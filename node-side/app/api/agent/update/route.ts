@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     copyDir(extractedRoot, nodeDir);
 
     // 5. Install deps and build
-    await execAsync("npm install --prefer-offline --no-audit --no-fund", { cwd: nodeDir, timeout: 300_000 });
+    await execAsync("npm install --include=dev --prefer-offline --no-audit --no-fund", { cwd: nodeDir, timeout: 300_000 });
     await execAsync("npm run build", { cwd: nodeDir, timeout: 600_000 });
 
     // 6. Clean temp files

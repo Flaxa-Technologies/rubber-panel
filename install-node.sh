@@ -142,7 +142,7 @@ EOF
 
 # Build Node Side
 echo -e "${CYAN}[6/6] Building Node Daemon...${NC}"
-npm install --prefer-offline --no-audit --no-fund
+npm install --include=dev --prefer-offline --no-audit --no-fund
 npm run build
 
 # Start via PM2 Ecosystem

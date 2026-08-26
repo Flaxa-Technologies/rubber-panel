@@ -80,14 +80,14 @@ rm -rf "${TEMP_DIR}"
 # Build Admin Panel
 echo -e "${CYAN}[4/5] Compiling Admin Panel (${LATEST_TAG})...${NC}"
 cd "${INSTALL_DIR}/admin-side"
-npm install --prefer-offline --no-audit --no-fund
+npm install --include=dev --prefer-offline --no-audit --no-fund
 npx prisma db push --accept-data-loss
 npm run build
 
 # Build User Panel
 echo -e "${CYAN}Compiling User Panel (${LATEST_TAG})...${NC}"
 cd "${INSTALL_DIR}/user-side"
-npm install --prefer-offline --no-audit --no-fund
+npm install --include=dev --prefer-offline --no-audit --no-fund
 npm run build
 
 # Restart PM2

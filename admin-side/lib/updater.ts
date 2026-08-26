@@ -322,7 +322,7 @@ export async function applyUpdate(
 
   // 6. Reinstall deps
   onProgress({ phase: "building", message: "Installing dependencies..." });
-  await execAsync("npm install --prefer-offline --no-audit --no-fund", { cwd: sideDir, timeout: 300_000 });
+  await execAsync("npm install --include=dev --prefer-offline --no-audit --no-fund", { cwd: sideDir, timeout: 300_000 });
 
   // 7. Rebuild
   onProgress({ phase: "building", message: "Building updated code (npm run build)..." });

@@ -180,7 +180,7 @@ echo -e "${GREEN}✓ Environments configured with secure random keys.${NC}"
 # Build Admin Side
 echo -e "${CYAN}[6/7] Building Admin Panel...${NC}"
 cd "${INSTALL_DIR}/admin-side"
-npm install --prefer-offline --no-audit --no-fund
+npm install --include=dev --prefer-offline --no-audit --no-fund
 npx prisma db push --accept-data-loss
 if [ -f prisma/seed.ts ]; then
   SEED_ADMIN_EMAIL="${ADMIN_EMAIL}" SEED_ADMIN_PASSWORD="${ADMIN_PASSWORD}" SEED_ADMIN_USERNAME="${ADMIN_USERNAME}" npx tsx prisma/seed.ts || true
@@ -190,7 +190,7 @@ npm run build
 # Build User Side
 echo -e "${CYAN}Building User Panel...${NC}"
 cd "${INSTALL_DIR}/user-side"
-npm install --prefer-offline --no-audit --no-fund
+npm install --include=dev --prefer-offline --no-audit --no-fund
 npm run build
 
 # Create PM2 Ecosystem File for clean multi-app execution
