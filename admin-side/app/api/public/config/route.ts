@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSettingBool, getSetting } from "@/lib/settings";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Internal-Secret, X-User-Id, X-Source, Authorization",
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "Pragma": "no-cache",
+  "Expires": "0",
 };
 
 export function OPTIONS() {

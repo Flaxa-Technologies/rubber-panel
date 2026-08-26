@@ -1,22 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminApiFetch } from "@/lib/api-client";
 
-const ADMIN_API_URL = process.env.ADMIN_API_URL ?? "http://localhost:3000";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // GET /api/public/config — Proxies public config from admin API (no auth required)
 export async function GET(request: NextRequest) {
-  try {
-    const res = await fetch(`${ADMIN_API_URL}/api/public/config`, {
-      cache: "no-store",
-    });
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch {
-    // Fallback: safe defaults if admin API is unreachable
-    return NextResponse.json({
-      registrationEnabled: false,
+  const { data } = await adminApiFetch<{
+    registrationEnabled: boolean;
+    siteName: string;
+    siteDescription: string;
+    accentColor: string;
+  }>("/api/public/config");
+
+  return NextResponse.json(
+    data ?? {
+      registrationEnabled: true,
       siteName: "Rubber Panel",
       siteDescription: "Professional Minecraft Hosting",
       accentColor: "#a3e635",
-    });
-  }
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      },
+    }
+  );
 }

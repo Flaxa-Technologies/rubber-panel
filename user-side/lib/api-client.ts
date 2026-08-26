@@ -1,8 +1,7 @@
 // User-side API client — proxies to admin API
 // Users NEVER call node-side directly
 
-const ADMIN_API_URL = process.env.ADMIN_API_URL ?? "http://localhost:3000";
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "";
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "rubber-panel-internal-secret";
 
 interface ApiClientOptions {
   userId?: string;
@@ -17,44 +16,55 @@ export async function adminApiFetch<T>(
 ): Promise<{ data: T | null; error: string | null; status: number }> {
   const { method = "GET", body, token, userId } = options;
 
-  try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-Internal-Secret": INTERNAL_SECRET,
-      "X-Source": "user-side",
-    };
+  const targets = [
+    process.env.ADMIN_API_URL || "http://127.0.0.1:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+  ];
 
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+  const uniqueTargets = Array.from(new Set(targets.filter(Boolean)));
+  let lastError: any = null;
+
+  for (const base of uniqueTargets) {
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Internal-Secret": INTERNAL_SECRET,
+        "X-Source": "user-side",
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      if (userId) {
+        headers["X-User-Id"] = userId;
+      }
+
+      const res = await fetch(`${base}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        cache: "no-store",
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        return { data: null, error: data?.error ?? "Request failed", status: res.status };
+      }
+
+      return { data, error: null, status: res.status };
+    } catch (error) {
+      lastError = error;
     }
-
-    // Pass authenticated userId via trusted server-side header
-    // This is never supplied by the client/browser
-    if (userId) {
-      headers["X-User-Id"] = userId;
-    }
-
-    const res = await fetch(`${ADMIN_API_URL}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      return { data: null, error: data.error ?? "Request failed", status: res.status };
-    }
-
-    return { data, error: null, status: res.status };
-  } catch (error) {
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : "Network error",
-      status: 500,
-    };
   }
+
+  return {
+    data: null,
+    error: lastError instanceof Error ? lastError.message : "Network error",
+    status: 500,
+  };
 }
 
 export async function getPublicConfig(): Promise<{
@@ -64,10 +74,17 @@ export async function getPublicConfig(): Promise<{
   accentColor?: string;
 }> {
   try {
-    // Use a relative URL so browsers call same-origin (port 3002), avoiding CORS
-    const base = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3002");
-    const res = await fetch(`${base}/api/config`, { cache: "no-store" });
-    if (res.ok) return res.json();
+    const base = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3002");
+    const res = await fetch(`${base}/api/config?_t=${Date.now()}`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        registrationEnabled: data.registrationEnabled === true || data.registrationEnabled === "true",
+        siteName: data.siteName || "Rubber Panel",
+        siteDescription: data.siteDescription || "Professional Minecraft Hosting",
+        accentColor: data.accentColor || "#a3e635",
+      };
+    }
   } catch {}
-  return { registrationEnabled: false, siteName: "Rubber Panel", siteDescription: "", accentColor: "#a3e635" };
+  return { registrationEnabled: true, siteName: "Rubber Panel", siteDescription: "", accentColor: "#a3e635" };
 }
