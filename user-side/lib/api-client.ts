@@ -75,16 +75,19 @@ export async function getPublicConfig(): Promise<{
 }> {
   try {
     const base = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3002");
-    const res = await fetch(`${base}/api/config?_t=${Date.now()}`, { cache: "no-store" });
+    const res = await fetch(`${base}/api/config?_t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Pragma": "no-cache" },
+    });
     if (res.ok) {
       const data = await res.json();
       return {
-        registrationEnabled: data.registrationEnabled === true || data.registrationEnabled === "true",
+        registrationEnabled: data.registrationEnabled === true,
         siteName: data.siteName || "Rubber Panel",
         siteDescription: data.siteDescription || "Professional Minecraft Hosting",
         accentColor: data.accentColor || "#a3e635",
       };
     }
   } catch {}
-  return { registrationEnabled: true, siteName: "Rubber Panel", siteDescription: "", accentColor: "#a3e635" };
+  return { registrationEnabled: false, siteName: "Rubber Panel", siteDescription: "", accentColor: "#a3e635" };
 }

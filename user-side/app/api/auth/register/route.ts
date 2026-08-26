@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { adminApiFetch } from "@/lib/api-client";
 
+export const dynamic = "force-dynamic";
+
 // POST /api/auth/register — User self-registration
-// Checks registrationEnabled server-side AND admin API enforces it
 export async function POST(request: NextRequest) {
+  // 1. Explicit check if registration is enabled via public config
+  const { data: config } = await adminApiFetch<{ registrationEnabled: boolean }>("/api/public/config");
+  if (!config || config.registrationEnabled !== true) {
+    return NextResponse.json(
+      { error: "New user registration is currently disabled by administrator." },
+      { status: 403 }
+    );
+  }
+
   const body = await request.json();
 
   const { data, error, status } = await adminApiFetch<{
@@ -20,7 +28,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json({ error }, { status });
+    return NextResponse.json({ error }, { status: status || 400 });
   }
 
   return NextResponse.json(data, { status: 201 });

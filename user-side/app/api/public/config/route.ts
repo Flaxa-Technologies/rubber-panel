@@ -15,14 +15,14 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     data ?? {
-      registrationEnabled: true,
+      registrationEnabled: false,
       siteName: "Rubber Panel",
       siteDescription: "Professional Minecraft Hosting",
       accentColor: "#a3e635",
     },
     {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0",
       },
