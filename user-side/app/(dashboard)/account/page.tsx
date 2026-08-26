@@ -151,7 +151,15 @@ export default function AccountPage() {
           <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-primary)" }}>Session</div>
           <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Sign out of your account on this device.</div>
         </div>
-        <button onClick={() => signOut({ callbackUrl: "/login" })} className="btn-secondary-dark">
+        <button
+          onClick={async () => {
+            try {
+              await signOut({ redirect: false });
+            } catch {}
+            window.location.href = "/login";
+          }}
+          className="btn-secondary-dark"
+        >
           <LogOut size={13} />
           <span>Sign out</span>
         </button>

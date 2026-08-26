@@ -169,7 +169,12 @@ export default function Sidebar() {
             </div>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={async () => {
+              try {
+                await signOut({ redirect: false });
+              } catch {}
+              window.location.href = "/login";
+            }}
             className="p-1.5 rounded-md transition-colors hover:bg-red-500/10"
             title="Sign out"
           >

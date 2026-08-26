@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Image from "next/image";
-import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Info } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -40,7 +40,7 @@ export default function LoginPage() {
     setError("");
 
     const result = await signIn("credentials", {
-      email,
+      email: email.trim(),
       password,
       redirect: false,
     });
@@ -52,11 +52,6 @@ export default function LoginPage() {
       setError("Invalid credentials or insufficient permissions.");
       setLoading(false);
     }
-  }
-
-  function fillDefaults() {
-    setEmail("admin@rubberlab.net");
-    setPassword("ChangeMe123!");
   }
 
   return (
@@ -75,8 +70,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm animate-slide-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 overflow-hidden p-2"
-            style={{ backgroundColor: "#111", border: "1px solid var(--color-rp-border)" }}>
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 overflow-hidden p-2"
+            style={{ backgroundColor: "#111", border: "1px solid var(--color-rp-border)" }}
+          >
             <Image src={branding.logoUrl || "/logo.png"} alt={branding.siteName} width={48} height={48} className="object-contain" unoptimized />
           </div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--color-rp-text)" }}>
@@ -102,31 +99,6 @@ export default function LoginPage() {
             <p className="text-sm mt-1" style={{ color: "var(--color-rp-text-muted)" }}>
               Access restricted to admins and staff only.
             </p>
-          </div>
-
-          {/* Default credentials hint */}
-          <div
-            className="rounded-xl border p-3 text-xs space-y-1.5 cursor-pointer select-none"
-            onClick={fillDefaults}
-            title="Click to auto-fill"
-            style={{
-              backgroundColor: "rgba(163,230,53,0.05)",
-              borderColor: "rgba(163,230,53,0.2)",
-            }}
-          >
-            <div className="flex items-center gap-1.5 mb-1" style={{ color: "var(--color-rp-accent)" }}>
-              <Info className="w-3.5 h-3.5" />
-              <span className="font-semibold">Default Credentials</span>
-              <span className="ml-auto text-xs opacity-60" style={{ color: "var(--color-rp-text-muted)" }}>click to fill</span>
-            </div>
-            <div className="flex items-center justify-between" style={{ color: "var(--color-rp-text-muted)" }}>
-              <span>Email</span>
-              <code style={{ color: "var(--color-rp-text)", fontFamily: "monospace" }}>admin@rubberlab.net</code>
-            </div>
-            <div className="flex items-center justify-between" style={{ color: "var(--color-rp-text-muted)" }}>
-              <span>Password</span>
-              <code style={{ color: "var(--color-rp-text)", fontFamily: "monospace" }}>ChangeMe123!</code>
-            </div>
           </div>
 
           {error && (
@@ -159,7 +131,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@rubberlab.net"
+                  placeholder="Enter your admin email"
                   required
                   autoComplete="email"
                   className="w-full h-10 pl-10 pr-3 rounded-lg border text-sm outline-none transition-colors"
@@ -187,7 +159,7 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••"
+                  placeholder="Enter your password"
                   required
                   autoComplete="current-password"
                   className="w-full h-10 pl-10 pr-10 rounded-lg border text-sm outline-none transition-colors"
@@ -225,7 +197,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--color-rp-text-dim)" }}>
-          Rubber Panel v1.0.0 · Flaxa Studios · Admin access only
+          Rubber Panel · Admin access only
         </p>
       </div>
     </div>

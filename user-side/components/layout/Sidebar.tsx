@@ -279,7 +279,12 @@ export default function Sidebar({ onCloseMobile }: { onCloseMobile?: () => void 
         </div>
 
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={async () => {
+            try {
+              await signOut({ redirect: false });
+            } catch {}
+            window.location.href = "/login";
+          }}
           style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 4 }}
           title="Sign out"
           className="hover:text-white"
