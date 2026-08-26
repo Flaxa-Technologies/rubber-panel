@@ -117,16 +117,24 @@ export default function UpdatesPage() {
     }
   });
 
-  function compareVersions(a: string, b: string) {
+  function isVersionNewer(current: string, latest: string): boolean {
+    if (!current || !latest) return false;
     const clean = (v: string) => v.replace(/^v/, "").trim();
-    const [ca, cb] = [clean(a), clean(b)];
-    if (ca === cb) return 0;
-    const [pa, pb] = [ca.split("-")[0].split(".").map(Number), cb.split("-")[0].split(".").map(Number)];
+    const [c, l] = [clean(current), clean(latest)];
+    if (c === l) return false;
+
+    const [pa, pb] = [c.split("-")[0].split(".").map(Number), l.split("-")[0].split(".").map(Number)];
     for (let i = 0; i < 3; i++) {
       const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-      if (diff !== 0) return diff;
+      if (diff !== 0) return diff < 0;
     }
-    return cb.localeCompare(ca, undefined, { numeric: true });
+
+    const cHasPre = c.includes("-");
+    const lHasPre = l.includes("-");
+    if (cHasPre && !lHasPre) return true;
+    if (!cHasPre && lHasPre) return false;
+
+    return c.localeCompare(l, undefined, { numeric: true }) < 0;
   }
 
   async function handleApplyUpdate(side: "admin" | "user" | "node", nodeId?: string) {
@@ -373,7 +381,7 @@ export default function UpdatesPage() {
               const asset = updateData.assets.find((a) => a.side === side);
               const cv = updateData.currentVersions[side];
               const lv = updateData.latestVersion;
-              const needsUpdate = updateData.available && compareVersions(cv, lv) < 0 && !!asset;
+              const needsUpdate = isVersionNewer(cv, lv) && !!asset;
               const busy = isUpdating(state.status);
 
               return (
@@ -512,16 +520,32 @@ export default function UpdatesPage() {
                         Update {meta.label} to {lv}
                       </button>
                     ) : !needsUpdate && state.status === "idle" ? (
-                      <div
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm"
-                        style={{
-                          backgroundColor: "rgba(34,197,94,0.06)",
-                          border: "1px solid rgba(34,197,94,0.15)",
-                          color: "#4ade80",
-                        }}
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Up to date
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm"
+                          style={{
+                            backgroundColor: "rgba(34,197,94,0.06)",
+                            border: "1px solid rgba(34,197,94,0.15)",
+                            color: "#4ade80",
+                          }}
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Up to date
+                        </div>
+                        {asset && (
+                          <button
+                            onClick={() => handleApplyUpdate(side)}
+                            title="Force re-install current release files"
+                            className="px-3 py-2.5 rounded-xl text-xs transition-colors border"
+                            style={{
+                              backgroundColor: "var(--color-rp-surface-2)",
+                              borderColor: "var(--color-rp-border)",
+                              color: "var(--color-rp-text-muted)",
+                            }}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     ) : busy ? (
                       <div
