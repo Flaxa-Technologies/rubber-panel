@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { adminApiFetch } from "@/lib/api-client";
+
+type RouteContext = { params: Promise<{ id: string; subuserId: string }> };
+
+// PATCH /api/user/servers/[id]/users/[subuserId] — Update subuser
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = (session.user as any).id;
+  const { id, subuserId } = await context.params;
+  const body = await request.json();
+
+  const { data, error, status } = await adminApiFetch<object>(`/api/user/servers/${id}/users/${subuserId}`, {
+    method: "PATCH",
+    userId,
+    body,
+  });
+  if (error) return NextResponse.json({ error }, { status });
+  return NextResponse.json(data);
+}
+
+// DELETE /api/user/servers/[id]/users/[subuserId] — Delete subuser
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = (session.user as any).id;
+  const { id, subuserId } = await context.params;
+
+  const { data, error, status } = await adminApiFetch<object>(`/api/user/servers/${id}/users/${subuserId}`, {
+    method: "DELETE",
+    userId,
+  });
+  if (error) return NextResponse.json({ error }, { status });
+  return NextResponse.json(data);
+}

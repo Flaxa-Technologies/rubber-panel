@@ -1,0 +1,35 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { adminApiFetch } from "@/lib/api-client";
+
+type RouteContext = { params: Promise<{ id: string }> };
+
+// GET /api/user/servers/[id]/schedules — List schedules
+export async function GET(request: NextRequest, context: RouteContext) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = (session.user as any).id;
+  const { id } = await context.params;
+
+  const { data, error, status } = await adminApiFetch<object>(`/api/user/servers/${id}/schedules`, { userId });
+  if (error) return NextResponse.json({ error }, { status });
+  return NextResponse.json(data);
+}
+
+// POST /api/user/servers/[id]/schedules — Create schedule
+export async function POST(request: NextRequest, context: RouteContext) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = (session.user as any).id;
+  const { id } = await context.params;
+  const body = await request.json();
+
+  const { data, error, status } = await adminApiFetch<object>(`/api/user/servers/${id}/schedules`, {
+    method: "POST",
+    userId,
+    body,
+  });
+  if (error) return NextResponse.json({ error }, { status });
+  return NextResponse.json(data);
+}

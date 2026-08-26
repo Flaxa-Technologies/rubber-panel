@@ -1,0 +1,130 @@
+name: Release — Package & Publish
+
+on:
+  push:
+    tags:
+      - "v*"   # Triggers on all version tags like v0.1.0-beta.1, v1.0.0
+
+jobs:
+  release:
+    name: Build & Publish Release Assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Needed to create releases and upload assets
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Update package.json versions
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          # Strip leading 'v' for package.json (which uses 0.1.0 not v0.1.0)
+          PKG_VER="${VERSION#v}"
+          
+          # Update all three sides
+          for side in admin-side user-side node-side; do
+            if [ -f "$side/package.json" ]; then
+              node -e "
+                const fs = require('fs');
+                const pkg = JSON.parse(fs.readFileSync('$side/package.json', 'utf8'));
+                pkg.version = '${PKG_VER}';
+                fs.writeFileSync('$side/package.json', JSON.stringify(pkg, null, 2) + '\n');
+              "
+              echo "Updated $side/package.json to $PKG_VER"
+            fi
+          done
+
+      - name: Package admin-side.zip
+        run: |
+          cd admin-side
+          zip -r ../admin-side.zip . \
+            --exclude "node_modules/*" \
+            --exclude ".next/*" \
+            --exclude ".env" \
+            --exclude ".env.local" \
+            --exclude "prisma/dev.db" \
+            --exclude "prisma/dev.db-journal" \
+            --exclude ".git/*" \
+            --exclude ".updates/*"
+          cd ..
+          echo "admin-side.zip: $(du -sh admin-side.zip | cut -f1)"
+
+      - name: Package user-side.zip
+        run: |
+          cd user-side
+          zip -r ../user-side.zip . \
+            --exclude "node_modules/*" \
+            --exclude ".next/*" \
+            --exclude ".env" \
+            --exclude ".env.local" \
+            --exclude ".git/*"
+          cd ..
+          echo "user-side.zip: $(du -sh user-side.zip | cut -f1)"
+
+      - name: Package node-side.zip
+        run: |
+          cd node-side
+          zip -r ../node-side.zip . \
+            --exclude "node_modules/*" \
+            --exclude ".next/*" \
+            --exclude ".env" \
+            --exclude ".env.local" \
+            --exclude "servers/*" \
+            --exclude ".git/*" \
+            --exclude ".updates/*"
+          cd ..
+          echo "node-side.zip: $(du -sh node-side.zip | cut -f1)"
+
+      - name: Create GitHub Release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: "Rubber Panel ${{ steps.version.outputs.VERSION }}"
+          body: |
+            # ⚡ Rubber Panel ${{ steps.version.outputs.VERSION }} (Beta)
+
+            ### 🚀 Quick 1-Command Installation
+
+            #### 1. Panel Installation (Admin + User Portals)
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-panel.sh | sudo bash
+            ```
+
+            #### 2. Node Daemon Installation (Compute Nodes / Dedicated Servers)
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash
+            ```
+
+            ---
+
+            ### 📦 Release Assets
+            - `admin-side.zip` — Admin Management Portal update
+            - `user-side.zip` — User Client Portal update
+            - `node-side.zip` — Node Daemon Agent update
+            - `install-panel.sh` — 1-Click Panel Installer
+            - `install-node.sh` — 1-Click Node Daemon Installer
+
+            ### 🔄 Update Policy & Safety
+            - Updates are applied directly from the **Admin Dashboard → Update Manager**.
+            - `.env`, SQLite databases, game server files, and `node_modules` are 100% preserved.
+            - Automatic additive database migrations (`prisma db push`) and process respawn.
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'alpha') || contains(steps.version.outputs.VERSION, 'rc') }}
+          files: |
+            admin-side.zip
+            user-side.zip
+            node-side.zip
+            install-panel.sh
+            install-node.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

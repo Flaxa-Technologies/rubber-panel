@@ -1,0 +1,23 @@
+{
+  "id": "df6f8bea-4c06-4fe2-a45a-600fc79579b7",
+  "name": "Test",
+  "status": "STOPPED",
+  "ram": 1024,
+  "cpu": 100,
+  "port": 25566,
+  "environment": {
+    "DOCKER_IMAGE": "itzg/minecraft-server",
+    "EULA": "TRUE",
+    "TYPE": "PAPER",
+    "VERSION": "1.21.6",
+    "MEMORY": "1024M",
+    "JVM_XX_OPTS": "-Xms256M",
+    "SERVER_PORT": "25566",
+    "ENABLE_RCON": "true",
+    "RCON_PASSWORD": "rp-df6f8bea",
+    "RCON_PORT": "25575",
+    "ONLINE_MODE": "false",
+    "USE_AIKAR_FLAGS": "true"
+  },
+  "isCryoSleeping": false
+}

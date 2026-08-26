@@ -1,0 +1,559 @@
+// Rubber Panel — Admin Side Prisma Schema (v5, SQLite)
+// Enums are represented as String for SQLite compatibility
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USER ─────────────────────────────────────────────────────────────────────
+// role: SUPER_ADMIN | ADMIN | STAFF | USER
+// status: ACTIVE | SUSPENDED | PENDING
+
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  email         String    @unique
+  passwordHash  String
+  role          String    @default("USER")
+  status        String    @default("ACTIVE")
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+
+  servers       Server[]
+  subuserServers ServerSubuser[]
+  sessions      Session[]
+  auditLogs     AuditLog[]  @relation("ActorLogs")
+  apiKeys       APIKey[]
+  resourceQuota UserResourceQuota?
+  gdriveToken   UserGoogleDriveToken?
+
+  @@map("users")
+}
+
+// ─── SESSIONS ─────────────────────────────────────────────────────────────────
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ─── NODES ───────────────────────────────────────────────────────────────────
+// status: ONLINE | OFFLINE | DEGRADED | MAINTENANCE
+
+model Node {
+  id              String      @id @default(uuid())
+  name            String
+  fqdn            String
+  port            Int         @default(8080)
+  location        String?
+  description     String?
+  status          String      @default("OFFLINE")
+  authToken       String      @unique
+  maintenanceMode Boolean     @default(false)
+  agentVersion    String?
+  lastHeartbeat   DateTime?
+
+  maxCpu          Int?
+  maxRam          Int?
+  maxDisk         Int?
+  portRangeStart  Int?
+  portRangeEnd    Int?
+
+  // Node Boot & Cryo-Sleep Startup Policy
+  autoStartServersOnBoot     Boolean   @default(false)
+  bootCryoSleepMode          String    @default("CRYO_HIBERNATE_ALL") // "CRYO_HIBERNATE_ALL" | "RESTORE_PREVIOUS" | "DO_NOTHING"
+  bootGracePeriodSeconds     Int       @default(15)
+  maxConcurrentBootStarts    Int       @default(3)
+  bootStartupDelaySeconds    Int       @default(5)
+
+  cpuUsage        Float?
+  ramUsage        Float?
+  diskUsage       Float?
+  networkRx       Float?
+  networkTx       Float?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  servers         Server[]
+  allocations     Allocation[]
+  sourceTransfers ServerTransfer[] @relation("TransferSourceNode")
+  targetTransfers ServerTransfer[] @relation("TransferTargetNode")
+  javaVersions    JavaVersion[]
+  containerImages ContainerImage[]
+
+  @@map("nodes")
+}
+
+// ─── ALLOCATIONS ─────────────────────────────────────────────────────────────
+
+model Allocation {
+  id         String   @id @default(uuid())
+  nodeId     String
+  ip         String
+  port       Int
+  alias      String?
+  assigned   Boolean  @default(false)
+  disabled   Boolean  @default(false)
+  serverId   String?
+
+  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  server     Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  createdAt  DateTime @default(now())
+
+  @@unique([nodeId, ip, port])
+  @@map("allocations")
+}
+
+// ─── SERVERS ─────────────────────────────────────────────────────────────────
+// status: RUNNING | STOPPED | STARTING | STOPPING | INSTALLING | CRASHED | OFFLINE
+
+model Server {
+  id              String    @id @default(uuid())
+  name            String
+  ownerId         String
+  nodeId          String
+  status          String    @default("OFFLINE")
+  suspended       Boolean   @default(false)
+
+  ram             Int
+  cpu             Int
+  disk            Int
+  swap            Int       @default(0)
+
+  softwareId        String?
+  softwareVersionId String?
+  templateId        String?
+
+  allowedPaths        String    @default("[\"/plugins\",\"/mods\",\"/config\",\"/world\"]")
+  protectedPaths      String    @default("[\"/server.jar\",\"/start.sh\",\"/rubber-panel\"]")
+  blockedUploadPaths  String    @default("[]")
+  allowNodeTransfer   Boolean   @default(false)
+
+  // Billing, Lifecycle & Suspension
+  expiresAt                DateTime?
+  gracePeriodDays          Int       @default(3)
+  autoSuspendOnExpiry      Boolean   @default(true)
+  autoDeleteOnGraceExpiry  Boolean   @default(false)
+  suspensionReason         String?
+  quotaId                  String?
+
+  // Base Subscription Resources vs Extra Quota Boosts
+  baseRam                  Int       @default(1024)
+  baseCpu                  Int       @default(100)
+  baseDisk                 Int       @default(5120)
+  extraRam                 Int       @default(0)
+  extraCpu                 Int       @default(0)
+  extraDisk                Int       @default(0)
+  isCreatedFromQuota       Boolean   @default(false)
+
+  // Cloud Backups (Google Drive)
+  allowGoogleDriveBackups  Boolean   @default(true)
+  gdriveRetentionCount     Int       @default(3)
+  gdriveAutoSchedule       String?
+  gdriveExcludePaths       String?
+
+  // Cryo-Sleep (0-RAM Hibernation & Auto Wake-on-Ping)
+  cryoSleepEnabled         Boolean   @default(false)
+  cryoSleepIdleMinutes     Int       @default(10)
+  cryoSleepCustomMotdAllowed Boolean @default(true)
+  cryoSleepMotd            String?
+  autoStartOnBoot          Boolean   @default(false)
+
+  uuid            String    @unique @default(uuid())
+  internalPort    Int?
+  dockerId        String?
+  startupCommand  String?
+  serverType      String    @default("MINECRAFT") // "MINECRAFT" | "NODEJS"
+  nodeVersion     String?   @default("20")
+  securityProtection Boolean @default(true)
+  securitySuspendedUntil DateTime?
+  securityQuarantineReason String?
+  javaVersion     String?   @default("21")
+  javaVersionId   String?
+  customImageId   String?
+  environment     String    @default("{}")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  owner           User              @relation(fields: [ownerId], references: [id])
+  node            Node              @relation(fields: [nodeId], references: [id])
+  software        Software?         @relation(fields: [softwareId], references: [id])
+  softwareVersion SoftwareVersion?  @relation(fields: [softwareVersionId], references: [id])
+  template        Template?         @relation(fields: [templateId], references: [id])
+  quota           UserResourceQuota? @relation(fields: [quotaId], references: [id], onDelete: SetNull)
+  javaVersionRel  JavaVersion?      @relation(fields: [javaVersionId], references: [id], onDelete: SetNull)
+  customImage     ContainerImage?   @relation(fields: [customImageId], references: [id], onDelete: SetNull)
+  allocations     Allocation[]
+  backups         Backup[]
+  subusers        ServerSubuser[]
+  schedules       Schedule[]
+  webhooks        ServerWebhook[]
+  transfers       ServerTransfer[]
+
+  @@map("servers")
+}
+
+// ─── USER RESOURCE QUOTAS ───────────────────────────────────────────────────
+// onExpireAction: SUSPEND_SERVERS | FREEZE_SCALE | DELETE_SERVERS | NOTIFY_ONLY
+
+model UserResourceQuota {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  name                String    @default("Custom Resource Pool")
+
+  maxRam              Int       @default(4096)  // MB
+  maxCpu              Int       @default(200)   // %
+  maxDisk             Int       @default(20480) // MB
+  maxServers          Int       @default(3)     // Max servers count
+  maxBackups          Int       @default(5)     // Max backups per server
+  maxAllocations      Int       @default(3)     // Max extra ports/allocations
+
+  allowServerCreation Boolean   @default(false) // Toggle for user server self-creation
+  isSuspended         Boolean   @default(false) // Manual or auto quota freeze
+  suspendedReason     String?
+
+  expiresAt           DateTime? // Billing renewal / expiration timestamp
+  gracePeriodDays     Int       @default(3)
+  onExpireAction      String    @default("SUSPEND_SERVERS")
+
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  servers             Server[]
+
+  @@map("user_resource_quotas")
+}
+
+// ─── NODE TRANSFERS ─────────────────────────────────────────────────────────
+// status: PENDING | PREPARING | ARCHIVING | TRANSFERRING | EXTRACTING | CONFIGURING | COMPLETED | FAILED | CANCELLED
+
+model ServerTransfer {
+  id                 String    @id @default(uuid())
+  serverId           String
+  sourceNodeId       String
+  targetNodeId       String
+  targetAllocationId String?
+  status             String    @default("PENDING")
+  progress           Int       @default(0)
+  currentStep        String?
+  speedBytesPerSec   Int?
+  totalBytes         BigInt?
+  transferredBytes   BigInt?
+  options            String    @default("{}")
+  error              String?
+  initiatedBy        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  server             Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  sourceNode         Node      @relation("TransferSourceNode", fields: [sourceNodeId], references: [id])
+  targetNode         Node      @relation("TransferTargetNode", fields: [targetNodeId], references: [id])
+
+  @@map("server_transfers")
+}
+
+// ─── WEBHOOKS / CONNECTIONS ──────────────────────────────────────────────────
+
+model ServerWebhook {
+  id          String   @id @default(uuid())
+  serverId    String
+  name        String
+  url         String
+  secret      String?
+  events      String   @default("[\"server.start\",\"server.stop\",\"server.crash\"]")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@map("server_webhooks")
+}
+
+// ─── SUBUSERS / COLLABORATORS ───────────────────────────────────────────────
+
+model ServerSubuser {
+  id          String   @id @default(uuid())
+  serverId    String
+  userId      String
+  roleName    String   @default("Custom")
+  permissions String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, userId])
+  @@map("server_subusers")
+}
+
+// ─── SCHEDULES / AUTOMATIONS ────────────────────────────────────────────────
+
+model Schedule {
+  id             String         @id @default(uuid())
+  serverId       String
+  name           String
+  cron           String         @default("0 0 * * *")
+  enabled        Boolean        @default(true)
+  onlyWhenOnline Boolean        @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  server         Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  tasks          ScheduleTask[]
+
+  @@map("schedules")
+}
+
+model ScheduleTask {
+  id             String    @id @default(uuid())
+  scheduleId     String
+  sequence       Int       @default(1)
+  action         String    @default("COMMAND")
+  payload        String    @default("")
+  timeOffset     Int       @default(0)
+  createdAt      DateTime  @default(now())
+
+  schedule       Schedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@map("schedule_tasks")
+}
+
+// ─── SOFTWARE ────────────────────────────────────────────────────────────────
+// type: VANILLA | PAPER | SPIGOT | FABRIC | FORGE | PURPUR | BUNGEECORD | VELOCITY | CUSTOM
+
+model Software {
+  id          String            @id @default(uuid())
+  name        String            @unique
+  type        String
+  description String?
+  logoUrl     String?
+  createdAt   DateTime          @default(now())
+
+  versions    SoftwareVersion[]
+  servers     Server[]
+
+  @@map("software")
+}
+
+model SoftwareVersion {
+  id           String   @id @default(uuid())
+  softwareId   String
+  version      String
+  buildNumber  String?
+  downloadUrl  String?
+  releaseDate  DateTime?
+  isStable     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  software     Software @relation(fields: [softwareId], references: [id], onDelete: Cascade)
+  servers      Server[]
+
+  @@unique([softwareId, version])
+  @@map("software_versions")
+}
+
+// ─── TEMPLATES ───────────────────────────────────────────────────────────────
+
+model Template {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  softwareType  String?
+  startupCmd    String?
+  environment   String   @default("{}")
+  dockerImage   String?
+  allowedPaths  String   @default("[\"/plugins\",\"/mods\",\"/config\",\"/world\"]")
+  protectedPaths String  @default("[\"/server.jar\",\"/start.sh\"]")
+  defaultRam    Int      @default(1024)
+  defaultCpu    Int      @default(100)
+  defaultDisk   Int      @default(5120)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  servers       Server[]
+
+  @@map("templates")
+}
+
+// ─── BACKUPS ─────────────────────────────────────────────────────────────────
+// status: PENDING | IN_PROGRESS | COMPLETED | FAILED
+
+model Backup {
+  id             String   @id @default(uuid())
+  serverId       String
+  name           String
+  status         String   @default("PENDING")
+  storageType    String   @default("LOCAL") // LOCAL | GOOGLE_DRIVE | BOTH
+  size           Int?
+  checksum       String?
+  nodeBackupPath String?
+  gdriveFileId   String?
+  gdriveWebUrl   String?
+  excludePaths   String?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  server         Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@map("backups")
+}
+
+// ─── USER GOOGLE DRIVE TOKENS ────────────────────────────────────────────────
+model UserGoogleDriveToken {
+  id           String    @id @default(uuid())
+  userId       String    @unique
+  accessToken  String
+  refreshToken String?
+  tokenExpiry  DateTime?
+  accountEmail String?
+  accountName  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_gdrive_tokens")
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  group     String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ─── API KEYS ─────────────────────────────────────────────────────────────────
+
+model APIKey {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String
+  permissions String    @default("[]")
+  lastUsed    DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// ─── AUDIT LOGS ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actorEmail String?
+  action     String
+  target     String?
+  targetId   String?
+  result     String   @default("SUCCESS")
+  ipAddress  String?
+  metadata   String   @default("{}")
+  createdAt  DateTime @default(now())
+
+  actor      User?    @relation("ActorLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+// ─── JAVA VERSIONS ────────────────────────────────────────────────────────────
+
+model JavaVersion {
+  id          String    @id @default(uuid())
+  name        String    // e.g. "Java 21 (LTS)"
+  version     String    // e.g. "21"
+  dockerImage String?   // optional image e.g. "itzg/minecraft-server:java21"
+  binaryPath  String?   // optional path e.g. "/usr/lib/jvm/java-21-openjdk/bin/java"
+  isDefault   Boolean   @default(false)
+  nodeId      String?   // null for all nodes globally, or specific node id
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  node        Node?     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  servers     Server[]
+
+  @@map("java_versions")
+}
+
+// ─── CONTAINER IMAGES & MULTI-RUNTIME ────────────────────────────────────────
+
+model ContainerImage {
+  id             String    @id @default(uuid())
+  name           String    // e.g. "Python 3.12 (Alpine)", "Rust 1.80", "MySQL 8.0"
+  category       String    @default("RUNTIME") // "RUNTIME" | "DATABASE" | "WEB" | "CUSTOM"
+  dockerImage    String    // e.g. "python:3.12-alpine", "rust:1.80-alpine", "mysql:8.0"
+  defaultPort    Int       @default(8080)
+  internalPort   Int       @default(8080)
+  defaultStartup String?   // e.g. "python -u main.py", "cargo run --release", "docker-entrypoint.sh mysqld"
+  environment    String    @default("{}") // JSON default env vars e.g. {"PORT": "8080"}
+  description    String?
+  icon           String?   // "python" | "rust" | "database" | "code" | "box" | "server"
+  nodeId         String?   // null = available on all nodes, or specific node id
+  isOfficial     Boolean   @default(false)
+  isPulled       Boolean   @default(true)
+  lastPulledAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  node           Node?     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  servers        Server[]
+
+  @@map("container_images")
+}
+
+// ─── UPDATE RECORDS ───────────────────────────────────────────────────────────
+// Tracks update history for admin, user and node sides
+// status: PENDING | DOWNLOADING | APPLYING | SUCCESS | FAILED
+
+model UpdateRecord {
+  id          String   @id @default(uuid())
+  side        String   // "admin" | "user" | "node"
+  version     String   // e.g. "v1.2.0"
+  status      String   @default("PENDING")
+  releaseUrl  String?  // GitHub release page URL
+  assetUrl    String?  // Download URL for zip asset
+  changelog   String?  // Release notes
+  sizeBytes   Int?
+  appliedAt   DateTime?
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("update_records")
+}
+
