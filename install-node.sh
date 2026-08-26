@@ -41,13 +41,13 @@ echo -e "${CYAN}[2/6] Checking Docker Engine...${NC}"
 if ! command -v docker >/dev/null 2>&1; then
   echo -e "${YELLOW}Docker not found. Installing Docker CE automatically...${NC}"
   curl -fsSL https://get.docker.com | sh
-  systemctl enable --now docker
+  systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true
 else
   echo -e "${GREEN}✓ Docker is already installed ($(docker --version)).${NC}"
 fi
 
 # Ensure Docker service is running
-systemctl start docker || true
+systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
 
 # Install Node.js 20 LTS if not present
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 20 ]; then
@@ -90,8 +90,7 @@ if [ -f node-side.zip ] && [ -s node-side.zip ]; then
   unzip -qo node-side.zip -d "${INSTALL_DIR}"
   rm -f node-side.zip
 else
-  # Fallback: Clone repo
-  echo -e "${YELLOW}Release asset pending; extracting node-side from repository...${NC}"
+  echo -e "${YELLOW}Downloading source tree from repository...${NC}"
   TEMP_CLONE=$(mktemp -d)
   git clone --depth 1 "https://github.com/${REPO}.git" "${TEMP_CLONE}"
   cp -r "${TEMP_CLONE}/node-side/"* "${INSTALL_DIR}/" 2>/dev/null || true
@@ -104,17 +103,31 @@ echo -e "${LIME}--- Node Daemon Configuration ---${NC}"
 echo -e "${YELLOW}(Create a Node in your Admin Panel -> Nodes -> 'Add Node' to obtain the token)${NC}"
 echo ""
 
-read -p "Enter Admin Panel URL [e.g. http://your-panel-ip:3000]: " ADMIN_URL
+prompt_input() {
+  local prompt_text="$1"
+  local var_name="$2"
+  local val=""
+
+  if [ -t 0 ]; then
+    read -r -p "${prompt_text}" val
+  elif [ -e /dev/tty ]; then
+    read -r -p "${prompt_text}" val </dev/tty 2>/dev/null || true
+  fi
+  eval "$var_name=\"\$val\""
+}
+
+ADMIN_URL=""
 while [ -z "${ADMIN_URL}" ]; do
-  read -p "Admin Panel URL cannot be empty. Please enter URL: " ADMIN_URL
+  prompt_input "Enter Admin Panel URL [e.g. http://your-panel-ip:3000]: " ADMIN_URL
 done
 
-read -p "Enter Node Auth Token (from Admin Panel): " NODE_TOKEN
+NODE_TOKEN=""
 while [ -z "${NODE_TOKEN}" ]; do
-  read -p "Node Auth Token cannot be empty. Please enter Token: " NODE_TOKEN
+  prompt_input "Enter Node Auth Token (from Admin Panel): " NODE_TOKEN
 done
 
-read -p "Enter Node Daemon Port [Default: 3001]: " NODE_PORT
+NODE_PORT=""
+prompt_input "Enter Node Daemon Port [Default: 3001]: " NODE_PORT
 NODE_PORT=${NODE_PORT:-3001}
 
 # Configure node-side .env
@@ -132,15 +145,37 @@ echo -e "${CYAN}[6/6] Building Node Daemon...${NC}"
 npm install --prefer-offline --no-audit --no-fund
 npm run build
 
-# Start via PM2
+# Start via PM2 Ecosystem
+cat <<EOF > "${INSTALL_DIR}/ecosystem.config.js"
+module.exports = {
+  apps: [
+    {
+      name: "rubber-node",
+      cwd: "${INSTALL_DIR}",
+      script: "node_modules/next/dist/bin/next",
+      args: "start --port ${NODE_PORT}",
+      env: {
+        NODE_ENV: "production",
+        PORT: ${NODE_PORT}
+      },
+      max_memory_restart: "1G",
+      restart_delay: 2000
+    }
+  ]
+};
+EOF
+
 pm2 delete rubber-node 2>/dev/null || true
-pm2 start npm --name "rubber-node" -- run start -- --port "${NODE_PORT}"
+pm2 start "${INSTALL_DIR}/ecosystem.config.js"
 pm2 save
-pm2 startup systemd -u root --hp /root 2>/dev/null || true
+
+if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
+  pm2 startup systemd -u root --hp /root 2>/dev/null || true
+fi
 
 echo -e "${LIME}"
 echo "==================================================================="
-echo "            🎉 Rubber Node Daemon Setup Complete!                  "
+echo "            Rubber Node Daemon Setup Complete!                     "
 echo "==================================================================="
 echo -e "${NC}"
 echo -e "  ${GREEN}Daemon Port:${NC}     ${NODE_PORT}"
@@ -152,5 +187,5 @@ echo -e "  ${CYAN}Heartbeat:${NC} The daemon is now actively communicating with 
 echo -e "             Check the Admin Dashboard under 'Nodes' to verify the green ONLINE status."
 echo ""
 echo -e "  ${LIME}Auto-Updates:${NC} Node Daemon updates can be remotely dispatched directly"
-echo -e "                from the Admin Dashboard -> Updates Manager."
+echo -e "                from the Admin Dashboard -> Update Manager."
 echo "==================================================================="

@@ -88,8 +88,7 @@ if [ -f admin-side.zip ] && [ -s admin-side.zip ]; then
   unzip -qo admin-side.zip -d "${INSTALL_DIR}/admin-side"
   rm -f admin-side.zip
 else
-  # Fallback: Clone repo if zip asset not yet uploaded
-  echo -e "${YELLOW}Release assets pending; cloning from repository...${NC}"
+  echo -e "${YELLOW}Downloading source tree from repository...${NC}"
   TEMP_CLONE=$(mktemp -d)
   git clone --depth 1 "https://github.com/${REPO}.git" "${TEMP_CLONE}"
   cp -r "${TEMP_CLONE}/admin-side/"* "${INSTALL_DIR}/admin-side/" 2>/dev/null || true
@@ -103,13 +102,25 @@ if [ -f user-side.zip ] && [ -s user-side.zip ]; then
 fi
 
 # Detect Public IP
-SERVER_IP=$(curl -s -4 ifconfig.me || curl -s -4 icanhazip.com || echo "localhost")
+SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "localhost")
+SERVER_IP=$(echo "${SERVER_IP}" | tr -d ' \n\r')
+if [ -z "${SERVER_IP}" ]; then
+  SERVER_IP="localhost"
+fi
 
-# Prompt for domain / hostname
-echo ""
-echo -e "${LIME}--- Configuration Settings ---${NC}"
-read -p "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " PANEL_HOST
-PANEL_HOST=${PANEL_HOST:-$SERVER_IP}
+# Prompt for domain / hostname safely (supports piped curl execution)
+PANEL_HOST=""
+if [ -t 0 ]; then
+  read -r -p "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " INPUT_HOST
+  PANEL_HOST="${INPUT_HOST}"
+elif [ -e /dev/tty ]; then
+  read -r -p "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " INPUT_HOST </dev/tty 2>/dev/null || true
+  PANEL_HOST="${INPUT_HOST}"
+fi
+
+if [ -z "${PANEL_HOST}" ]; then
+  PANEL_HOST="${SERVER_IP}"
+fi
 
 # Generate Secure Random Secrets
 NEXTAUTH_SECRET=$(openssl rand -hex 32)
@@ -163,33 +174,65 @@ cd "${INSTALL_DIR}/user-side"
 npm install --prefer-offline --no-audit --no-fund
 npm run build
 
-# Start with PM2
+# Create PM2 Ecosystem File for clean multi-app execution
 echo -e "${CYAN}[7/7] Starting Services via PM2...${NC}"
-pm2 delete rubber-admin 2>/dev/null || true
-pm2 delete rubber-user 2>/dev/null || true
+cat <<EOF > "${INSTALL_DIR}/ecosystem.config.js"
+module.exports = {
+  apps: [
+    {
+      name: "rubber-admin",
+      cwd: "${INSTALL_DIR}/admin-side",
+      script: "node_modules/next/dist/bin/next",
+      args: "start --port 3000",
+      env: {
+        NODE_ENV: "production",
+        PORT: 3000
+      },
+      max_memory_restart: "1G",
+      restart_delay: 2000
+    },
+    {
+      name: "rubber-user",
+      cwd: "${INSTALL_DIR}/user-side",
+      script: "node_modules/next/dist/bin/next",
+      args: "start --port 3002",
+      env: {
+        NODE_ENV: "production",
+        PORT: 3002
+      },
+      max_memory_restart: "1G",
+      restart_delay: 2000
+    }
+  ]
+};
+EOF
 
-cd "${INSTALL_DIR}/admin-side"
-pm2 start npm --name "rubber-admin" -- run start
-
-cd "${INSTALL_DIR}/user-side"
-pm2 start npm --name "rubber-user" -- run start -- -p 3002
-
+pm2 delete rubber-admin rubber-user 2>/dev/null || true
+pm2 start "${INSTALL_DIR}/ecosystem.config.js"
 pm2 save
-pm2 startup systemd -u root --hp /root 2>/dev/null || true
+
+# Attempt systemd startup if available
+if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
+  pm2 startup systemd -u root --hp /root 2>/dev/null || true
+fi
 
 echo -e "${LIME}"
 echo "==================================================================="
-echo "            🎉 Rubber Panel Installation Complete!                 "
+echo "            Rubber Panel Installation Complete!                    "
 echo "==================================================================="
 echo -e "${NC}"
-echo -e "  ${GREEN}Admin Portal:${NC}      http://${PANEL_HOST}:3000"
-echo -e "  ${GREEN}User Client Portal:${NC}http://${PANEL_HOST}:3002"
+echo -e "  ${GREEN}Admin Portal:${NC}       http://${PANEL_HOST}:3000"
+echo -e "  ${GREEN}User Client Portal:${NC} http://${PANEL_HOST}:3002"
 echo ""
 echo -e "  ${CYAN}Default Admin Login:${NC}"
 echo -e "    Email:     admin@flaxa.local"
 echo -e "    Password:  Admin@Rubber123#"
 echo ""
-echo -e "  ${YELLOW}Note:${NC} Please log in and change your default password."
-echo -e "  ${LIME}Auto-Updates:${NC} Admin & User panel updates can now be applied directly"
-echo -e "                from the Admin Dashboard -> Updates Manager."
+echo -e "  ${YELLOW}PM2 Management Commands:${NC}"
+echo -e "    Status:    pm2 status"
+echo -e "    Logs:      pm2 logs"
+echo -e "    Restart:   pm2 restart all"
+echo ""
+echo -e "  ${LIME}Auto-Updates:${NC} Admin, User, & Node fleet updates can be applied directly"
+echo -e "                from Admin Dashboard -> Update Manager."
 echo "==================================================================="
