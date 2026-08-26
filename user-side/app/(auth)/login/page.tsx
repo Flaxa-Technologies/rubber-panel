@@ -1,21 +1,32 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { getPublicConfig } from "@/lib/api-client";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/servers";
+  const justRegistered = searchParams.get("registered") === "true";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [regEnabled, setRegEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getPublicConfig().then((cfg) => {
+      setRegEnabled(cfg.registrationEnabled);
+    }).catch(() => {
+      setRegEnabled(false);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +41,7 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        setError("Invalid username/email or password.");
+        setError("Invalid email or password.");
       } else {
         router.push(callbackUrl);
       }
@@ -42,35 +53,65 @@ function LoginForm() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 32, width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, width: "100%" }}>
       {/* Title & Subtitle */}
       <div>
         <h1
           style={{
-            fontSize: 34,
+            fontSize: 32,
             fontWeight: 700,
             color: "#ffffff",
             letterSpacing: "-0.03em",
-            marginBottom: 8,
+            marginBottom: 6,
           }}
         >
-          Log In
+          Welcome Back
         </h1>
-        <p style={{ fontSize: 14, color: "#94a3b8" }}>
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            style={{
-              color: "#818cf8",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-            className="hover:underline"
-          >
-            Register
-          </Link>
-        </p>
+        {regEnabled === true ? (
+          <p style={{ fontSize: 14, color: "#94a3b8" }}>
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/register"
+              style={{
+                color: "#a3e635",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+              className="hover:underline"
+            >
+              Create one here
+            </Link>
+          </p>
+        ) : regEnabled === false ? (
+          <p style={{ fontSize: 13, color: "#64748b" }}>
+            New user registration is currently closed
+          </p>
+        ) : (
+          <p style={{ fontSize: 14, color: "#94a3b8" }}>
+            Sign in to access your game servers
+          </p>
+        )}
       </div>
+
+      {/* Success Notification (After Registration) */}
+      {justRegistered && (
+        <div
+          style={{
+            padding: "12px 16px",
+            background: "rgba(163, 230, 53, 0.1)",
+            border: "1px solid rgba(163, 230, 53, 0.3)",
+            borderRadius: 10,
+            color: "#a3e635",
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+          <span>Account created successfully! You can now log in below.</span>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -93,19 +134,22 @@ function LoginForm() {
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Email or Username Input */}
         <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#94a3b8", marginBottom: 6 }}>
+            Email Address or Username
+          </label>
           <input
             type="text"
             required
             autoComplete="username"
-            placeholder="Email or username"
+            placeholder="Enter your email or username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             style={{
               width: "100%",
-              padding: "15px 18px",
+              padding: "14px 16px",
               borderRadius: 10,
               background: "#141722",
               border: "1px solid #23273a",
@@ -115,8 +159,8 @@ function LoginForm() {
               transition: "all 0.15s ease",
             }}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = "#6366f1";
-              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99, 102, 241, 0.18)";
+              e.currentTarget.style.borderColor = "#a3e635";
+              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(163, 230, 53, 0.18)";
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = "#23273a";
@@ -127,53 +171,58 @@ function LoginForm() {
 
         {/* Password Input with Visibility Toggle */}
         <div style={{ position: "relative" }}>
-          <input
-            type={showPassword ? "text" : "password"}
-            required
-            autoComplete="current-password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "15px 48px 15px 18px",
-              borderRadius: 10,
-              background: "#141722",
-              border: "1px solid #23273a",
-              color: "#ffffff",
-              fontSize: 14,
-              outline: "none",
-              transition: "all 0.15s ease",
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "#6366f1";
-              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99, 102, 241, 0.18)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "#23273a";
-              e.currentTarget.style.boxShadow = "none";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            style={{
-              position: "absolute",
-              right: 16,
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "none",
-              border: "none",
-              color: "#64748b",
-              cursor: "pointer",
-              padding: 4,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#94a3b8", marginBottom: 6 }}>
+            Password
+          </label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "14px 44px 14px 16px",
+                borderRadius: 10,
+                background: "#141722",
+                border: "1px solid #23273a",
+                color: "#ffffff",
+                fontSize: 14,
+                outline: "none",
+                transition: "all 0.15s ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#a3e635";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(163, 230, 53, 0.18)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#23273a";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                right: 14,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#64748b",
+                cursor: "pointer",
+                padding: 4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </div>
 
         {/* Primary Action Button */}
@@ -183,15 +232,15 @@ function LoginForm() {
           style={{
             width: "100%",
             marginTop: 8,
-            padding: "15px 20px",
+            padding: "14px 20px",
             borderRadius: 10,
-            background: "#5b45e0",
-            color: "#ffffff",
-            fontWeight: 600,
-            fontSize: 15,
+            background: "#a3e635",
+            color: "#0f172a",
+            fontWeight: 700,
+            fontSize: 14,
             border: "none",
             cursor: loading ? "not-allowed" : "pointer",
-            boxShadow: "0 4px 16px rgba(91, 69, 224, 0.4)",
+            boxShadow: "0 4px 16px rgba(163, 230, 53, 0.25)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -200,18 +249,18 @@ function LoginForm() {
           }}
           onMouseEnter={(e) => {
             if (!loading) {
-              e.currentTarget.style.background = "#6751ee";
+              e.currentTarget.style.background = "#bef264";
               e.currentTarget.style.transform = "translateY(-1px)";
             }
           }}
           onMouseLeave={(e) => {
             if (!loading) {
-              e.currentTarget.style.background = "#5b45e0";
+              e.currentTarget.style.background = "#a3e635";
               e.currentTarget.style.transform = "translateY(0)";
             }
           }}
         >
-          {loading ? <Loader2 size={16} className="spin" /> : "Log In"}
+          {loading ? <Loader2 size={16} className="animate-spin" /> : "Log In to Panel"}
         </button>
       </form>
     </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, ShieldAlert, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { getPublicConfig } from "@/lib/api-client";
 
 export default function RegisterPage() {
@@ -16,18 +16,18 @@ export default function RegisterPage() {
   const [agreeTerms, setAgreeTerms] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [regEnabled, setRegEnabled] = useState(true);
+  const [regEnabled, setRegEnabled] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    getPublicConfig().then((c) => {
-      setRegEnabled(c.registrationEnabled);
+    getPublicConfig().then((cfg) => {
+      setRegEnabled(cfg.registrationEnabled);
       setChecking(false);
-      if (!c.registrationEnabled) {
-        router.push("/login");
-      }
+    }).catch(() => {
+      setRegEnabled(false);
+      setChecking(false);
     });
-  }, [router]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,13 +42,13 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ username: username.trim(), email: email.trim(), password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Registration failed.");
+        setError(data.error || "Registration failed. Please check your information.");
       } else {
         router.push("/login?registered=true");
       }
@@ -59,29 +59,94 @@ export default function RegisterPage() {
     }
   };
 
-  if (checking || !regEnabled) return null;
+  if (checking) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 0", gap: 12 }}>
+        <Loader2 size={24} className="animate-spin text-lime-400" />
+        <span style={{ fontSize: 13, color: "#94a3b8" }}>Checking system configuration...</span>
+      </div>
+    );
+  }
+
+  // Registration Disabled View
+  if (regEnabled === false) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, width: "100%", textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "rgba(239, 68, 68, 0.12)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#f87171",
+            }}
+          >
+            <ShieldAlert size={28} />
+          </div>
+        </div>
+
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#ffffff", marginBottom: 8 }}>
+            Registration Closed
+          </h1>
+          <p style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6 }}>
+            New user registration is currently disabled by the server administrator.
+            Only existing accounts can log in.
+          </p>
+        </div>
+
+        <Link
+          href="/login"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            width: "100%",
+            padding: "14px 20px",
+            borderRadius: 10,
+            background: "#141722",
+            border: "1px solid #23273a",
+            color: "#a3e635",
+            fontSize: 14,
+            fontWeight: 600,
+            textDecoration: "none",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <ArrowLeft size={16} />
+          <span>Return to Log In</span>
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 32, width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, width: "100%" }}>
       {/* Title & Subtitle */}
       <div>
         <h1
           style={{
-            fontSize: 34,
+            fontSize: 32,
             fontWeight: 700,
             color: "#ffffff",
             letterSpacing: "-0.03em",
-            marginBottom: 8,
+            marginBottom: 6,
           }}
         >
-          Create an account
+          Create Account
         </h1>
         <p style={{ fontSize: 14, color: "#94a3b8" }}>
           Already have an account?{" "}
           <Link
             href="/login"
             style={{
-              color: "#818cf8",
+              color: "#a3e635",
               fontWeight: 600,
               textDecoration: "none",
             }}
@@ -113,19 +178,23 @@ export default function RegisterPage() {
       )}
 
       {/* Registration Form */}
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Username */}
         <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#94a3b8", marginBottom: 6 }}>
+            Username
+          </label>
           <input
             type="text"
             required
-            pattern="^[a-zA-Z0-9_]{3,20}$"
-            placeholder="Username"
+            pattern="^[a-zA-Z0-9_]{3,32}$"
+            title="Username must be 3-32 alphanumeric characters"
+            placeholder="Choose a username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             style={{
               width: "100%",
-              padding: "15px 18px",
+              padding: "14px 16px",
               borderRadius: 10,
               background: "#141722",
               border: "1px solid #23273a",
@@ -135,8 +204,8 @@ export default function RegisterPage() {
               transition: "all 0.15s ease",
             }}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = "#6366f1";
-              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99, 102, 241, 0.18)";
+              e.currentTarget.style.borderColor = "#a3e635";
+              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(163, 230, 53, 0.18)";
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = "#23273a";
@@ -147,16 +216,19 @@ export default function RegisterPage() {
 
         {/* Email */}
         <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#94a3b8", marginBottom: 6 }}>
+            Email Address
+          </label>
           <input
             type="email"
             required
             autoComplete="email"
-            placeholder="Email"
+            placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             style={{
               width: "100%",
-              padding: "15px 18px",
+              padding: "14px 16px",
               borderRadius: 10,
               background: "#141722",
               border: "1px solid #23273a",
@@ -166,8 +238,8 @@ export default function RegisterPage() {
               transition: "all 0.15s ease",
             }}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = "#6366f1";
-              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99, 102, 241, 0.18)";
+              e.currentTarget.style.borderColor = "#a3e635";
+              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(163, 230, 53, 0.18)";
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = "#23273a";
@@ -178,54 +250,59 @@ export default function RegisterPage() {
 
         {/* Password with Toggle */}
         <div style={{ position: "relative" }}>
-          <input
-            type={showPassword ? "text" : "password"}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "15px 48px 15px 18px",
-              borderRadius: 10,
-              background: "#141722",
-              border: "1px solid #23273a",
-              color: "#ffffff",
-              fontSize: 14,
-              outline: "none",
-              transition: "all 0.15s ease",
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "#6366f1";
-              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99, 102, 241, 0.18)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "#23273a";
-              e.currentTarget.style.boxShadow = "none";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            style={{
-              position: "absolute",
-              right: 16,
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "none",
-              border: "none",
-              color: "#64748b",
-              cursor: "pointer",
-              padding: 4,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#94a3b8", marginBottom: 6 }}>
+            Password
+          </label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="Minimum 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "14px 44px 14px 16px",
+                borderRadius: 10,
+                background: "#141722",
+                border: "1px solid #23273a",
+                color: "#ffffff",
+                fontSize: 14,
+                outline: "none",
+                transition: "all 0.15s ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#a3e635";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(163, 230, 53, 0.18)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#23273a";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                right: 14,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#64748b",
+                cursor: "pointer",
+                padding: 4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </div>
 
         {/* Agree Terms Checkbox */}
@@ -236,7 +313,7 @@ export default function RegisterPage() {
               checked={agreeTerms}
               onChange={(e) => setAgreeTerms(e.target.checked)}
               style={{
-                accentColor: "#6366f1",
+                accentColor: "#a3e635",
                 width: 17,
                 height: 17,
                 cursor: "pointer",
@@ -245,7 +322,7 @@ export default function RegisterPage() {
             />
             <span>
               I agree to the{" "}
-              <span style={{ color: "#818cf8", fontWeight: 500 }}>Terms &amp; Conditions</span>
+              <span style={{ color: "#a3e635", fontWeight: 500 }}>Terms &amp; Conditions</span>
             </span>
           </label>
         </div>
@@ -257,15 +334,15 @@ export default function RegisterPage() {
           style={{
             width: "100%",
             marginTop: 8,
-            padding: "15px 20px",
+            padding: "14px 20px",
             borderRadius: 10,
-            background: "#5b45e0",
-            color: "#ffffff",
-            fontWeight: 600,
-            fontSize: 15,
+            background: "#a3e635",
+            color: "#0f172a",
+            fontWeight: 700,
+            fontSize: 14,
             border: "none",
             cursor: loading ? "not-allowed" : "pointer",
-            boxShadow: "0 4px 16px rgba(91, 69, 224, 0.4)",
+            boxShadow: "0 4px 16px rgba(163, 230, 53, 0.25)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -274,18 +351,18 @@ export default function RegisterPage() {
           }}
           onMouseEnter={(e) => {
             if (!loading) {
-              e.currentTarget.style.background = "#6751ee";
+              e.currentTarget.style.background = "#bef264";
               e.currentTarget.style.transform = "translateY(-1px)";
             }
           }}
           onMouseLeave={(e) => {
             if (!loading) {
-              e.currentTarget.style.background = "#5b45e0";
+              e.currentTarget.style.background = "#a3e635";
               e.currentTarget.style.transform = "translateY(0)";
             }
           }}
         >
-          {loading ? <Loader2 size={16} className="spin" /> : "Create Account"}
+          {loading ? <Loader2 size={16} className="animate-spin" /> : "Create Account"}
         </button>
       </form>
     </div>

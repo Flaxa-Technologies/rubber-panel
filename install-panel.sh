@@ -108,19 +108,38 @@ if [ -z "${SERVER_IP}" ]; then
   SERVER_IP="localhost"
 fi
 
-# Prompt for domain / hostname safely (supports piped curl execution)
-PANEL_HOST=""
-if [ -t 0 ]; then
-  read -r -p "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " INPUT_HOST
-  PANEL_HOST="${INPUT_HOST}"
-elif [ -e /dev/tty ]; then
-  read -r -p "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " INPUT_HOST </dev/tty 2>/dev/null || true
-  PANEL_HOST="${INPUT_HOST}"
-fi
+prompt_input() {
+  local prompt_text="$1"
+  local var_name="$2"
+  local val=""
 
-if [ -z "${PANEL_HOST}" ]; then
-  PANEL_HOST="${SERVER_IP}"
-fi
+  if [ -t 0 ]; then
+    read -r -p "${prompt_text}" val
+  elif [ -e /dev/tty ]; then
+    read -r -p "${prompt_text}" val </dev/tty 2>/dev/null || true
+  fi
+  eval "$var_name=\"\$val\""
+}
+
+# Prompt for domain / hostname
+PANEL_HOST=""
+prompt_input "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " PANEL_HOST
+PANEL_HOST=${PANEL_HOST:-$SERVER_IP}
+
+# Prompt for Admin Credentials
+echo ""
+echo -e "${LIME}--- Initial Super Admin Credentials ---${NC}"
+ADMIN_EMAIL=""
+prompt_input "Enter Admin Email [Default: admin@flaxa.local]: " ADMIN_EMAIL
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@flaxa.local}
+
+ADMIN_USERNAME=""
+prompt_input "Enter Admin Username [Default: admin]: " ADMIN_USERNAME
+ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+
+ADMIN_PASSWORD=""
+prompt_input "Enter Admin Password [Default: Admin@Rubber123#]: " ADMIN_PASSWORD
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin@Rubber123#}
 
 # Generate Secure Random Secrets
 NEXTAUTH_SECRET=$(openssl rand -hex 32)
@@ -164,7 +183,7 @@ cd "${INSTALL_DIR}/admin-side"
 npm install --prefer-offline --no-audit --no-fund
 npx prisma db push --accept-data-loss
 if [ -f prisma/seed.ts ]; then
-  npx tsx prisma/seed.ts || true
+  SEED_ADMIN_EMAIL="${ADMIN_EMAIL}" SEED_ADMIN_PASSWORD="${ADMIN_PASSWORD}" SEED_ADMIN_USERNAME="${ADMIN_USERNAME}" npx tsx prisma/seed.ts || true
 fi
 npm run build
 
@@ -224,9 +243,9 @@ echo -e "${NC}"
 echo -e "  ${GREEN}Admin Portal:${NC}       http://${PANEL_HOST}:3000"
 echo -e "  ${GREEN}User Client Portal:${NC} http://${PANEL_HOST}:3002"
 echo ""
-echo -e "  ${CYAN}Default Admin Login:${NC}"
-echo -e "    Email:     admin@flaxa.local"
-echo -e "    Password:  Admin@Rubber123#"
+echo -e "  ${CYAN}Admin Login Credentials:${NC}"
+echo -e "    Email:     ${ADMIN_EMAIL}"
+echo -e "    Password:  ${ADMIN_PASSWORD}"
 echo ""
 echo -e "  ${YELLOW}PM2 Management Commands:${NC}"
 echo -e "    Status:    pm2 status"

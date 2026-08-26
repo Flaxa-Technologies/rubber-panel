@@ -6,13 +6,15 @@ import bcrypt from "bcryptjs";
 const db = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding Rubber Panel database...");
+  console.log("[Seed] Seeding Rubber Panel database...");
 
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@rubberlab.net";
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
-  const adminUsername = process.env.SEED_ADMIN_USERNAME ?? "superadmin";
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? process.env.ADMIN_EMAIL ?? "admin@flaxa.local";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? process.env.ADMIN_PASSWORD ?? "Admin@Rubber123#";
+  const adminUsername = process.env.SEED_ADMIN_USERNAME ?? process.env.ADMIN_USERNAME ?? "admin";
 
-  const existing = await db.user.findUnique({ where: { email: adminEmail } });
+  const existing = await db.user.findFirst({
+    where: { OR: [{ email: adminEmail }, { username: adminUsername }, { role: "SUPER_ADMIN" }] },
+  });
 
   if (!existing) {
     const passwordHash = await bcrypt.hash(adminPassword, 12);
@@ -26,9 +28,9 @@ async function main() {
         emailVerified: true,
       },
     });
-    console.log(`✅ Created Super Admin: ${admin.email}`);
+    console.log(`[Seed] Created Super Admin: ${admin.email}`);
   } else {
-    console.log(`ℹ️  Super Admin already exists: ${adminEmail}`);
+    console.log(`[Seed] Super Admin already exists: ${existing.email}`);
   }
 
   // Default settings
