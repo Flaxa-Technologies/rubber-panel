@@ -244,39 +244,11 @@ export async function fetchLatestRelease(includePrerelease = true): Promise<GitH
   return active ?? releases[0] ?? null;
 }
 
-/** Returns true if latestVersion is newer than currentVersion (supports semver + beta/rc) */
+/** Returns true if latestVersion is newer or different from currentVersion */
 export function isNewerVersion(current: string, latest: string): boolean {
-  if (current === latest) return false;
-
+  if (!current || !latest) return false;
   const clean = (v: string) => v.replace(/^v/, "").trim();
-  const cClean = clean(current);
-  const lClean = clean(latest);
-
-  if (cClean === lClean) return false;
-
-  // Extract core numbers (e.g., 0.1.0 from 0.1.0-beta.1)
-  const parseCore = (v: string) => {
-    const [core] = v.split("-");
-    return core.split(".").map((n) => parseInt(n, 10) || 0);
-  };
-
-  const [ca, cb, cc] = parseCore(cClean);
-  const [la, lb, lc] = parseCore(lClean);
-
-  if (la !== ca) return la > ca;
-  if (lb !== cb) return lb > cb;
-  if (lc !== cc) return lc > cc;
-
-  // Same core version: compare prerelease tag if present
-  const cHasPre = cClean.includes("-");
-  const lHasPre = lClean.includes("-");
-
-  // Core is identical: non-prerelease is newer than prerelease (1.0.0 > 1.0.0-beta)
-  if (cHasPre && !lHasPre) return true;
-  if (!cHasPre && lHasPre) return false;
-
-  // Both have prereleases: compare string/number suffixes (e.g. beta.2 > beta.1)
-  return lClean.localeCompare(cClean, undefined, { numeric: true }) > 0;
+  return clean(current) !== clean(latest);
 }
 
 /** Read currently installed package version from package.json */

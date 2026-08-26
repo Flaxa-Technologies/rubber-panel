@@ -120,21 +120,9 @@ export default function UpdatesPage() {
   function isVersionNewer(current: string, latest: string): boolean {
     if (!current || !latest) return false;
     const clean = (v: string) => v.replace(/^v/, "").trim();
-    const [c, l] = [clean(current), clean(latest)];
-    if (c === l) return false;
-
-    const [pa, pb] = [c.split("-")[0].split(".").map(Number), l.split("-")[0].split(".").map(Number)];
-    for (let i = 0; i < 3; i++) {
-      const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-      if (diff !== 0) return diff < 0;
-    }
-
-    const cHasPre = c.includes("-");
-    const lHasPre = l.includes("-");
-    if (cHasPre && !lHasPre) return true;
-    if (!cHasPre && lHasPre) return false;
-
-    return c.localeCompare(l, undefined, { numeric: true }) < 0;
+    const c = clean(current);
+    const l = clean(latest);
+    return c !== l;
   }
 
   async function handleApplyUpdate(side: "admin" | "user" | "node", nodeId?: string) {
