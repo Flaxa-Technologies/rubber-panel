@@ -67,9 +67,12 @@ cd "${INSTALL_DIR}"
 REPO="Flaxa-Technologies/rubber-panel"
 echo -e "${CYAN}Fetching latest release information from GitHub (${REPO})...${NC}"
 
-LATEST_TAG=$(curl -s "https://api.github.com/repos/${REPO}/releases" | grep '"tag_name":' | head -n 1 | cut -d'"' -f4)
+LATEST_TAG=$(git ls-remote --tags --sort="v:refname" "https://github.com/${REPO}.git" 2>/dev/null | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.1"
+  LATEST_TAG=$(curl -s "https://github.com/${REPO}/releases.atom" 2>/dev/null | grep -o '<id>tag:github.com[^<]*' | head -n 1 | sed 's/.*\///')
+fi
+if [ -z "${LATEST_TAG}" ]; then
+  LATEST_TAG="v0.1.0-beta.6"
 fi
 echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
 

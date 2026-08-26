@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
           send("progress", { phase: "done", message: `Node "${targetNode.name}" updated to ${version} successfully!` });
         } else {
           // Local side update (admin, user, or local node)
-          await applyUpdate(side, assetUrl, version, onProgress);
+          await applyUpdate(side, version, assetUrl, onProgress);
         }
 
         // Audit log
