@@ -111,17 +111,32 @@ if [ -z "${SERVER_IP}" ]; then
   SERVER_IP="localhost"
 fi
 
-prompt_input() {
-  local prompt_text="$1"
-  local default_val="$2"
-  local var_name="$3"
+# Interactive Setup Form
+echo ""
+echo -e "${LIME}"
+echo "==================================================================="
+echo "                  Super Admin Setup Configuration Form             "
+echo "==================================================================="
+echo -e "${NC}"
+echo -e "  Please provide your domain/IP and initial administrator credentials:"
+echo ""
+
+prompt_field() {
+  local prompt_label="$1"
+  local prompt_hint="$2"
+  local default_val="$3"
+  local var_name="$4"
   local val=""
 
+  echo -e "${LIME}┌── ${prompt_label}${NC}"
+  if [ -n "${prompt_hint}" ]; then
+    echo -e "${LIME}│${NC}   ${YELLOW}Hint: ${prompt_hint}${NC}"
+  fi
+  echo -ne "${LIME}└──> ${NC}"
+
   if [ -e /dev/tty ] && [ -r /dev/tty ]; then
-    echo -ne "${prompt_text}" > /dev/tty
     read -r val < /dev/tty || true
   else
-    echo -ne "${prompt_text}"
     read -r val || true
   fi
 
@@ -130,26 +145,25 @@ prompt_input() {
     val="$default_val"
   fi
   eval "$var_name=\"\$val\""
+  echo ""
 }
 
 # Prompt for domain / hostname
 PANEL_HOST=""
-prompt_input "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " "${SERVER_IP}" PANEL_HOST
+prompt_field "[1/4] Panel Domain or Public IP [Default: ${SERVER_IP}]" "The IP address or domain used to access your panel in browser" "${SERVER_IP}" PANEL_HOST
 
 # Prompt for Admin Credentials
-echo ""
-echo -e "${LIME}--- Initial Super Admin Credentials ---${NC}"
 ADMIN_EMAIL=""
 while [ -z "${ADMIN_EMAIL}" ]; do
-  prompt_input "Enter Admin Email: " "" ADMIN_EMAIL
+  prompt_field "[2/4] Super Admin Email Address" "Primary email address for logging into the Admin Panel" "" ADMIN_EMAIL
 done
 
 ADMIN_USERNAME=""
-prompt_input "Enter Admin Username [Default: admin]: " "admin" ADMIN_USERNAME
+prompt_field "[3/4] Super Admin Username [Default: admin]" "Username for the administrator account" "admin" ADMIN_USERNAME
 
 ADMIN_PASSWORD=""
 while [ -z "${ADMIN_PASSWORD}" ]; do
-  prompt_input "Enter Admin Password: " "" ADMIN_PASSWORD
+  prompt_field "[4/4] Super Admin Password" "Choose a strong password for your super admin account" "" ADMIN_PASSWORD
 done
 
 # Generate Secure Random Secrets

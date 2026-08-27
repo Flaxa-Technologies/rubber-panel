@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  Rubber Panel — 1-Click Node Daemon Installer (Compute Node)
-#  Installs Docker CE, Node.js 20, PM2, sets up daemon agent & auto-starts.
+#  Rubber Panel — 1-Click Compute Node Daemon Installer
+#  Installs Docker, Node.js 20, PM2, and configures the compute agent daemon.
 # ==============================================================================
 
 set -e
@@ -16,8 +16,7 @@ NC="\033[0m"
 
 echo -e "${LIME}"
 echo "==================================================================="
-echo "              Rubber Panel — Node Daemon Installer                 "
-echo "              Automated Docker & Daemon Compute Agent Setup        "
+echo "             Rubber Panel — Compute Node Daemon Setup              "
 echo "==================================================================="
 echo -e "${NC}"
 
@@ -27,27 +26,25 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-# Detect OS & Base Tools
-echo -e "${CYAN}[1/6] Installing Base Dependencies...${NC}"
+# Detect OS
+echo -e "${CYAN}[1/6] Detecting OS & Installing Base Dependencies...${NC}"
 if [ -f /etc/debian_version ]; then
   apt-get update -y
   apt-get install -y curl git unzip tar build-essential openssl ca-certificates gnupg
 elif [ -f /etc/redhat-release ]; then
   yum install -y curl git unzip tar make gcc gcc-c++ openssl
-fi
-
-# Check & Install Docker CE
-echo -e "${CYAN}[2/6] Checking Docker Engine...${NC}"
-if ! command -v docker >/dev/null 2>&1; then
-  echo -e "${YELLOW}Docker not found. Installing Docker CE automatically...${NC}"
-  curl -fsSL https://get.docker.com | sh
-  systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true
 else
-  echo -e "${GREEN}✓ Docker is already installed ($(docker --version)).${NC}"
+  echo -e "${YELLOW}[Warning] Unknown OS. Continuing with generic setup...${NC}"
 fi
 
-# Ensure Docker service is running
-systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
+# Install Docker if not present
+if ! command -v docker >/dev/null 2>&1; then
+  echo -e "${CYAN}[2/6] Installing Docker Engine...${NC}"
+  curl -fsSL https://get.docker.com | bash
+  systemctl enable docker
+  systemctl start docker
+fi
+echo -e "${GREEN}✓ Docker $(docker --version | cut -d',' -f1) ready.${NC}"
 
 # Install Node.js 20 LTS if not present
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 20 ]; then
@@ -59,19 +56,20 @@ if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d'.' -f1 | tr -d 'v'
     yum install -y nodejs
   fi
 fi
+echo -e "${GREEN}✓ Node.js $(node -v) & npm $(npm -v) ready.${NC}"
 
-# Install PM2
+# Install PM2 globally
 if ! command -v pm2 >/dev/null 2>&1; then
-  echo -e "${CYAN}Installing PM2 Process Manager...${NC}"
   npm install -g pm2
 fi
 
-# Prepare Directories
-INSTALL_DIR="/var/www/rubber-node"
-DATA_DIR="/var/lib/rubber-panel/servers"
-
-mkdir -p "${INSTALL_DIR}"
+# Prepare Data Directory for Game Servers
+DATA_DIR="/var/rubber-panel/servers"
 mkdir -p "${DATA_DIR}"
+
+# Install Directory
+INSTALL_DIR="/var/rubber-panel/node-daemon"
+mkdir -p "${INSTALL_DIR}"
 cd "${INSTALL_DIR}"
 
 # Fetch Latest Node Release
@@ -100,23 +98,33 @@ else
   rm -rf "${TEMP_CLONE}"
 fi
 
-# Interactive Configuration
+# Interactive CLI Form
 echo ""
-echo -e "${LIME}--- Node Daemon Configuration ---${NC}"
-echo -e "${YELLOW}(Create a Node in your Admin Panel -> Nodes -> 'Add Node' to obtain the token)${NC}"
+echo -e "${LIME}"
+echo "==================================================================="
+echo "                  Node Daemon Configuration Form                   "
+echo "==================================================================="
+echo -e "${NC}"
+echo -e "  ${CYAN}Step 1:${NC} Open your Admin Panel -> ${GREEN}Nodes${NC} -> click ${GREEN}'Add Node'${NC}"
+echo -e "  ${CYAN}Step 2:${NC} Fill in the connection form fields below:"
 echo ""
 
-prompt_input() {
-  local prompt_text="$1"
-  local default_val="$2"
-  local var_name="$3"
+prompt_field() {
+  local prompt_label="$1"
+  local prompt_hint="$2"
+  local default_val="$3"
+  local var_name="$4"
   local val=""
 
+  echo -e "${LIME}┌── ${prompt_label}${NC}"
+  if [ -n "${prompt_hint}" ]; then
+    echo -e "${LIME}│${NC}   ${YELLOW}Hint: ${prompt_hint}${NC}"
+  fi
+  echo -ne "${LIME}└──> ${NC}"
+
   if [ -e /dev/tty ] && [ -r /dev/tty ]; then
-    echo -ne "${prompt_text}" > /dev/tty
     read -r val < /dev/tty || true
   else
-    echo -ne "${prompt_text}"
     read -r val || true
   fi
 
@@ -125,20 +133,21 @@ prompt_input() {
     val="$default_val"
   fi
   eval "$var_name=\"\$val\""
+  echo ""
 }
 
 ADMIN_URL=""
 while [ -z "${ADMIN_URL}" ]; do
-  prompt_input "Enter Admin Panel URL [e.g. http://your-panel-ip:3000]: " "" ADMIN_URL
+  prompt_field "[1/3] Admin Panel URL" "e.g. http://20.192.21.60:3000 or http://localhost:3000" "" ADMIN_URL
 done
 
 NODE_TOKEN=""
 while [ -z "${NODE_TOKEN}" ]; do
-  prompt_input "Enter Node Auth Token (from Admin Panel): " "" NODE_TOKEN
+  prompt_field "[2/3] Node Auth Token" "Copy token from Admin Panel -> Nodes -> 'Add Node'" "" NODE_TOKEN
 done
 
 NODE_PORT=""
-prompt_input "Enter Node Daemon Port [Default: 3001]: " "3001" NODE_PORT
+prompt_field "[3/3] Node Daemon Port [Default: 3001]" "Port where this compute agent will listen" "3001" NODE_PORT
 
 # Configure node-side .env
 echo -e "${CYAN}[5/6] Writing configuration (.env)...${NC}"
@@ -198,7 +207,3 @@ echo -e "  ${GREEN}Docker Service:${NC}  Running"
 echo ""
 echo -e "  ${CYAN}Heartbeat:${NC} The daemon is now actively communicating with your panel."
 echo -e "             Check the Admin Dashboard under 'Nodes' to verify the green ONLINE status."
-echo ""
-echo -e "  ${LIME}Auto-Updates:${NC} Node Daemon updates can be remotely dispatched directly"
-echo -e "                from the Admin Dashboard -> Update Manager."
-echo "==================================================================="
