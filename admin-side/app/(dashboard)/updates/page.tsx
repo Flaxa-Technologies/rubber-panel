@@ -630,6 +630,7 @@ export default function UpdatesPage() {
                   const state = progressStates[stateKey] || { status: "idle", logs: [] };
                   const busy = isUpdating(state.status);
                   const isOnline = node.status === "ONLINE";
+                  const nodeNeedsUpdate = isVersionNewer(node.currentVersion, updateData.latestVersion);
 
                   return (
                     <div key={node.id} className="p-5 space-y-4">
@@ -657,16 +658,16 @@ export default function UpdatesPage() {
                         <div className="flex items-center gap-4">
                           <div className="text-right">
                             <div className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>Installed Version</div>
-                            <div className="font-mono text-sm font-bold" style={{ color: node.needsUpdate ? "#f59e0b" : "var(--color-rp-text)" }}>
+                            <div className="font-mono text-sm font-bold" style={{ color: nodeNeedsUpdate ? "#f59e0b" : "var(--color-rp-text)" }}>
                               {node.currentVersion}
                             </div>
                           </div>
 
                           <div>
-                            {node.needsUpdate && !busy && state.status !== "done" ? (
+                            {nodeNeedsUpdate && !busy && state.status !== "done" ? (
                               <button
                                 onClick={() => handleApplyUpdate("node", node.id)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer"
                                 style={{
                                   background: "linear-gradient(135deg, rgba(245,158,11,0.25), rgba(245,158,11,0.12))",
                                   border: "1px solid rgba(245,158,11,0.4)",
@@ -676,7 +677,7 @@ export default function UpdatesPage() {
                                 <Download className="w-3.5 h-3.5" />
                                 Update to {updateData.latestVersion}
                               </button>
-                            ) : !node.needsUpdate && state.status === "idle" ? (
+                            ) : !nodeNeedsUpdate && state.status === "idle" ? (
                               <div
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
                                 style={{

@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const nodesWithUpdate = nodes.map((n) => {
       const currentVer = n.agentVersion || "0.1.0";
-      const needsUpdate = info.available && isNewer(currentVer, info.latestVersion);
+      const needsUpdate = isNewer(currentVer, info.latestVersion);
       return {
         ...n,
         currentVersion: currentVer,
