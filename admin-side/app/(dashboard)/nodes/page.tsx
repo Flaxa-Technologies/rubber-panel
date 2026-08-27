@@ -105,60 +105,94 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
   if (newToken) {
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
     const quickCmd = `curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash -s -- --admin-url="${origin}" --node-id="${newToken.nodeId}" --node-token="${newToken.token}" --port=3001`;
-    const envBlock = `NODE_TOKEN=${newToken.token}\nNODE_ID=${newToken.nodeId}\nADMIN_API_URL=${origin}\nAGENT_PORT=3001\nPORT=3001\nHEARTBEAT_INTERVAL_SECONDS=30\nSERVER_DATA_DIR=/var/rubber-panel/servers`;
 
     return (
-      <Modal open={open} onClose={handleClose} title="Node Created — Flaxa Studios Deployment" size="md"
+      <Modal open={open} onClose={handleClose} title="Node Registered — Deployment Credentials" size="lg"
         footer={<Button onClick={handleClose}>Done</Button>}>
         <div className="space-y-4">
-          <div className="flex items-start gap-3 p-3 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
+          <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#22c55e" }} />
-            <p className="text-xs" style={{ color: "var(--color-rp-text)" }}>
-              <strong>Node registered successfully!</strong> Run the Quick Start command inside your VPS / Codespace <code>node-side</code> directory to initialize the daemon automatically.
+            <p className="text-xs leading-relaxed" style={{ color: "var(--color-rp-text)" }}>
+              <strong>Node registered successfully!</strong> Run the 1-Line Auto-Deploy command on your VPS to automatically install Docker, PM2, and connect this node daemon to your panel in under 30 seconds.
             </p>
           </div>
 
           {/* Quick Auto-Deploy Command */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
                 <Zap className="w-3.5 h-3.5" />
-                <span>Quick 1-Line Setup (VPS / Codespaces)</span>
+                <span>1-Click Auto-Deploy Command (VPS / Codespace)</span>
               </p>
               <button
                 type="button"
                 onClick={() => { navigator.clipboard.writeText(quickCmd); setCopied(true); setTimeout(() => setCopied(false), 3000); }}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-semibold"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
                 style={{ backgroundColor: "var(--color-rp-accent)", color: "#000" }}>
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                {copied ? "Copied Command!" : "Copy Quick Command"}
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? "Copied 1-Line Command!" : "Copy Auto-Deploy Command"}
               </button>
             </div>
-            <div className="rounded-xl overflow-hidden" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
-              <pre className="p-3 text-[11px] font-mono overflow-x-auto select-all" style={{ color: "#4ade80", lineHeight: 1.6, margin: 0 }}>
+            <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
+              <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#a3e635" }}>
                 {quickCmd}
-              </pre>
+              </code>
             </div>
           </div>
 
-          {/* Manual .env block */}
+          {/* Connection Parameters Cards */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>
-                Or paste directly into <code style={{ color: "var(--color-rp-text)" }}>node-side/.env</code>
-              </p>
-              <button
-                type="button"
-                onClick={() => { navigator.clipboard.writeText(envBlock); setCopied(true); setTimeout(() => setCopied(false), 3000); }}
-                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border"
-                style={{ borderColor: "var(--color-rp-border)", color: "var(--color-rp-text-muted)" }}>
-                {copied ? "Copied!" : "Copy .env"}
-              </button>
-            </div>
-            <div className="rounded-xl overflow-hidden" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
-              <pre className="p-3 text-[11px] font-mono overflow-x-auto" style={{ color: "#e2e8f0", lineHeight: 1.6, margin: 0 }}>
-                {envBlock}
-              </pre>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "var(--color-rp-text-muted)" }}>
+              Node Connection Parameters
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {/* Admin URL */}
+              <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+                <div className="min-w-0 pr-2">
+                  <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Admin Panel URL</p>
+                  <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{origin}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(origin)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                  title="Copy Admin URL"
+                  style={{ color: "var(--color-rp-text-muted)" }}>
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Node ID */}
+              <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+                <div className="min-w-0 pr-2">
+                  <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node ID</p>
+                  <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{newToken.nodeId}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(newToken.nodeId)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                  title="Copy Node ID"
+                  style={{ color: "var(--color-rp-text-muted)" }}>
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Node Auth Token */}
+              <div className="p-3 rounded-xl flex items-center justify-between md:col-span-2" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+                <div className="min-w-0 pr-2">
+                  <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node Auth Token (Secret)</p>
+                  <p className="text-xs font-mono font-semibold truncate" style={{ color: "#a3e635" }}>{newToken.token}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(newToken.token)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                  title="Copy Node Token"
+                  style={{ color: "var(--color-rp-accent)" }}>
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
