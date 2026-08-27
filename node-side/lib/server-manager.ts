@@ -293,9 +293,9 @@ export async function reloadStatesFromDisk() {
           motd: env.CRYO_SLEEP_MOTD || info.cryoSleepMotd,
         });
 
-        // 💤 On node startup/restart: If Cryo-Sleep is enabled and container is not actively running,
+        // 💤 On node startup/restart: If Cryo-Sleep is enabled and container is not actively running or sleeping,
         // immediately auto-arm the lightweight wake proxy on the assigned port (0% RAM mode)
-        if (isCryoEnabled && !running) {
+        if (isCryoEnabled && !running && !isSleeping) {
           hibernateServer(info.id, "Node boot auto-arm").catch((err) => {
             console.warn(`[Cryo-Sleep] Boot auto-arm notice for ${info.id}:`, err.message);
           });

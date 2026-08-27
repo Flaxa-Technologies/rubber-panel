@@ -72,12 +72,16 @@ const activeProxies = new Map<string, ActiveWakeProxy>();
  * Starts a lightweight native TCP wake proxy on the server's primary port.
  */
 export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakeProxy> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const { serverId, serverName, port, serverType = "MINECRAFT", onWake } = options;
 
-    // If an existing proxy for this server is running, close it first
-    if (activeProxies.has(serverId)) {
-      activeProxies.get(serverId)?.close().catch(() => {});
+    // If an existing proxy for this server is already running on this port, return it
+    const existing = activeProxies.get(serverId);
+    if (existing) {
+      if (existing.port === port) {
+        return resolve(existing);
+      }
+      await existing.close().catch(() => {});
       activeProxies.delete(serverId);
     }
 

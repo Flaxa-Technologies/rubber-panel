@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNodeResources } from "@/lib/resource-monitor";
-import { startHeartbeat, getDiscoveredNodeId } from "@/lib/heartbeat-worker";
-import { reloadStatesFromDisk } from "@/lib/server-manager";
-
-// Self-healing initialization on node startup
-startHeartbeat();
-reloadStatesFromDisk().catch(() => {});
+import { getDiscoveredNodeId } from "@/lib/heartbeat-worker";
 
 // GET /api/agent/health — Protected by Bearer token (used by admin-side)
 // GET /api/agent/health?local=1 — No auth, localhost only (used by node-side UI)
