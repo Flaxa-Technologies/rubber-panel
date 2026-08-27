@@ -87,6 +87,7 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
 
     const isNodeJs = serverType === "NODEJS";
     let isClosing = false;
+    const sockets = new Set<net.Socket>();
 
     if (isNodeJs) {
       // ─── HTTP WAKE PROXY FOR NODE.JS APPS ─────────────────────────────────
@@ -140,6 +141,11 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
         `);
       });
 
+      server.on("connection", (socket) => {
+        sockets.add(socket);
+        socket.on("close", () => sockets.delete(socket));
+      });
+
       server.listen(port, "0.0.0.0", () => {
         console.log(`[Cryo-Sleep:Proxy] HTTP Wake Proxy active on port ${port} for "${serverName}" (${serverId})`);
         const proxyObj: ActiveWakeProxy = {
@@ -147,7 +153,15 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
           port,
           close: () => new Promise<void>((res) => {
             isClosing = true;
-            server.close(() => res());
+            for (const s of sockets) {
+              try { s.destroy(); } catch {}
+            }
+            sockets.clear();
+            server.close(() => {
+              console.log(`[Cryo-Sleep:Proxy] Released HTTP port ${port} for server ${serverId}`);
+              res();
+            });
+            setTimeout(res, 200);
           }),
         };
         activeProxies.set(serverId, proxyObj);
@@ -163,6 +177,8 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
 
     // ─── MINECRAFT TCP SLP & WAKE PROXY ───────────────────────────────────────
     const tcpServer = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.on("close", () => sockets.delete(socket));
       let state: "HANDSHAKE" | "STATUS" | "LOGIN" = "HANDSHAKE";
       let clientProtocol = 767; // default modern MC 1.21
 
@@ -283,10 +299,15 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
         port,
         close: () => new Promise<void>((res) => {
           isClosing = true;
+          for (const s of sockets) {
+            try { s.destroy(); } catch {}
+          }
+          sockets.clear();
           tcpServer.close(() => {
             console.log(`[Cryo-Sleep:Proxy] Released port ${port} for server ${serverId}`);
             res();
           });
+          setTimeout(res, 200);
         }),
       };
       activeProxies.set(serverId, proxyObj);

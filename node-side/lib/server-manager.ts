@@ -728,12 +728,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       } catch {}
     }
 
-    // Ensure the host port is completely free and no orphan process/container holds it
+    // Ensure the host port is completely free and no orphan container holds it
     try {
       await stopWakeProxy(serverId).catch(() => {});
       await execAsync(`docker ps -a -q --filter "publish=${assignedPort}" | xargs -r docker rm -f 2>/dev/null || true`);
-      await execAsync(`fuser -k ${assignedPort}/tcp 2>/dev/null || true`);
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 200));
     } catch {}
 
     const hostCores = os.cpus()?.length || 1;
