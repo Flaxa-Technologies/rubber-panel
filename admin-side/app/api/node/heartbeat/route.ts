@@ -53,10 +53,23 @@ export async function POST(request: NextRequest) {
   const defaultMotd = (await getSetting("cryosleep.defaultMotd")) || "§bRubber Panel §8| §3Server is in Cryo-Sleep\\n§e§lClick to Connect & Auto-Wake Instance!";
   const wakeMessage = (await getSetting("cryosleep.wakeMessage")) || "§b§lRubber Panel §8— §3§lCRYO-SLEEP WAKE-UP\\n\\n§aServer wake sequence initiated!\\n§7The instance is now booting from hibernation.\\n\\n§e§lPlease reconnect in 10-15 seconds! §r§8(0-RAM Power Savings)";
 
+  // Check if there is a pending update queued for this node
+  const pendingUpdateRecord = await db.updateRecord.findFirst({
+    where: {
+      side: { in: [`node:${node.nodeId}`, "node"] },
+      status: { in: ["DOWNLOADING", "APPLYING", "PENDING"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   return NextResponse.json({ 
     success: true, 
     nodeId: node.nodeId,
     timestamp: new Date().toISOString(),
+    pendingUpdate: pendingUpdateRecord ? {
+      version: pendingUpdateRecord.version,
+      assetUrl: pendingUpdateRecord.assetUrl,
+    } : null,
     config: {
       cryosleep: {
         defaultEnabled: defaultCryoEnabled,

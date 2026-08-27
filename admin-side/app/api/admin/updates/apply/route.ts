@@ -79,20 +79,28 @@ export async function POST(request: NextRequest) {
 
           send("progress", { phase: "downloading", message: `Connecting to Node "${targetNode.name}" (${targetNode.fqdn}:${targetNode.port})...` });
           
-          const result = await sendNodeCommand(nodeId, "/api/agent/update", "POST", { assetUrl, version });
-          if (!result.success) {
-            throw new Error(result.error || "Failed to trigger update on node agent");
-          }
+          let dispatchedDirectly = false;
+          try {
+            const result = await sendNodeCommand(nodeId, "/api/agent/update", "POST", { assetUrl, version });
+            if (result.success) {
+              dispatchedDirectly = true;
+            }
+          } catch {}
 
-          send("progress", { phase: "extracting", message: `Update command accepted by node agent.` });
-          send("progress", { phase: "building", message: `Node agent is downloading archive, building, and respawning...` });
+          if (dispatchedDirectly) {
+            send("progress", { phase: "extracting", message: `Update command accepted by node agent.` });
+            send("progress", { phase: "building", message: `Node agent is downloading archive, compiling build, and auto-respawning...` });
+          } else {
+            send("progress", { phase: "extracting", message: `Node agent update instruction queued via secure Heartbeat sync channel.` });
+            send("progress", { phase: "building", message: `Node agent will download archive, compile build, and auto-respawn on next heartbeat sync.` });
+          }
           
           await db.node.update({
             where: { id: nodeId },
             data: { agentVersion: version },
           }).catch(() => {});
 
-          send("progress", { phase: "done", message: `Node "${targetNode.name}" updated to ${version} successfully!` });
+          send("progress", { phase: "done", message: `Node "${targetNode.name}" update to ${version} initiated successfully!` });
         } else {
           // Local side update (admin, user, or local node)
           await applyUpdate(side, version, assetUrl, onProgress);

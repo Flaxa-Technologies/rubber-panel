@@ -79,9 +79,12 @@ export async function sendNodeCommand(
         "Content-Type": "application/json",
         Authorization: `Bearer ${node.authToken}`,
         "X-Rubber-Panel": "admin",
+        "Bypass-Tunnel-Reminder": "true",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
+        Accept: "application/json",
       },
       body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!response.ok) {

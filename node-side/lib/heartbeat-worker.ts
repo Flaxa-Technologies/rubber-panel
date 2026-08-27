@@ -86,6 +86,10 @@ async function sendHeartbeat() {
       console.log(`[Heartbeat] ✓ OK (Node: ${discoveredNodeId || "connected"}) — ${new Date().toLocaleTimeString()}`);
       
       try {
+        if (data?.pendingUpdate?.version && data?.pendingUpdate?.assetUrl) {
+          const { runNodeUpdate } = await import("./node-updater");
+          runNodeUpdate(data.pendingUpdate.version, data.pendingUpdate.assetUrl).catch(() => {});
+        }
         if (data?.config?.cryosleep) {
           const { initCryoSleepEngine } = await import("./cryo-sleep-engine");
           initCryoSleepEngine(data.config.cryosleep);
