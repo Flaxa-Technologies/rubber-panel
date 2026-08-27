@@ -3,6 +3,28 @@ import { verifySetupToken } from "@/lib/node-setup-tokens";
 
 export const dynamic = "force-dynamic";
 
+function getPublicOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  let proto = request.headers.get("x-forwarded-proto") || (request.headers.get("x-forwarded-ssl") === "on" ? "https" : "http");
+
+  if (forwardedHost) {
+    if (forwardedHost.includes(".github.dev") || forwardedHost.includes(".app.github.dev") || forwardedHost.includes(".gitpod.io") || forwardedHost.includes(".trycloudflare.com")) {
+      proto = "https";
+    }
+    return `${proto}://${forwardedHost}`.replace(/\/$/, "");
+  }
+
+  if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.includes("localhost")) {
+    return process.env.NEXTAUTH_URL.replace(/\/$/, "");
+  }
+
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+
+  return request.nextUrl.origin;
+}
+
 // GET /api/node/configure/[token] (e.g. /api/node/configure/ncfg_....sh)
 export async function GET(
   request: NextRequest,
@@ -33,8 +55,7 @@ exit 1
     });
   }
 
-  const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = getPublicOrigin(request);
   const { nodeId, authToken, port } = setupData;
 
   const script = `#!/usr/bin/env bash
@@ -101,7 +122,7 @@ fi
 
 # 4. Immediate Connection Verification
 echo -e "\${CYAN}[3/3] Verifying heartbeat connection with Admin Panel...\\033[0m"
-PAYLOAD='{"nodeId":"'\${NODE_ID}'","agentVersion":"0.1.0-beta.11","cpuUsage":0,"ramUsage":0,"diskUsage":0}'
+PAYLOAD='{"nodeId":"'\${NODE_ID}'","agentVersion":"0.1.0-beta.13","cpuUsage":0,"ramUsage":0,"diskUsage":0}'
 STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "\${ADMIN_URL}/api/node/heartbeat" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer \${NODE_TOKEN}" \\
