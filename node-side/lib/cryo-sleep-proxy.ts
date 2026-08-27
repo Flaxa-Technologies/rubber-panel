@@ -65,8 +65,12 @@ export interface ActiveWakeProxy {
   close: () => Promise<void>;
 }
 
-// Active proxies map: serverId -> ActiveWakeProxy
-const activeProxies = new Map<string, ActiveWakeProxy>();
+// Global active proxies maps preserved across module reloads
+const activeProxiesById: Map<string, ActiveWakeProxy> = 
+  (globalThis as any).__rp_wake_proxies_by_id || ((globalThis as any).__rp_wake_proxies_by_id = new Map());
+
+const activeProxiesByPort: Map<number, ActiveWakeProxy> = 
+  (globalThis as any).__rp_wake_proxies_by_port || ((globalThis as any).__rp_wake_proxies_by_port = new Map());
 
 /**
  * Starts a lightweight native TCP wake proxy on the server's primary port.
@@ -75,15 +79,13 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
   return new Promise(async (resolve, reject) => {
     const { serverId, serverName, port, serverType = "MINECRAFT", onWake } = options;
 
-    // If an existing proxy for this server is already running on this port, return it
-    const existing = activeProxies.get(serverId);
-    if (existing) {
-      if (existing.port === port) {
-        return resolve(existing);
-      }
-      await existing.close().catch(() => {});
-      activeProxies.delete(serverId);
+    // 1. Ensure any existing proxy on this serverId or port is completely closed first
+    const existingById = activeProxiesById.get(serverId);
+    if (existingById && existingById.port === port) {
+      return resolve(existingById);
     }
+    await stopWakeProxy(serverId, port).catch(() => {});
+    await stopWakeProxyByPort(port).catch(() => {});
 
     const isNodeJs = serverType === "NODEJS";
     let isClosing = false;
@@ -157,6 +159,8 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
               try { s.destroy(); } catch {}
             }
             sockets.clear();
+            activeProxiesById.delete(serverId);
+            activeProxiesByPort.delete(port);
             server.close(() => {
               console.log(`[Cryo-Sleep:Proxy] Released HTTP port ${port} for server ${serverId}`);
               res();
@@ -164,7 +168,8 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
             setTimeout(res, 200);
           }),
         };
-        activeProxies.set(serverId, proxyObj);
+        activeProxiesById.set(serverId, proxyObj);
+        activeProxiesByPort.set(port, proxyObj);
         resolve(proxyObj);
       });
 
@@ -303,6 +308,8 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
             try { s.destroy(); } catch {}
           }
           sockets.clear();
+          activeProxiesById.delete(serverId);
+          activeProxiesByPort.delete(port);
           tcpServer.close(() => {
             console.log(`[Cryo-Sleep:Proxy] Released port ${port} for server ${serverId}`);
             res();
@@ -310,7 +317,8 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
           setTimeout(res, 200);
         }),
       };
-      activeProxies.set(serverId, proxyObj);
+      activeProxiesById.set(serverId, proxyObj);
+      activeProxiesByPort.set(port, proxyObj);
       resolve(proxyObj);
     });
 
@@ -322,19 +330,64 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
 }
 
 /**
- * Stops an active wake proxy for a server and releases its port.
+ * Stops an active wake proxy for a server and optionally releases a specific port.
  */
-export async function stopWakeProxy(serverId: string): Promise<void> {
-  const proxy = activeProxies.get(serverId);
-  if (proxy) {
-    await proxy.close();
-    activeProxies.delete(serverId);
+export async function stopWakeProxy(serverId: string, port?: number): Promise<void> {
+  const proxyById = activeProxiesById.get(serverId);
+  if (proxyById) {
+    await proxyById.close().catch(() => {});
+    activeProxiesById.delete(serverId);
+    activeProxiesByPort.delete(proxyById.port);
+  }
+
+  if (port) {
+    const proxyByPort = activeProxiesByPort.get(port);
+    if (proxyByPort) {
+      await proxyByPort.close().catch(() => {});
+      activeProxiesByPort.delete(port);
+      activeProxiesById.delete(proxyByPort.serverId);
+    }
   }
 }
 
 /**
- * Checks if a wake proxy is currently running for a server.
+ * Stops any wake proxy listening on a specific TCP/HTTP port.
  */
-export function isWakeProxyRunning(serverId: string): boolean {
-  return activeProxies.has(serverId);
+export async function stopWakeProxyByPort(port: number): Promise<void> {
+  const proxy = activeProxiesByPort.get(port);
+  if (proxy) {
+    await proxy.close().catch(() => {});
+    activeProxiesByPort.delete(port);
+    activeProxiesById.delete(proxy.serverId);
+  }
+
+  // Also check if any proxy in activeProxiesById has this port
+  for (const [sid, p] of activeProxiesById.entries()) {
+    if (p.port === port) {
+      await p.close().catch(() => {});
+      activeProxiesById.delete(sid);
+      activeProxiesByPort.delete(port);
+    }
+  }
+}
+
+/**
+ * Stops all active wake proxies across the daemon.
+ */
+export async function stopAllWakeProxies(): Promise<void> {
+  const all = Array.from(activeProxiesById.values());
+  for (const p of all) {
+    await p.close().catch(() => {});
+  }
+  activeProxiesById.clear();
+  activeProxiesByPort.clear();
+}
+
+/**
+ * Checks if a wake proxy is currently running for a server or port.
+ */
+export function isWakeProxyRunning(serverId: string, port?: number): boolean {
+  if (activeProxiesById.has(serverId)) return true;
+  if (port !== undefined && activeProxiesByPort.has(port)) return true;
+  return false;
 }

@@ -692,8 +692,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
   }
 
   // ─── 2.5 RELEASE WAKE PROXY PORT IF ACTIVE ──────────────────────────────
-  const { stopWakeProxy } = await import("./cryo-sleep-proxy");
-  await stopWakeProxy(serverId).catch(() => {});
+  const { stopWakeProxy, stopWakeProxyByPort } = await import("./cryo-sleep-proxy");
+  const assignedPort = info.port ?? 25566;
+  await stopWakeProxy(serverId, assignedPort).catch(() => {});
+  await stopWakeProxyByPort(assignedPort).catch(() => {});
 
   const containerName = getContainerName(serverId);
   info.status = "STARTING";
@@ -703,7 +705,6 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
   try {
     const dir = getServerDir(serverId);
-    const assignedPort = info.port ?? 25566;
 
     if (runtime.isMinecraft) {
       // Ensure eula.txt is in place
@@ -730,7 +731,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
     // Ensure the host port is completely free and no orphan container holds it
     try {
-      await stopWakeProxy(serverId).catch(() => {});
+      await stopWakeProxy(serverId, assignedPort).catch(() => {});
+      await stopWakeProxyByPort(assignedPort).catch(() => {});
       await execAsync(`docker ps -a -q --filter "publish=${assignedPort}" | xargs -r docker rm -f 2>/dev/null || true`);
       await new Promise(r => setTimeout(r, 200));
     } catch {}

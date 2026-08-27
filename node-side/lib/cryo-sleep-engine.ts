@@ -126,7 +126,12 @@ export async function wakeServer(serverId: string, trigger = "Manual wake"): Pro
   appendLog(serverId, `[Cryo-Sleep] ⚡ Wake sequence initiated (${trigger})! Booting instance...`);
 
   // 1. Stop and release the wake proxy TCP port
-  await stopWakeProxy(serverId);
+  const config = serverConfigs.get(serverId);
+  const status = await getServerStatus(serverId);
+  const targetPort = config?.port || status?.port || 25565;
+  await stopWakeProxy(serverId, targetPort).catch(() => {});
+  const { stopWakeProxyByPort } = await import("./cryo-sleep-proxy");
+  await stopWakeProxyByPort(targetPort).catch(() => {});
 
   // 2. Reset last active timer
   lastActiveTimestamps.set(serverId, Date.now());
