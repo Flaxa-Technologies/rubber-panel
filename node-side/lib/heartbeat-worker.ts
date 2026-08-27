@@ -1,14 +1,22 @@
 // heartbeat-worker.ts — Sends periodic heartbeats from the node agent to the admin panel
 // Runs in the Node.js server process via instrumentation.ts
 
+import fs from "fs";
+import path from "path";
 import { getNodeResources } from "./resource-monitor";
-import { getAllServers } from "./server-manager";
+import { getAllServers, getServerStatus } from "./server-manager";
+import { initCryoSleepEngine, syncBootPolicy, registerCryoServer, hibernateServer } from "./cryo-sleep-engine";
+import { isWakeProxyRunning } from "./cryo-sleep-proxy";
+import { runNodeUpdate } from "./node-updater";
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL ?? "http://localhost:3000";
 const NODE_TOKEN = process.env.NODE_TOKEN ?? "";
 const INTERVAL_MS = parseInt(process.env.HEARTBEAT_INTERVAL_SECONDS ?? "30") * 1000;
 
-let started = false;
+declare global {
+  var __rubberHeartbeatStarted: boolean | undefined;
+}
+
 let discoveredNodeId: string = process.env.NODE_ID ?? "";
 
 export function getDiscoveredNodeId(): string {
@@ -16,8 +24,8 @@ export function getDiscoveredNodeId(): string {
 }
 
 export function startHeartbeat() {
-  if (started) return;
-  started = true;
+  if (globalThis.__rubberHeartbeatStarted) return;
+  globalThis.__rubberHeartbeatStarted = true;
 
   // Don't start if token not configured
   if (!NODE_TOKEN || NODE_TOKEN === "dev-token-placeholder") {
@@ -38,15 +46,12 @@ async function sendHeartbeat() {
     const servers = await getAllServers();
     
     // Periodically verify actual container statuses if they are marked RUNNING
-    const { getServerStatus } = await import("./server-manager");
     for (const s of servers) {
       if (s.status === "RUNNING") await getServerStatus(s.id);
     }
 
-    let currentVer = "0.1.0-beta.9";
+    let currentVer = "0.1.0-beta.16";
     try {
-      const fs = await import("fs");
-      const path = await import("path");
       const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
       if (pkg?.version) currentVer = pkg.version;
     } catch {}
@@ -86,22 +91,20 @@ async function sendHeartbeat() {
       console.log(`[Heartbeat] ✓ OK (Node: ${discoveredNodeId || "connected"}) — ${new Date().toLocaleTimeString()}`);
       
       try {
+        const clean = (v: string) => (v || "").replace(/^v/, "").trim();
         if (data?.pendingUpdate?.version && data?.pendingUpdate?.assetUrl) {
-          const { runNodeUpdate } = await import("./node-updater");
-          runNodeUpdate(data.pendingUpdate.version, data.pendingUpdate.assetUrl).catch(() => {});
+          if (clean(currentVer) !== clean(data.pendingUpdate.version)) {
+            runNodeUpdate(data.pendingUpdate.version, data.pendingUpdate.assetUrl).catch(() => {});
+          }
         }
+
         if (data?.config?.cryosleep) {
-          const { initCryoSleepEngine } = await import("./cryo-sleep-engine");
           initCryoSleepEngine(data.config.cryosleep);
         }
         if (data?.config?.bootPolicy) {
-          const { syncBootPolicy } = await import("./cryo-sleep-engine");
           syncBootPolicy(data.config.bootPolicy);
         }
         if (Array.isArray(data?.config?.servers)) {
-          const { registerCryoServer, hibernateServer } = await import("./cryo-sleep-engine");
-          const { getServerStatus } = await import("./server-manager");
-          const { isWakeProxyRunning } = await import("./cryo-sleep-proxy");
           for (const s of data.config.servers) {
             registerCryoServer({
               serverId: s.id,
@@ -109,7 +112,7 @@ async function sendHeartbeat() {
               serverType: s.serverType,
               port: s.allocations?.[0]?.port ?? s.internalPort,
               enabled: !!s.cryoSleepEnabled,
-              idleMinutes: s.cryoSleepIdleMinutes ?? data.config.cryosleep.defaultIdleMinutes ?? 10,
+              idleMinutes: s.cryoSleepIdleMinutes ?? data.config.cryosleep?.defaultIdleMinutes ?? 10,
               motd: s.cryoSleepMotd,
             });
             if (s.cryoSleepEnabled) {

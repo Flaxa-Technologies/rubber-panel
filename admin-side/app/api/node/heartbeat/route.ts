@@ -62,14 +62,29 @@ export async function POST(request: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
+  const clean = (v: string) => (v || "").replace(/^v/, "").trim();
+  let pendingUpdate = null;
+
+  if (pendingUpdateRecord) {
+    if (clean(agentVersion) === clean(pendingUpdateRecord.version)) {
+      // Node has completed the update! Mark as SUCCESS.
+      await db.updateRecord.update({
+        where: { id: pendingUpdateRecord.id },
+        data: { status: "SUCCESS", appliedAt: new Date() },
+      }).catch(() => {});
+    } else {
+      pendingUpdate = {
+        version: pendingUpdateRecord.version,
+        assetUrl: pendingUpdateRecord.assetUrl,
+      };
+    }
+  }
+
   return NextResponse.json({ 
     success: true, 
     nodeId: node.nodeId,
     timestamp: new Date().toISOString(),
-    pendingUpdate: pendingUpdateRecord ? {
-      version: pendingUpdateRecord.version,
-      assetUrl: pendingUpdateRecord.assetUrl,
-    } : null,
+    pendingUpdate,
     config: {
       cryosleep: {
         defaultEnabled: defaultCryoEnabled,
