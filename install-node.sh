@@ -104,7 +104,7 @@ if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(curl -s "https://github.com/${REPO}/releases.atom" 2>/dev/null | grep -o '<id>tag:github.com[^<]*' | head -n 1 | sed 's/.*\///')
 fi
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.10"
+  LATEST_TAG="v0.1.0-beta.11"
 fi
 
 NODE_ZIP_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/node-side.zip"
@@ -152,34 +152,10 @@ prompt_field() {
 NODE_TOKEN="${INPUT_NODE_TOKEN}"
 NODE_ID="${INPUT_NODE_ID}"
 ADMIN_URL="${INPUT_ADMIN_URL}"
-NODE_PORT="${INPUT_PORT}"
-
 if [ -z "${NODE_TOKEN}" ] || [ -z "${ADMIN_URL}" ]; then
-  echo ""
-  echo -e "${LIME}"
-  echo "==================================================================="
-  echo "                  Node Daemon Configuration Form                   "
-  echo "==================================================================="
-  echo -e "${NC}"
-  echo -e "  ${CYAN}Step 1:${NC} Open your Admin Panel -> ${GREEN}Nodes${NC} -> click ${GREEN}'Add Node'${NC}"
-  echo -e "  ${CYAN}Step 2:${NC} Copy the Token and ID, then fill in the fields below:"
-  echo ""
-
-  while [ -z "${NODE_TOKEN}" ]; do
-    prompt_field "[1/4] Enter Node Auth Token" "Copy token from Admin Panel -> Nodes -> 'Add Node'" "" NODE_TOKEN
-  done
-
-  if [ -z "${NODE_ID}" ]; then
-    prompt_field "[2/4] Enter Node ID [Optional — will auto-discover if blank]" "Node ID from Admin Panel -> Nodes -> 'Add Node'" "" NODE_ID
-  fi
-
-  while [ -z "${ADMIN_URL}" ]; do
-    prompt_field "[3/4] Enter Admin Panel URL" "e.g. https://your-domain.com or http://localhost:3000" "http://localhost:3000" ADMIN_URL
-  done
-
-  if [ -z "${NODE_PORT}" ]; then
-    prompt_field "[4/4] Enter Node Daemon Port [Default: 3001]" "Port where this compute agent listens (press Enter for 3001)" "3001" NODE_PORT
-  fi
+  # Standby installation mode if run without CLI flags
+  NODE_PORT=${NODE_PORT:-3001}
+  ADMIN_URL=${ADMIN_URL:-"http://localhost:3000"}
 fi
 
 NODE_PORT=${NODE_PORT:-3001}
