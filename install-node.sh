@@ -136,18 +136,18 @@ prompt_field() {
   echo ""
 }
 
-ADMIN_URL=""
-while [ -z "${ADMIN_URL}" ]; do
-  prompt_field "[1/3] Admin Panel URL" "e.g. http://20.192.21.60:3000 or http://localhost:3000" "" ADMIN_URL
-done
-
 NODE_TOKEN=""
 while [ -z "${NODE_TOKEN}" ]; do
-  prompt_field "[2/3] Node Auth Token" "Copy token from Admin Panel -> Nodes -> 'Add Node'" "" NODE_TOKEN
+  prompt_field "[1/3] Enter Node Auth Token" "Create a Node in your Admin Panel -> Nodes -> 'Add Node' to obtain and paste this token" "" NODE_TOKEN
+done
+
+ADMIN_URL=""
+while [ -z "${ADMIN_URL}" ]; do
+  prompt_field "[2/3] Enter Admin Panel URL" "e.g. http://20.192.21.60:3000 or http://localhost:3000" "http://localhost:3000" ADMIN_URL
 done
 
 NODE_PORT=""
-prompt_field "[3/3] Node Daemon Port [Default: 3001]" "Port where this compute agent will listen" "3001" NODE_PORT
+prompt_field "[3/3] Enter Node Daemon Port [Default: 3001]" "Port where this compute agent listens (press Enter for 3001)" "3001" NODE_PORT
 
 # Configure node-side .env
 echo -e "${CYAN}[5/6] Writing configuration (.env)...${NC}"
