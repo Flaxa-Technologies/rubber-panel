@@ -1,55 +1,202 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, RefreshCw, Copy, AlertCircle, Pencil, Trash2, X, Check, Loader2, Zap, Moon, Activity } from "lucide-react";
+import {
+  Plus, RefreshCw, Copy, AlertCircle, Pencil, Trash2, X, Check, Loader2,
+  Zap, Moon, Activity, Server, Cpu, HardDrive, ShieldAlert,
+  Radio, Terminal, Info, ChevronRight, CheckCircle2, AlertTriangle, PlayCircle
+} from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Input, Toggle } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { ResourceBar } from "@/components/ui/ResourceBar";
 
-interface Node {
+interface NodeItem {
   id: string;
   name: string;
   fqdn: string;
   port: number;
   location: string | null;
+  description: string | null;
   status: string;
+  isOnline: boolean;
   maintenanceMode: boolean;
   agentVersion: string | null;
   lastHeartbeat: string | null;
-  cpuUsage: number | null;
-  ramUsage: number | null;
-  diskUsage: number | null;
-  maxCpu: number | null;
-  maxRam: number | null;
-  maxDisk: number | null;
-  portRangeStart: number | null;
-  portRangeEnd: number | null;
+  cpuUsage: number;
+  ramUsage: number;
+  diskUsage: number;
+  networkRx?: number | null;
+  networkTx?: number | null;
+  maxCpu?: number | null;
+  maxRam?: number | null;
+  maxDisk?: number | null;
+  portRangeStart?: number | null;
+  portRangeEnd?: number | null;
   autoStartServersOnBoot?: boolean;
   bootCryoSleepMode?: string;
   bootGracePeriodSeconds?: number;
   maxConcurrentBootStarts?: number;
   bootStartupDelaySeconds?: number;
   createdAt: string;
+  totalAllocatedRam: number;
+  totalAllocatedDisk: number;
+  serversRunning: number;
+  serversCryo: number;
+  serversStopped: number;
+  ramUsedPercent: number;
+  diskUsedPercent: number;
+  isRamWarning: boolean;
+  isRamCritical: boolean;
+  isCpuWarning: boolean;
+  isDiskWarning: boolean;
   _count: { servers: number; allocations: number };
 }
 
-type NewTokenState = { token: string; nodeId: string; setupToken?: string } | null;
+type SetupModalState = {
+  nodeId: string;
+  name: string;
+  token: string;
+  setupToken?: string;
+  port?: number;
+} | null;
+
+// ─── Setup / Connect Node Command Modal ────────────────────────────
+function SetupCommandModal({
+  data,
+  onClose,
+}: {
+  data: SetupModalState;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!data) return null;
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const setupFile = data.setupToken ? `${data.setupToken}.sh` : `ncfg_${data.token}.sh`;
+  const quickCmd = `curl -sSL "${origin}/api/node/configure/${setupFile}" | sudo bash`;
+
+  return (
+    <Modal
+      open={Boolean(data)}
+      onClose={onClose}
+      title={`Node Setup — ${data.name}`}
+      size="lg"
+      footer={<Button onClick={onClose}>Done</Button>}
+    >
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
+          <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#22c55e" }} />
+          <p className="text-xs leading-relaxed" style={{ color: "var(--color-rp-text)" }}>
+            <strong>1-Click Auto-Deploy Command:</strong> Run this command on your VPS or Codespace. It automatically downloads dependencies, sets up credentials, reloads PM2, and connects the daemon in seconds.
+          </p>
+        </div>
+
+        {/* 1-Click Command */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
+                <Zap className="w-3.5 h-3.5" />
+                <span>1-Click Auto-Configure Command</span>
+              </p>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
+                Expires in 15 mins
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(quickCmd);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 3000);
+              }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
+              style={{ backgroundColor: "var(--color-rp-accent)", color: "#000" }}>
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? "Copied 1-Line Command!" : "Copy Command"}
+            </button>
+          </div>
+          <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
+            <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#a3e635" }}>
+              {quickCmd}
+            </code>
+          </div>
+        </div>
+
+        {/* Credentials Cards */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "var(--color-rp-text-muted)" }}>
+            Node Credentials (Manual Setup)
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+              <div className="min-w-0 pr-2">
+                <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Admin Panel URL</p>
+                <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{origin}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(origin)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                title="Copy Admin URL"
+                style={{ color: "var(--color-rp-text-muted)" }}>
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+              <div className="min-w-0 pr-2">
+                <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node ID</p>
+                <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{data.nodeId}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(data.nodeId)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                title="Copy Node ID"
+                style={{ color: "var(--color-rp-text-muted)" }}>
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl flex items-center justify-between md:col-span-2" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+              <div className="min-w-0 pr-2">
+                <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node Auth Token (Secret)</p>
+                <p className="text-xs font-mono font-semibold truncate" style={{ color: "#a3e635" }}>{data.token}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(data.token)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                title="Copy Node Token"
+                style={{ color: "var(--color-rp-accent)" }}>
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 // ─── Add Node Modal ────────────────────────────────────────────────
-function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+function AddNodeModal({
+  open,
+  onClose,
+  onCreated,
+  onSetupReady,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+  onSetupReady: (info: SetupModalState) => void;
+}) {
   const [form, setForm] = useState({
-    name: "",
-    fqdn: "",
-    port: "3001",
-    location: "",
-    description: "",
-    maxRam: "",
-    maxDisk: "",
-    portRangeStart: "",
-    portRangeEnd: "",
+    name: "", fqdn: "", port: "3001", location: "", description: "",
+    maxRam: "", maxDisk: "", portRangeStart: "", portRangeEnd: "",
     autoStartServersOnBoot: false,
     bootCryoSleepMode: "CRYO_HIBERNATE_ALL",
     bootGracePeriodSeconds: "15",
@@ -58,8 +205,6 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [newToken, setNewToken] = useState<NewTokenState>(null);
-  const [copied, setCopied] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,7 +213,7 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: form.name, fqdn: form.fqdn, port: parseInt(form.port),
+        name: form.name, fqdn: form.fqdn, port: parseInt(form.port) || 3001,
         location: form.location || undefined,
         description: form.description || undefined,
         maxRam: form.maxRam ? parseInt(form.maxRam) : undefined,
@@ -84,135 +229,24 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
     });
     const data = await res.json();
     if (res.ok) {
-      setNewToken({ token: data.authToken, nodeId: data.id, setupToken: data.setupToken });
       onCreated();
+      onClose();
+      onSetupReady({
+        nodeId: data.id,
+        name: data.name,
+        token: data.authToken,
+        setupToken: data.setupToken,
+        port: data.port,
+      });
     } else {
       setError(data.error ?? "Failed to create node");
     }
     setLoading(false);
   }
 
-  function handleClose() {
-    setNewToken(null); setCopied(false);
-    setForm({
-      name: "", fqdn: "", port: "3001", location: "", description: "", maxRam: "", maxDisk: "",
-      portRangeStart: "", portRangeEnd: "",
-      autoStartServersOnBoot: false,
-      bootCryoSleepMode: "CRYO_HIBERNATE_ALL",
-      bootGracePeriodSeconds: "15",
-      maxConcurrentBootStarts: "3",
-      bootStartupDelaySeconds: "5",
-    });
-    onClose();
-  }
-
-  if (newToken) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const setupFile = newToken.setupToken ? `${newToken.setupToken}.sh` : `ncfg_${newToken.token}.sh`;
-    const quickCmd = `curl -sSL "${origin}/api/node/configure/${setupFile}" | sudo bash`;
-
-    return (
-      <Modal open={open} onClose={handleClose} title="Node Registered — 1-Click Deployment" size="lg"
-        footer={<Button onClick={handleClose}>Done</Button>}>
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
-            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#22c55e" }} />
-            <p className="text-xs leading-relaxed" style={{ color: "var(--color-rp-text)" }}>
-              <strong>Node created successfully!</strong> Run the 1-Line command below on your VPS or Codespace. It automatically writes credentials, reloads PM2, and connects the daemon in seconds.
-            </p>
-          </div>
-
-          {/* Quick Auto-Deploy Command */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>1-Click Auto-Configure Command</span>
-                </p>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
-                  Expires in 15 mins
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => { navigator.clipboard.writeText(quickCmd); setCopied(true); setTimeout(() => setCopied(false), 3000); }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
-                style={{ backgroundColor: "var(--color-rp-accent)", color: "#000" }}>
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "Copied 1-Line Command!" : "Copy Command"}
-              </button>
-            </div>
-            <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
-              <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#a3e635" }}>
-                {quickCmd}
-              </code>
-            </div>
-          </div>
-
-          {/* Connection Parameters Cards */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "var(--color-rp-text-muted)" }}>
-              Node Connection Parameters
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-              {/* Admin URL */}
-              <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
-                <div className="min-w-0 pr-2">
-                  <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Admin Panel URL</p>
-                  <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{origin}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(origin)}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-                  title="Copy Admin URL"
-                  style={{ color: "var(--color-rp-text-muted)" }}>
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Node ID */}
-              <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
-                <div className="min-w-0 pr-2">
-                  <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node ID</p>
-                  <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{newToken.nodeId}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(newToken.nodeId)}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-                  title="Copy Node ID"
-                  style={{ color: "var(--color-rp-text-muted)" }}>
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Node Auth Token */}
-              <div className="p-3 rounded-xl flex items-center justify-between md:col-span-2" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
-                <div className="min-w-0 pr-2">
-                  <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node Auth Token (Secret)</p>
-                  <p className="text-xs font-mono font-semibold truncate" style={{ color: "#a3e635" }}>{newToken.token}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(newToken.token)}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-                  title="Copy Node Token"
-                  style={{ color: "var(--color-rp-accent)" }}>
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
-
   return (
-    <Modal open={open} onClose={handleClose} title="Add Node" description="Register a new hosting node/VPS." size="lg"
-      footer={<><Button variant="secondary" onClick={handleClose}>Cancel</Button><Button loading={loading} onClick={handleSubmit as any}>Create Node</Button></>}>
+    <Modal open={open} onClose={onClose} title="Add Compute Node" description="Register a new hosting node/VPS." size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={loading} onClick={handleSubmit as any}>Create Node</Button></>}>
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
         {error && <div className="text-sm p-3 rounded-lg" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "var(--color-rp-red)" }}>{error}</div>}
         <div className="grid grid-cols-2 gap-3">
@@ -224,8 +258,8 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
           <Input label="Agent Port" type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} required placeholder="3001" />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Max RAM (MB)" type="number" value={form.maxRam} onChange={e => setForm(f => ({ ...f, maxRam: e.target.value }))} placeholder="e.g. 32768" />
-          <Input label="Max Disk (MB)" type="number" value={form.maxDisk} onChange={e => setForm(f => ({ ...f, maxDisk: e.target.value }))} placeholder="e.g. 512000" />
+          <Input label="Max RAM (MB)" type="number" value={form.maxRam} onChange={e => setForm(f => ({ ...f, maxRam: e.target.value }))} placeholder="e.g. 32768" hint="Leave blank for unmetered" />
+          <Input label="Max Disk (MB)" type="number" value={form.maxDisk} onChange={e => setForm(f => ({ ...f, maxDisk: e.target.value }))} placeholder="e.g. 512000" hint="Leave blank for unmetered" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Input label="Port Range Start" type="number" value={form.portRangeStart} onChange={e => setForm(f => ({ ...f, portRangeStart: e.target.value }))} placeholder="25565" />
@@ -265,27 +299,9 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <Input
-              label="Max Boot Starts"
-              type="number"
-              value={form.maxConcurrentBootStarts}
-              onChange={e => setForm(f => ({ ...f, maxConcurrentBootStarts: e.target.value }))}
-              hint="Max parallel boots"
-            />
-            <Input
-              label="Stagger Delay (s)"
-              type="number"
-              value={form.bootStartupDelaySeconds}
-              onChange={e => setForm(f => ({ ...f, bootStartupDelaySeconds: e.target.value }))}
-              hint="Seconds between starts"
-            />
-            <Input
-              label="Grace Period (s)"
-              type="number"
-              value={form.bootGracePeriodSeconds}
-              onChange={e => setForm(f => ({ ...f, bootGracePeriodSeconds: e.target.value }))}
-              hint="Daemon init delay"
-            />
+            <Input label="Max Boot Starts" type="number" value={form.maxConcurrentBootStarts} onChange={e => setForm(f => ({ ...f, maxConcurrentBootStarts: e.target.value }))} hint="Max parallel" />
+            <Input label="Stagger Delay (s)" type="number" value={form.bootStartupDelaySeconds} onChange={e => setForm(f => ({ ...f, bootStartupDelaySeconds: e.target.value }))} hint="Secs between starts" />
+            <Input label="Grace Period (s)" type="number" value={form.bootGracePeriodSeconds} onChange={e => setForm(f => ({ ...f, bootGracePeriodSeconds: e.target.value }))} hint="Daemon init delay" />
           </div>
         </div>
       </form>
@@ -294,10 +310,11 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
 }
 
 // ─── Edit Node Modal ───────────────────────────────────────────────
-function EditNodeModal({ node, onClose, onSaved }: { node: Node; onClose: () => void; onSaved: () => void }) {
+function EditNodeModal({ node, onClose, onSaved }: { node: NodeItem; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: node.name, fqdn: node.fqdn, port: String(node.port),
     location: node.location ?? "",
+    description: node.description ?? "",
     maxRam: node.maxRam ? String(node.maxRam) : "",
     maxDisk: node.maxDisk ? String(node.maxDisk) : "",
     portRangeStart: node.portRangeStart ? String(node.portRangeStart) : "",
@@ -317,8 +334,9 @@ function EditNodeModal({ node, onClose, onSaved }: { node: Node; onClose: () => 
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: form.name, fqdn: form.fqdn, port: parseInt(form.port),
+        name: form.name, fqdn: form.fqdn, port: parseInt(form.port) || 3001,
         location: form.location || undefined,
+        description: form.description || undefined,
         maxRam: form.maxRam ? parseInt(form.maxRam) : undefined,
         maxDisk: form.maxDisk ? parseInt(form.maxDisk) : undefined,
         portRangeStart: form.portRangeStart ? parseInt(form.portRangeStart) : undefined,
@@ -390,27 +408,9 @@ function EditNodeModal({ node, onClose, onSaved }: { node: Node; onClose: () => 
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <Input
-              label="Max Boot Starts"
-              type="number"
-              value={form.maxConcurrentBootStarts}
-              onChange={e => setForm(f => ({ ...f, maxConcurrentBootStarts: e.target.value }))}
-              hint="Max parallel boots"
-            />
-            <Input
-              label="Stagger Delay (s)"
-              type="number"
-              value={form.bootStartupDelaySeconds}
-              onChange={e => setForm(f => ({ ...f, bootStartupDelaySeconds: e.target.value }))}
-              hint="Seconds between starts"
-            />
-            <Input
-              label="Grace Period (s)"
-              type="number"
-              value={form.bootGracePeriodSeconds}
-              onChange={e => setForm(f => ({ ...f, bootGracePeriodSeconds: e.target.value }))}
-              hint="Daemon init delay"
-            />
+            <Input label="Max Boot Starts" type="number" value={form.maxConcurrentBootStarts} onChange={e => setForm(f => ({ ...f, maxConcurrentBootStarts: e.target.value }))} hint="Max parallel" />
+            <Input label="Stagger Delay (s)" type="number" value={form.bootStartupDelaySeconds} onChange={e => setForm(f => ({ ...f, bootStartupDelaySeconds: e.target.value }))} hint="Secs between starts" />
+            <Input label="Grace Period (s)" type="number" value={form.bootGracePeriodSeconds} onChange={e => setForm(f => ({ ...f, bootGracePeriodSeconds: e.target.value }))} hint="Daemon init delay" />
           </div>
         </div>
       </div>
@@ -419,7 +419,7 @@ function EditNodeModal({ node, onClose, onSaved }: { node: Node; onClose: () => 
 }
 
 // ─── Delete Confirm ────────────────────────────────────────────────
-function DeleteConfirm({ node, onClose, onDeleted }: { node: Node; onClose: () => void; onDeleted: () => void }) {
+function DeleteConfirm({ node, onClose, onDeleted }: { node: NodeItem; onClose: () => void; onDeleted: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -462,33 +462,75 @@ function DeleteConfirm({ node, onClose, onDeleted }: { node: Node; onClose: () =
 
 // ─── Main Page ─────────────────────────────────────────────────────
 export default function NodesPage() {
-  const [nodes, setNodes] = useState<Node[]>([]);
+  const [nodes, setNodes] = useState<NodeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
-  const [editNode, setEditNode] = useState<Node | null>(null);
-  const [deleteNode, setDeleteNode] = useState<Node | null>(null);
+  const [editNode, setEditNode] = useState<NodeItem | null>(null);
+  const [deleteNode, setDeleteNode] = useState<NodeItem | null>(null);
+  const [setupModal, setSetupModal] = useState<SetupModalState>(null);
+  const [pingStates, setPingStates] = useState<Record<string, { loading: boolean; latency?: number; error?: string }>>({});
 
   const loadNodes = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch("/api/admin/nodes");
-    if (res.ok) { const data = await res.json(); setNodes(data.nodes); }
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/nodes");
+      if (res.ok) {
+        const data = await res.json();
+        setNodes(data.nodes || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     loadNodes();
-    // Auto-refresh every 15s so status updates appear
-    const t = setInterval(loadNodes, 15000);
+    const t = setInterval(loadNodes, 10000);
     return () => clearInterval(t);
   }, [loadNodes]);
 
-  async function toggleMaintenance(node: Node) {
+  async function toggleMaintenance(node: NodeItem) {
     await fetch(`/api/admin/nodes/${node.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ maintenanceMode: !node.maintenanceMode }),
     });
     loadNodes();
+  }
+
+  async function handleGetSetupCommand(node: NodeItem) {
+    try {
+      const res = await fetch(`/api/admin/nodes/${node.id}/setup-token`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setSetupModal({
+          nodeId: data.nodeId,
+          name: data.name || node.name,
+          token: data.token,
+          setupToken: data.setupToken,
+          port: data.port,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function pingNode(node: NodeItem) {
+    setPingStates(p => ({ ...p, [node.id]: { loading: true } }));
+    try {
+      const res = await fetch(`/api/admin/nodes/${node.id}/ping`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.online) {
+        setPingStates(p => ({ ...p, [node.id]: { loading: false, latency: data.latencyMs } }));
+        loadNodes();
+      } else {
+        setPingStates(p => ({ ...p, [node.id]: { loading: false, error: data.error || "Offline" } }));
+      }
+    } catch {
+      setPingStates(p => ({ ...p, [node.id]: { loading: false, error: "Ping failed" } }));
+    }
   }
 
   function timeSince(date: string) {
@@ -498,133 +540,375 @@ export default function NodesPage() {
     return `${Math.floor(secs / 3600)}h ago`;
   }
 
+  // Fleet Totals Calculations
+  const onlineCount = nodes.filter(n => n.status === "ONLINE").length;
+  const maintenanceCount = nodes.filter(n => n.maintenanceMode).length;
+  const totalServers = nodes.reduce((sum, n) => sum + (n._count?.servers || 0), 0);
+  const totalRunningServers = nodes.reduce((sum, n) => sum + (n.serversRunning || 0), 0);
+  const totalCryoServers = nodes.reduce((sum, n) => sum + (n.serversCryo || 0), 0);
+  const totalAllocatedRamGb = (nodes.reduce((sum, n) => sum + (n.totalAllocatedRam || 0), 0) / 1024).toFixed(1);
+  const totalCapacityRamGb = (nodes.reduce((sum, n) => sum + (n.maxRam || 0), 0) / 1024).toFixed(1);
+  const nodesWithWarnings = nodes.filter(n => n.isRamCritical || n.isRamWarning || n.isCpuWarning || n.isDiskWarning).length;
+
   return (
-    <div className="space-y-5 w-full">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 w-full pb-10">
+      {/* Header & Actions */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--color-rp-text)" }}>Nodes</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--color-rp-text-muted)" }}>
-            {nodes.length} registered · {nodes.filter(n => n.status === "ONLINE").length} online · auto-refreshes every 15s
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--color-rp-text)" }}>
+              Fleet Nodes
+            </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ backgroundColor: "rgba(163,230,53,0.12)", color: "#a3e635", border: "1px solid rgba(163,230,53,0.25)" }}>
+              {nodes.length} Compute Nodes
+            </span>
+          </div>
+          <p className="text-xs mt-1" style={{ color: "var(--color-rp-text-muted)" }}>
+            Real-time compute clusters, memory load telemetry, Cryo-Sleep orchestration &amp; server hosting agents.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" icon={RefreshCw} onClick={loadNodes} size="sm">Refresh</Button>
-          <Button icon={Plus} onClick={() => setAddOpen(true)}>Add Node</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" icon={RefreshCw} onClick={loadNodes} size="sm">
+            Refresh
+          </Button>
+          <Button icon={Plus} onClick={() => setAddOpen(true)}>
+            Add Node
+          </Button>
         </div>
       </div>
 
+      {/* Fleet Overview Telemetry Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="p-4 rounded-xl border relative overflow-hidden" style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Fleet Status</p>
+            <Radio className="w-4 h-4 text-emerald-400" />
+          </div>
+          <p className="text-xl font-extrabold mt-2 flex items-baseline gap-1.5" style={{ color: "var(--color-rp-text)" }}>
+            <span>{onlineCount}</span>
+            <span className="text-xs font-normal" style={{ color: "var(--color-rp-text-muted)" }}>/ {nodes.length} Online</span>
+          </p>
+          <div className="mt-2.5 flex items-center gap-2 text-[11px]">
+            {maintenanceCount > 0 && (
+              <span className="text-amber-400 font-medium">⚠️ {maintenanceCount} Maintenance</span>
+            )}
+            {onlineCount === nodes.length && nodes.length > 0 && (
+              <span className="text-emerald-400 font-medium">✓ 100% Operational</span>
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl border relative overflow-hidden" style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Total Allocated RAM</p>
+            <Cpu className="w-4 h-4 text-lime-400" />
+          </div>
+          <p className="text-xl font-extrabold mt-2" style={{ color: "var(--color-rp-text)" }}>
+            {totalAllocatedRamGb} <span className="text-xs font-normal text-muted-foreground">/ {parseFloat(totalCapacityRamGb) > 0 ? `${totalCapacityRamGb} GB` : "∞ Capacity"}</span>
+          </p>
+          <div className="mt-2.5 text-[11px]" style={{ color: "var(--color-rp-text-muted)" }}>
+            Across {totalServers} provisioned servers
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl border relative overflow-hidden" style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Server Workloads</p>
+            <Server className="w-4 h-4 text-cyan-400" />
+          </div>
+          <p className="text-xl font-extrabold mt-2 flex items-baseline gap-2" style={{ color: "var(--color-rp-text)" }}>
+            <span className="text-emerald-400">{totalRunningServers} Active</span>
+            <span className="text-cyan-400 text-sm font-semibold">{totalCryoServers} Cryo</span>
+          </p>
+          <div className="mt-2.5 text-[11px] text-cyan-400/90 flex items-center gap-1">
+            <Moon className="w-3 h-3" />
+            <span>Cryo-Sleep saving 0% RAM on sleep</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl border relative overflow-hidden" style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Health Alerts</p>
+            <ShieldAlert className="w-4 h-4" style={{ color: nodesWithWarnings > 0 ? "#ef4444" : "#22c55e" }} />
+          </div>
+          <p className="text-xl font-extrabold mt-2" style={{ color: nodesWithWarnings > 0 ? "#ef4444" : "#22c55e" }}>
+            {nodesWithWarnings === 0 ? "All Healthy" : `${nodesWithWarnings} Need Attention`}
+          </p>
+          <div className="mt-2.5 text-[11px]" style={{ color: "var(--color-rp-text-muted)" }}>
+            {nodesWithWarnings === 0 ? "No memory/disk pressure" : "High RAM/CPU detected"}
+          </div>
+        </div>
+      </div>
+
+      {/* Nodes List */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[...Array(2)].map((_, i) => <div key={i} className="h-56 skeleton rounded-xl" />)}
+          {[...Array(2)].map((_, i) => <div key={i} className="h-64 skeleton rounded-2xl" />)}
         </div>
       ) : nodes.length === 0 ? (
         <Card padding="lg">
-          <div className="py-12 text-center">
-            <p className="font-medium mb-1" style={{ color: "var(--color-rp-text)" }}>No nodes registered</p>
-            <p className="text-sm mb-4" style={{ color: "var(--color-rp-text-muted)" }}>Add a hosting node to start deploying servers.</p>
+          <div className="py-14 text-center">
+            <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center mb-3" style={{ backgroundColor: "rgba(163,230,53,0.1)", color: "#a3e635" }}>
+              <Server className="w-6 h-6" />
+            </div>
+            <p className="text-base font-bold mb-1" style={{ color: "var(--color-rp-text)" }}>No Compute Nodes Connected</p>
+            <p className="text-xs mb-5 max-w-md mx-auto" style={{ color: "var(--color-rp-text-muted)" }}>
+              Add your first Linux VPS or compute node to automatically start deploying and managing game servers.
+            </p>
             <Button icon={Plus} onClick={() => setAddOpen(true)}>Add First Node</Button>
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {nodes.map(node => (
-            <Card key={node.id}>
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold" style={{ color: "var(--color-rp-text)" }}>{node.name}</h3>
-                    <StatusBadge status={node.maintenanceMode ? "MAINTENANCE" : node.status} />
-                    {node.autoStartServersOnBoot ? (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                        <Zap className="w-2.5 h-2.5" />
-                        <span>Auto-Start</span>
-                      </span>
-                    ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-lime-500/15 text-lime-400 border border-lime-500/30 flex items-center gap-1">
-                        <Moon className="w-2.5 h-2.5" />
-                        <span>Cryo-Arm</span>
-                      </span>
-                    )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {nodes.map(node => {
+            const ping = pingStates[node.id];
+            return (
+              <div
+                key={node.id}
+                className="rounded-2xl border transition-all duration-200 overflow-hidden relative flex flex-col justify-between"
+                style={{
+                  backgroundColor: "var(--color-rp-surface)",
+                  borderColor: node.isRamCritical ? "rgba(239,68,68,0.5)" : node.maintenanceMode ? "rgba(234,179,8,0.4)" : "var(--color-rp-border)",
+                  boxShadow: node.isRamCritical ? "0 0 20px rgba(239,68,68,0.12)" : "none",
+                }}
+              >
+                {/* Maintenance Mode Warning Strip */}
+                {node.maintenanceMode && (
+                  <div className="px-4 py-2 text-xs font-semibold flex items-center gap-2" style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#fbbf24", borderBottom: "1px solid rgba(234,179,8,0.3)" }}>
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 animate-bounce" />
+                    <span>Maintenance Mode Active — New server creation paused. Existing servers restricted.</span>
                   </div>
-                  <p className="text-xs mt-1" style={{ color: "var(--color-rp-text-muted)" }}>
-                    {node.fqdn}:{node.port}{node.location && ` · ${node.location}`}
-                  </p>
+                )}
+
+                {/* Critical RAM Alert Strip */}
+                {node.isRamCritical && !node.maintenanceMode && (
+                  <div className="px-4 py-2 text-xs font-bold flex items-center justify-between" style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#f87171", borderBottom: "1px solid rgba(239,68,68,0.3)" }}>
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 animate-pulse" />
+                      <span>CRITICAL RAM ALLOCATION: {(node.totalAllocatedRam / 1024).toFixed(1)} GB allocated (OOM Crash Risk)</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-5 space-y-4">
+                  {/* Header Row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-base" style={{ color: "var(--color-rp-text)" }}>
+                          {node.name}
+                        </h3>
+                        <StatusBadge status={node.maintenanceMode ? "MAINTENANCE" : node.status} />
+                        {node.autoStartServersOnBoot ? (
+                          <span className="text-[10.5px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                            <Zap className="w-2.5 h-2.5" />
+                            <span>Auto-Start</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10.5px] px-2 py-0.5 rounded-full font-semibold bg-lime-500/15 text-lime-400 border border-lime-500/30 flex items-center gap-1">
+                            <Moon className="w-2.5 h-2.5" />
+                            <span>Cryo-Arm</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs mt-1 font-mono" style={{ color: "var(--color-rp-text-muted)" }}>
+                        {node.fqdn}:{node.port}{node.location && <span className="font-sans"> · {node.location}</span>}
+                      </p>
+                    </div>
+
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-[11px] px-2 py-0.5 rounded-md font-mono" style={{ backgroundColor: "var(--color-rp-surface-2)", color: "var(--color-rp-text-muted)" }}>
+                        v{node.agentVersion ?? "0.1.0"}
+                      </span>
+                      <p className="text-[11px] mt-1.5 flex items-center justify-end gap-1 font-medium" style={{ color: node.status === "ONLINE" ? "var(--color-rp-green)" : "var(--color-rp-text-dim)" }}>
+                        {node.status === "ONLINE" ? (
+                          <>
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-0.5" />
+                            <span>Online ({node.lastHeartbeat ? timeSince(node.lastHeartbeat) : "active"})</span>
+                          </>
+                        ) : (
+                          "Agent Offline"
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Resource Gauges & Telemetry */}
+                  <div className="space-y-3 pt-1">
+                    {/* RAM Bar */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="font-semibold flex items-center gap-1.5" style={{ color: "var(--color-rp-text)" }}>
+                          <Cpu className="w-3.5 h-3.5 text-lime-400" />
+                          <span>RAM Allocation &amp; Usage</span>
+                        </span>
+                        <span className="font-mono text-xs font-semibold" style={{ color: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "var(--color-rp-text)" }}>
+                          {(node.totalAllocatedRam / 1024).toFixed(1)} GB {node.maxRam ? `/ ${(node.maxRam / 1024).toFixed(1)} GB (${Math.round((node.totalAllocatedRam / node.maxRam) * 100)}%)` : "Allocated"}
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(100, Math.max(4, node.maxRam ? (node.totalAllocatedRam / node.maxRam) * 100 : (node.ramUsage || 10)))}%`,
+                            backgroundColor: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "#a3e635",
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] mt-1" style={{ color: "var(--color-rp-text-muted)" }}>
+                        <span>OS Host RAM Used: {node.ramUsage}%</span>
+                        <span>Allocated across servers: {(node.totalAllocatedRam / 1024).toFixed(1)} GB</span>
+                      </div>
+                    </div>
+
+                    {/* CPU & Disk Grid */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      {/* CPU */}
+                      <div className="p-2.5 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-medium" style={{ color: "var(--color-rp-text-muted)" }}>CPU Load</span>
+                          <span className="font-mono font-bold" style={{ color: node.cpuUsage > 85 ? "#ef4444" : "var(--color-rp-text)" }}>{node.cpuUsage}%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full overflow-hidden bg-white/5">
+                          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(2, node.cpuUsage))}%`, backgroundColor: node.cpuUsage > 85 ? "#ef4444" : "#38bdf8" }} />
+                        </div>
+                      </div>
+
+                      {/* Disk */}
+                      <div className="p-2.5 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Storage</span>
+                          <span className="font-mono font-bold" style={{ color: node.diskUsage > 85 ? "#ef4444" : "var(--color-rp-text)" }}>
+                            {node.maxDisk ? `${(node.totalAllocatedDisk / 1024).toFixed(0)} / ${(node.maxDisk / 1024).toFixed(0)} GB` : `${node.diskUsage}%`}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full overflow-hidden bg-white/5">
+                          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(2, node.maxDisk ? (node.totalAllocatedDisk / node.maxDisk) * 100 : node.diskUsage))}%`, backgroundColor: node.diskUsage > 85 ? "#ef4444" : "#a855f7" }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Server Breakdown Pills */}
+                  <div className="grid grid-cols-4 gap-2 pt-2 text-center">
+                    <div className="p-2 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                      <p className="text-base font-extrabold" style={{ color: "var(--color-rp-text)" }}>{node._count.servers}</p>
+                      <p className="text-[10px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Total Servers</p>
+                    </div>
+                    <div className="p-2 rounded-xl border" style={{ backgroundColor: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.2)" }}>
+                      <p className="text-base font-extrabold text-emerald-400">{node.serversRunning}</p>
+                      <p className="text-[10px] font-medium text-emerald-400/80">Running</p>
+                    </div>
+                    <div className="p-2 rounded-xl border" style={{ backgroundColor: "rgba(56,189,248,0.06)", borderColor: "rgba(56,189,248,0.2)" }}>
+                      <p className="text-base font-extrabold text-cyan-400">{node.serversCryo}</p>
+                      <p className="text-[10px] font-medium text-cyan-400/80">Cryo Sleep</p>
+                    </div>
+                    <div className="p-2 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                      <p className="text-base font-extrabold" style={{ color: "var(--color-rp-text-muted)" }}>{node.serversStopped}</p>
+                      <p className="text-[10px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Stopped</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs" style={{ color: "var(--color-rp-text-muted)" }}>
-                    Agent v{node.agentVersion ?? "—"}
-                  </p>
-                  <p className="text-xs mt-1 flex items-center justify-end gap-1" style={{ color: node.lastHeartbeat ? "var(--color-rp-green)" : "var(--color-rp-text-dim)" }}>
-                    {node.lastHeartbeat ? (
-                      <>
-                        <Activity className="w-3 h-3 text-emerald-400" />
-                        <span>{timeSince(node.lastHeartbeat)}</span>
-                      </>
-                    ) : (
-                      "Never connected"
-                    )}
-                  </p>
+
+                {/* Footer Controls & Quick Actions */}
+                <div className="px-5 py-3.5 border-t flex items-center justify-between gap-2 flex-wrap" style={{ borderColor: "var(--color-rp-border)", backgroundColor: "var(--color-rp-surface-2)" }}>
+                  <div className="flex items-center gap-3">
+                    <Toggle
+                      checked={node.maintenanceMode}
+                      onChange={() => toggleMaintenance(node)}
+                      label="Maintenance Mode"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {/* Ping / Test Latency */}
+                    <button
+                      type="button"
+                      onClick={() => pingNode(node)}
+                      disabled={ping?.loading}
+                      title="Test Agent Heartbeat & Round-trip Latency"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer hover:bg-white/5"
+                      style={{
+                        borderColor: ping?.latency !== undefined ? "rgba(34,197,94,0.4)" : "var(--color-rp-border)",
+                        color: ping?.latency !== undefined ? "#22c55e" : "var(--color-rp-text-muted)",
+                      }}
+                    >
+                      {ping?.loading ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-lime-400" />
+                      ) : (
+                        <Activity className="w-3 h-3" />
+                      )}
+                      <span>{ping?.loading ? "Pinging..." : ping?.latency !== undefined ? `${ping.latency}ms (OK)` : ping?.error ? "Ping Failed" : "Ping"}</span>
+                    </button>
+
+                    {/* Setup Command Modal */}
+                    <button
+                      type="button"
+                      onClick={() => handleGetSetupCommand(node)}
+                      title="Generate 1-Click Auto-Configure Link"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer hover:bg-white/5"
+                      style={{ borderColor: "var(--color-rp-border)", color: "#a3e635" }}
+                    >
+                      <Terminal className="w-3 h-3" />
+                      <span>Setup Link</span>
+                    </button>
+
+                    {/* Edit */}
+                    <button
+                      type="button"
+                      onClick={() => setEditNode(node)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-white/[0.04]"
+                      style={{ borderColor: "var(--color-rp-border)", color: "var(--color-rp-text-muted)" }}>
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteNode(node)}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-red-500/10"
+                      style={{ borderColor: "rgba(239,68,68,0.3)", color: "var(--color-rp-red)" }}>
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-                <div>
-                  <p className="text-lg font-bold" style={{ color: "var(--color-rp-text)" }}>{node._count.servers}</p>
-                  <p className="text-xs" style={{ color: "var(--color-rp-text-muted)" }}>Servers</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold" style={{ color: "var(--color-rp-text)" }}>{node._count.allocations}</p>
-                  <p className="text-xs" style={{ color: "var(--color-rp-text-muted)" }}>Allocations</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold" style={{ color: "var(--color-rp-text)" }}>
-                    {node.maxRam ? `${(node.maxRam / 1024).toFixed(0)}GB` : "—"}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--color-rp-text-muted)" }}>Max RAM</p>
-                </div>
-              </div>
-
-              {/* Resource bars — only when online */}
-              {node.status === "ONLINE" && (
-                <div className="space-y-2 mb-4">
-                  <ResourceBar label="CPU" used={node.cpuUsage ?? 0} unit="%" />
-                  <ResourceBar label="RAM" used={node.ramUsage ?? 0} unit="%" />
-                  <ResourceBar label="Disk" used={node.diskUsage ?? 0} unit="%" />
-                </div>
-              )}
-
-              {/* Footer actions */}
-              <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: "var(--color-rp-border)" }}>
-                <Toggle
-                  checked={node.maintenanceMode}
-                  onChange={() => toggleMaintenance(node)}
-                  label="Maintenance"
-                />
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setEditNode(node)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors hover:bg-white/[0.04]"
-                    style={{ borderColor: "var(--color-rp-border)", color: "var(--color-rp-text-muted)" }}>
-                    <Pencil className="w-3 h-3" /> Edit
-                  </button>
-                  <button
-                    onClick={() => setDeleteNode(node)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors hover:bg-red-500/10"
-                    style={{ borderColor: "rgba(239,68,68,0.3)", color: "var(--color-rp-red)" }}>
-                    <Trash2 className="w-3 h-3" /> Delete
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <AddNodeModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={loadNodes} />
-      {editNode && <EditNodeModal node={editNode} onClose={() => setEditNode(null)} onSaved={loadNodes} />}
-      {deleteNode && <DeleteConfirm node={deleteNode} onClose={() => setDeleteNode(null)} onDeleted={loadNodes} />}
+      {/* Modals */}
+      <AddNodeModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={loadNodes}
+        onSetupReady={info => setSetupModal(info)}
+      />
+
+      {editNode && (
+        <EditNodeModal
+          node={editNode}
+          onClose={() => setEditNode(null)}
+          onSaved={loadNodes}
+        />
+      )}
+
+      {deleteNode && (
+        <DeleteConfirm
+          node={deleteNode}
+          onClose={() => setDeleteNode(null)}
+          onDeleted={loadNodes}
+        />
+      )}
+
+      {setupModal && (
+        <SetupCommandModal
+          data={setupModal}
+          onClose={() => setSetupModal(null)}
+        />
+      )}
     </div>
   );
 }

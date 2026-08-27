@@ -63,6 +63,9 @@ export async function GET(request: NextRequest) {
       maxConcurrentBootStarts: true,
       bootStartupDelaySeconds: true,
       createdAt: true,
+      servers: {
+        select: { id: true, status: true, ram: true, disk: true, cpu: true, cryoSleepEnabled: true }
+      },
       _count: { select: { servers: true, allocations: true } },
     },
   });
@@ -70,10 +73,56 @@ export async function GET(request: NextRequest) {
   const nodes = rawNodes.map(node => {
     const isRecent = node.lastHeartbeat && (now.getTime() - new Date(node.lastHeartbeat).getTime() <= 60000);
     const computedStatus = node.maintenanceMode ? "MAINTENANCE" : isRecent ? "ONLINE" : "OFFLINE";
+
+    const totalAllocatedRam = node.servers.reduce((sum, s) => sum + (s.ram || 0), 0);
+    const totalAllocatedDisk = node.servers.reduce((sum, s) => sum + (s.disk || 0), 0);
+    const serversRunning = node.servers.filter(s => s.status === "RUNNING").length;
+    const serversCryo = node.servers.filter(s => s.status === "CRYO_SLEEP" || s.status === "HIBERNATED").length;
+    const serversStopped = node.servers.filter(s => s.status === "STOPPED" || s.status === "OFFLINE" || s.status === "SUSPENDED").length;
+
+    const ramUsedPercent = node.ramUsage ?? (node.maxRam ? Math.round((totalAllocatedRam / node.maxRam) * 100) : 0);
+    const diskUsedPercent = node.diskUsage ?? (node.maxDisk ? Math.round((totalAllocatedDisk / node.maxDisk) * 100) : 0);
+
     return {
-      ...node,
+      id: node.id,
+      name: node.name,
+      fqdn: node.fqdn,
+      port: node.port,
+      location: node.location,
+      description: node.description,
       status: computedStatus,
       isOnline: computedStatus === "ONLINE",
+      maintenanceMode: node.maintenanceMode,
+      agentVersion: node.agentVersion,
+      lastHeartbeat: node.lastHeartbeat,
+      cpuUsage: node.cpuUsage ?? 0,
+      ramUsage: node.ramUsage ?? 0,
+      diskUsage: node.diskUsage ?? 0,
+      networkRx: node.networkRx,
+      networkTx: node.networkTx,
+      maxCpu: node.maxCpu,
+      maxRam: node.maxRam,
+      maxDisk: node.maxDisk,
+      portRangeStart: node.portRangeStart,
+      portRangeEnd: node.portRangeEnd,
+      autoStartServersOnBoot: node.autoStartServersOnBoot,
+      bootCryoSleepMode: node.bootCryoSleepMode,
+      bootGracePeriodSeconds: node.bootGracePeriodSeconds,
+      maxConcurrentBootStarts: node.maxConcurrentBootStarts,
+      bootStartupDelaySeconds: node.bootStartupDelaySeconds,
+      createdAt: node.createdAt,
+      totalAllocatedRam,
+      totalAllocatedDisk,
+      serversRunning,
+      serversCryo,
+      serversStopped,
+      ramUsedPercent,
+      diskUsedPercent,
+      isRamWarning: (node.ramUsage ?? 0) >= 80 || (node.maxRam ? (totalAllocatedRam / node.maxRam) >= 0.85 : false),
+      isRamCritical: (node.ramUsage ?? 0) >= 92 || (node.maxRam ? (totalAllocatedRam / node.maxRam) >= 0.98 : false),
+      isCpuWarning: (node.cpuUsage ?? 0) >= 85,
+      isDiskWarning: (node.diskUsage ?? 0) >= 85,
+      _count: node._count,
     };
   });
 
