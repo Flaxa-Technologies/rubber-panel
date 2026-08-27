@@ -67,7 +67,7 @@ cd "${INSTALL_DIR}"
 REPO="Flaxa-Technologies/rubber-panel"
 echo -e "${CYAN}Fetching latest release information from GitHub (${REPO})...${NC}"
 
-LATEST_TAG=$(git ls-remote --tags --sort="v:refname" "https://github.com/${REPO}.git" 2>/dev/null | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
+LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(curl -s "https://github.com/${REPO}/releases.atom" 2>/dev/null | grep -o '<id>tag:github.com[^<]*' | head -n 1 | sed 's/.*\///')
 fi
@@ -113,36 +113,44 @@ fi
 
 prompt_input() {
   local prompt_text="$1"
-  local var_name="$2"
+  local default_val="$2"
+  local var_name="$3"
   local val=""
 
-  if [ -t 0 ]; then
-    read -r -p "${prompt_text}" val
-  elif [ -e /dev/tty ]; then
-    read -r -p "${prompt_text}" val </dev/tty 2>/dev/null || true
+  if [ -e /dev/tty ] && [ -r /dev/tty ]; then
+    echo -ne "${prompt_text}" > /dev/tty
+    read -r val < /dev/tty || true
+  else
+    echo -ne "${prompt_text}"
+    read -r val || true
+  fi
+
+  val=$(echo "$val" | tr -d '\r\n')
+  if [ -z "$val" ]; then
+    val="$default_val"
   fi
   eval "$var_name=\"\$val\""
 }
 
 # Prompt for domain / hostname
 PANEL_HOST=""
-prompt_input "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " PANEL_HOST
-PANEL_HOST=${PANEL_HOST:-$SERVER_IP}
+prompt_input "Enter Domain or Public IP for Panel [Default: ${SERVER_IP}]: " "${SERVER_IP}" PANEL_HOST
 
 # Prompt for Admin Credentials
 echo ""
 echo -e "${LIME}--- Initial Super Admin Credentials ---${NC}"
 ADMIN_EMAIL=""
-prompt_input "Enter Admin Email [Default: admin@flaxa.local]: " ADMIN_EMAIL
-ADMIN_EMAIL=${ADMIN_EMAIL:-admin@flaxa.local}
+while [ -z "${ADMIN_EMAIL}" ]; do
+  prompt_input "Enter Admin Email: " "" ADMIN_EMAIL
+done
 
 ADMIN_USERNAME=""
-prompt_input "Enter Admin Username [Default: admin]: " ADMIN_USERNAME
-ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+prompt_input "Enter Admin Username [Default: admin]: " "admin" ADMIN_USERNAME
 
 ADMIN_PASSWORD=""
-prompt_input "Enter Admin Password [Default: Admin@Rubber123#]: " ADMIN_PASSWORD
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin@Rubber123#}
+while [ -z "${ADMIN_PASSWORD}" ]; do
+  prompt_input "Enter Admin Password: " "" ADMIN_PASSWORD
+done
 
 # Generate Secure Random Secrets
 NEXTAUTH_SECRET=$(openssl rand -hex 32)

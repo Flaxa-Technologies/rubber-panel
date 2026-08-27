@@ -78,7 +78,7 @@ cd "${INSTALL_DIR}"
 REPO="Flaxa-Technologies/rubber-panel"
 echo -e "${CYAN}[4/6] Fetching Node Daemon package from GitHub (${REPO})...${NC}"
 
-LATEST_TAG=$(git ls-remote --tags --sort="v:refname" "https://github.com/${REPO}.git" 2>/dev/null | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
+LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(curl -s "https://github.com/${REPO}/releases.atom" 2>/dev/null | grep -o '<id>tag:github.com[^<]*' | head -n 1 | sed 's/.*\///')
 fi
@@ -108,30 +108,37 @@ echo ""
 
 prompt_input() {
   local prompt_text="$1"
-  local var_name="$2"
+  local default_val="$2"
+  local var_name="$3"
   local val=""
 
-  if [ -t 0 ]; then
-    read -r -p "${prompt_text}" val
-  elif [ -e /dev/tty ]; then
-    read -r -p "${prompt_text}" val </dev/tty 2>/dev/null || true
+  if [ -e /dev/tty ] && [ -r /dev/tty ]; then
+    echo -ne "${prompt_text}" > /dev/tty
+    read -r val < /dev/tty || true
+  else
+    echo -ne "${prompt_text}"
+    read -r val || true
+  fi
+
+  val=$(echo "$val" | tr -d '\r\n')
+  if [ -z "$val" ]; then
+    val="$default_val"
   fi
   eval "$var_name=\"\$val\""
 }
 
 ADMIN_URL=""
 while [ -z "${ADMIN_URL}" ]; do
-  prompt_input "Enter Admin Panel URL [e.g. http://your-panel-ip:3000]: " ADMIN_URL
+  prompt_input "Enter Admin Panel URL [e.g. http://your-panel-ip:3000]: " "" ADMIN_URL
 done
 
 NODE_TOKEN=""
 while [ -z "${NODE_TOKEN}" ]; do
-  prompt_input "Enter Node Auth Token (from Admin Panel): " NODE_TOKEN
+  prompt_input "Enter Node Auth Token (from Admin Panel): " "" NODE_TOKEN
 done
 
 NODE_PORT=""
-prompt_input "Enter Node Daemon Port [Default: 3001]: " NODE_PORT
-NODE_PORT=${NODE_PORT:-3001}
+prompt_input "Enter Node Daemon Port [Default: 3001]: " "3001" NODE_PORT
 
 # Configure node-side .env
 echo -e "${CYAN}[5/6] Writing configuration (.env)...${NC}"
