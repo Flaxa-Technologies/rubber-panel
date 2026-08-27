@@ -620,6 +620,34 @@ export async function createServer(params: CreateServerParams): Promise<{ succes
   return { success: true };
 }
 
+export async function updateServerInfo(serverId: string, patch: Partial<ServerInfo>): Promise<{ success: boolean; error?: string }> {
+  let info = serverStates.get(serverId);
+  if (!info) {
+    const stateFile = path.join(getServerDir(serverId), ".rp-state.json");
+    try {
+      const raw = await fs.readFile(stateFile, "utf-8");
+      info = JSON.parse(raw) as ServerInfo;
+    } catch {
+      return { success: false, error: "Server not found on this node" };
+    }
+  }
+
+  if (patch.name !== undefined) info.name = patch.name;
+  if (patch.port !== undefined) info.port = patch.port;
+  if (patch.ram !== undefined) info.ram = patch.ram;
+  if (patch.cpu !== undefined) info.cpu = patch.cpu;
+  if (patch.disk !== undefined) info.disk = patch.disk;
+  if (patch.startupCommand !== undefined) info.startupCommand = patch.startupCommand;
+  if (patch.environment) {
+    info.environment = { ...info.environment, ...patch.environment };
+  }
+
+  serverStates.set(serverId, info);
+  await saveState(serverId, info);
+  appendLog(serverId, `[Panel] Instance configuration updated.`);
+  return { success: true };
+}
+
 export async function startServer(serverId: string): Promise<{ success: boolean; error?: string }> {
   console.log(`[ServerManager] START server ${serverId}`);
   let info = serverStates.get(serverId);

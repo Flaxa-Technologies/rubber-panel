@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         owner: { select: { id: true, username: true, email: true } },
         node: { select: { id: true, name: true, status: true } },
         software: { select: { name: true, type: true } },
-        allocations: { select: { id: true, ip: true, port: true } },
+        allocations: { select: { id: true, ip: true, port: true }, orderBy: { createdAt: "asc" } },
       },
     }),
     db.server.count({ where }),

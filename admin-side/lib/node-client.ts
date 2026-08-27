@@ -53,7 +53,7 @@ export function getNodeBaseUrl(node: { fqdn: string; port: number }): string {
 export async function sendNodeCommand(
   nodeId: string,
   endpoint: string,
-  method: "GET" | "POST" | "PUT" | "DELETE" = "POST",
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" = "POST",
   body?: unknown
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   try {

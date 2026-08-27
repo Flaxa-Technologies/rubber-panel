@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       node: { select: { id: true, name: true, status: true, fqdn: true, port: true } },
       software: { select: { name: true, type: true } },
       softwareVersion: { select: { version: true } },
-      allocations: { select: { ip: true, port: true }, take: 1 },
+      allocations: { select: { id: true, ip: true, port: true }, orderBy: { createdAt: "asc" }, take: 1 },
       subusers: {
         where: { userId },
         select: { roleName: true, permissions: true },

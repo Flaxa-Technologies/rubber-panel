@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       node: { select: { id: true, name: true, fqdn: true, status: true } },
       software: true,
       softwareVersion: true,
-      allocations: true,
+      allocations: { orderBy: { createdAt: "asc" } },
       backups: { take: 10, orderBy: { createdAt: "desc" } },
     },
   });

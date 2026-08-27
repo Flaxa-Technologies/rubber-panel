@@ -19,6 +19,7 @@ export default function NetworkPage() {
   const [quota, setQuota] = useState<QuotaData | null>(null);
   const [allocating, setAllocating] = useState(false);
   const [releasingId, setReleasingId] = useState<string | null>(null);
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -44,6 +45,33 @@ export default function NetworkPage() {
     await navigator.clipboard.writeText(address);
     setCopied(address);
     setTimeout(() => setCopied(null), 1500);
+  }
+
+  async function handleSetPrimary(allocId: string) {
+    setSettingPrimaryId(allocId);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/user/servers/${server.id}/allocations/${allocId}/primary`, {
+        method: "POST",
+      });
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = { error: `Server returned status ${res.status}` };
+      }
+      if (res.ok) {
+        setSuccess(data.message || "Primary port updated successfully!");
+        await refreshServer();
+      } else {
+        setError(data.error || "Failed to set primary port.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Network error while setting primary port.");
+    }
+    setSettingPrimaryId(null);
   }
 
   async function handleAllocatePort() {
@@ -227,6 +255,17 @@ export default function NetworkPage() {
                         >
                           {copied === address ? <Check size={13} /> : <Copy size={13} />}
                           <span>Copy</span>
+                        </button>
+
+                        <button
+                          onClick={() => alloc.id && handleSetPrimary(alloc.id)}
+                          disabled={settingPrimaryId === alloc.id || !alloc.id}
+                          className="btn-secondary-dark"
+                          style={{ padding: "6px 10px", fontSize: 12, borderRadius: 8, color: "#38bdf8", display: "flex", alignItems: "center", gap: 4 }}
+                          title="Set this port as the Primary Game Connection"
+                        >
+                          {settingPrimaryId === alloc.id ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                          <span>Make Primary</span>
                         </button>
 
                         <button
