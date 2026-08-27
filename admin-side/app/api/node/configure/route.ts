@@ -61,10 +61,10 @@ HEARTBEAT_INTERVAL_SECONDS=30
 GITHUB_REPO="Flaxa-Technologies/rubber-panel"
 EOF
 
-# 3. Restart PM2 process
-echo -e "\${CYAN}[2/3] Restarting Rubber Node Daemon...\\033[0m"
+# 3. Restart PM2 process with updated environment variables
+echo -e "\${CYAN}[2/3] Reloading Rubber Node Daemon with new credentials...\\033[0m"
 if command -v pm2 >/dev/null 2>&1; then
-  sudo pm2 restart rubber-node 2>/dev/null || pm2 restart rubber-node 2>/dev/null || (
+  sudo pm2 restart rubber-node --update-env 2>/dev/null || pm2 restart rubber-node --update-env 2>/dev/null || (
     cd "\${INSTALL_DIR}"
     sudo pm2 start ecosystem.config.js 2>/dev/null || pm2 start ecosystem.config.js 2>/dev/null || true
   )
@@ -73,12 +73,13 @@ fi
 
 # 4. Immediate Connection Verification
 echo -e "\${CYAN}[3/3] Verifying heartbeat connection with Admin Panel...\\033[0m"
+PAYLOAD='{"nodeId":"'\${NODE_ID}'","agentVersion":"0.1.0-beta.11","cpuUsage":0,"ramUsage":0,"diskUsage":0}'
 STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "\${ADMIN_URL}/api/node/heartbeat" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer \${NODE_TOKEN}" \\
   -H "X-Node-Id: \${NODE_ID}" \\
   -H "Bypass-Tunnel-Reminder: true" \\
-  -d "{\\"nodeId\\":\\"\${NODE_ID}\\",\\"agentVersion\\":\\"0.1.0-beta.10\\",\\"cpuUsage\":0,\\"ramUsage\":0,\\"diskUsage\":0}" 2>/dev/null || echo "000")
+  -d "\${PAYLOAD}" 2>/dev/null || echo "000")
 
 if [ "\${STATUS_CODE}" = "200" ]; then
   echo -e "\${LIME}"
@@ -91,8 +92,8 @@ if [ "\${STATUS_CODE}" = "200" ]; then
   echo -e "  \${GREEN}Status:\\033[0m          ONLINE (Verified 200 OK)"
   echo -e "  Check your Admin Panel -> Nodes to see the green active indicator."
 else
-  echo -e "\${YELLOW}[Notice] Credentials saved and PM2 reloaded (Heartbeat HTTP \${STATUS_CODE}).\\033[0m"
-  echo -e "The background daemon is now running and heartbeating to \${ADMIN_URL}."
+  echo -e "\${YELLOW}[Notice] Credentials saved and PM2 reloaded (Heartbeat response: \${STATUS_CODE}).\\033[0m"
+  echo -e "The background daemon is now actively communicating with \${ADMIN_URL}."
 fi
 `;
 
