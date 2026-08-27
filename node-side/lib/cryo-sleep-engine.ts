@@ -65,6 +65,11 @@ export async function hibernateServer(serverId: string, reason = "Idle timeout")
     return { success: false, error: "Server not found on this node" };
   }
 
+  if (status.status === "STARTING" || status.status === "WAKING" || status.status === "INSTALLING") {
+    console.log(`[Cryo-Sleep] Server ${serverId} is currently ${status.status}. Skipping hibernation.`);
+    return { success: false, error: `Server is currently ${status.status}` };
+  }
+
   const assignedPort = config?.port || status.port || 25565;
   const serverName = config?.serverName || status.name || "Server";
   const serverType = config?.serverType || (status.environment?.SERVER_TYPE === "NODEJS" ? "NODEJS" : "MINECRAFT");
