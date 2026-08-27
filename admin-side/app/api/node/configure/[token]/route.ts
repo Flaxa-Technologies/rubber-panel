@@ -1,18 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySetupToken } from "@/lib/node-setup-tokens";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/node/configure — Returns a self-contained bash script that configures the node daemon instantly
-export async function GET(request: NextRequest) {
+// GET /api/node/configure/[token] (e.g. /api/node/configure/ncfg_....sh)
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ token: string }> }
+) {
+  const { token } = await context.params;
+  const setupData = verifySetupToken(token);
+
+  if (!setupData) {
+    const expiredScript = `#!/usr/bin/env bash
+echo ""
+echo -e "\\033[0;31m===================================================================\\033[0m"
+echo -e "\\033[0;31m  [Error] This Node Auto-Configuration link has EXPIRED (15-min limit) \\033[0m"
+echo -e "\\033[0;31m===================================================================\\033[0m"
+echo ""
+echo -e "\\033[1;33mTo generate a fresh 1-click command:\\033[0m"
+echo "  1. Go to your Admin Panel -> Nodes"
+echo "  2. Open the node setup or click 'Add Node' to copy a new command."
+echo ""
+exit 1
+`;
+    return new NextResponse(expiredScript, {
+      status: 410,
+      headers: {
+        "Content-Type": "text/x-shellscript; charset=utf-8",
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
+  }
+
   const url = new URL(request.url);
-  const nodeId = url.searchParams.get("id") ?? "";
-  const token = url.searchParams.get("token") ?? "";
-  const port = url.searchParams.get("port") ?? "3001";
   const origin = url.origin;
+  const { nodeId, authToken, port } = setupData;
 
   const script = `#!/usr/bin/env bash
 # ==============================================================================
 #  Rubber Panel — 1-Click Instant Node Daemon Auto-Configuration
+#  Generated dynamically by Admin Panel (15-minute temporary link)
 # ==============================================================================
 
 set -e
@@ -31,14 +59,14 @@ echo "==================================================================="
 echo -e "\${NC}"
 
 ADMIN_URL="${origin}"
-NODE_TOKEN="${token}"
+NODE_TOKEN="${authToken}"
 NODE_ID="${nodeId}"
 NODE_PORT="${port}"
 
 INSTALL_DIR="/var/rubber-panel/node-daemon"
 DATA_DIR="/var/rubber-panel/servers"
 
-# 1. If not installed, install node daemon first
+# 1. If not installed, automatically install node daemon first
 if [ ! -d "\${INSTALL_DIR}" ] || [ ! -f "\${INSTALL_DIR}/package.json" ]; then
   echo -e "\${CYAN}Node daemon not found on this machine. Running installer first...\\033[0m"
   curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash -s -- --admin-url="\${ADMIN_URL}" --node-id="\${NODE_ID}" --node-token="\${NODE_TOKEN}" --port="\${NODE_PORT}"

@@ -5,6 +5,7 @@ import db from "@/lib/db";
 import { generateNodeToken } from "@/lib/auth";
 import { isAdminRole, hasPermission, PERMISSIONS } from "@/lib/rbac";
 import { createAuditLog, getIpFromRequest } from "@/lib/audit";
+import { createSetupToken } from "@/lib/node-setup-tokens";
 import { z } from "zod";
 
 
@@ -112,5 +113,12 @@ export async function POST(request: NextRequest) {
     metadata: { name: node.name, fqdn: node.fqdn },
   });
 
-  return NextResponse.json(node, { status: 201 });
+  const setupToken = createSetupToken({
+    nodeId: node.id,
+    authToken: node.authToken,
+    port: node.port,
+    ttlMinutes: 15,
+  });
+
+  return NextResponse.json({ ...node, setupToken }, { status: 201 });
 }

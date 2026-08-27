@@ -36,7 +36,7 @@ interface Node {
   _count: { servers: number; allocations: number };
 }
 
-type NewTokenState = { token: string; nodeId: string } | null;
+type NewTokenState = { token: string; nodeId: string; setupToken?: string } | null;
 
 // ─── Add Node Modal ────────────────────────────────────────────────
 function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
@@ -83,8 +83,12 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
       }),
     });
     const data = await res.json();
-    if (res.ok) { setNewToken({ token: data.authToken, nodeId: data.id }); onCreated(); }
-    else { setError(data.error ?? "Failed to create node"); }
+    if (res.ok) {
+      setNewToken({ token: data.authToken, nodeId: data.id, setupToken: data.setupToken });
+      onCreated();
+    } else {
+      setError(data.error ?? "Failed to create node");
+    }
     setLoading(false);
   }
 
@@ -104,33 +108,39 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
 
   if (newToken) {
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const quickCmd = `curl -sSL "${origin}/api/node/configure?id=${newToken.nodeId}&token=${newToken.token}&port=3001" | sudo bash`;
+    const setupFile = newToken.setupToken ? `${newToken.setupToken}.sh` : `ncfg_${newToken.token}.sh`;
+    const quickCmd = `curl -sSL "${origin}/api/node/configure/${setupFile}" | sudo bash`;
 
     return (
-      <Modal open={open} onClose={handleClose} title="Node Registered — Deployment Credentials" size="lg"
+      <Modal open={open} onClose={handleClose} title="Node Registered — 1-Click Deployment" size="lg"
         footer={<Button onClick={handleClose}>Done</Button>}>
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#22c55e" }} />
             <p className="text-xs leading-relaxed" style={{ color: "var(--color-rp-text)" }}>
-              <strong>Node registered successfully!</strong> Run the 1-Line Auto-Deploy command on your VPS to automatically install Docker, PM2, and connect this node daemon to your panel in under 30 seconds.
+              <strong>Node created successfully!</strong> Run the 1-Line command below on your VPS or Codespace. It automatically writes credentials, reloads PM2, and connects the daemon in seconds.
             </p>
           </div>
 
           {/* Quick Auto-Deploy Command */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
-                <Zap className="w-3.5 h-3.5" />
-                <span>1-Click Auto-Deploy Command (VPS / Codespace)</span>
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>1-Click Auto-Configure Command</span>
+                </p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
+                  Expires in 15 mins
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => { navigator.clipboard.writeText(quickCmd); setCopied(true); setTimeout(() => setCopied(false), 3000); }}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
                 style={{ backgroundColor: "var(--color-rp-accent)", color: "#000" }}>
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "Copied 1-Line Command!" : "Copy Auto-Deploy Command"}
+                {copied ? "Copied 1-Line Command!" : "Copy Command"}
               </button>
             </div>
             <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
