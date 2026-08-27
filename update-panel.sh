@@ -18,6 +18,15 @@ echo "              Rubber Panel — Hotfix & Update Patcher               "
 echo "==================================================================="
 echo -e "${NC}"
 
+# Check if running on a standalone node compute machine
+if [ ! -d "/var/www/rubber-panel/admin-side" ] && [ ! -d "./admin-side" ] && [ ! -d "/workspaces/rubber-panel/admin-side" ]; then
+  if [ -d "/var/rubber-panel/node-daemon" ] || [ -d "/workspaces/rubber-panel/node-side" ] || [ -d "./node-side" ]; then
+    echo -e "${CYAN}Detected Node Compute installation. Delegating to node update...${NC}"
+    curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/update-node.sh | sudo bash
+    exit 0
+  fi
+fi
+
 INSTALL_DIR="/var/www/rubber-panel"
 if [ ! -d "${INSTALL_DIR}/admin-side" ]; then
   if [ -d "./admin-side" ]; then
