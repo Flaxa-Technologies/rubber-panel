@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
 import { exec, spawn } from "child_process";
 import util from "util";
 
@@ -727,7 +728,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       } catch {}
     }
 
-    const cpuLimit = (info.cpu / 100).toFixed(2);
+    const hostCores = os.cpus()?.length || 1;
+    const requestedCores = (info.cpu || 100) / 100;
+    const effectiveCores = Math.max(0.1, Math.min(requestedCores, hostCores));
+    const cpuLimit = effectiveCores.toFixed(2);
 
     let dockerArgs: string[] = [];
 
