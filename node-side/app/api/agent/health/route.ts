@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNodeResources } from "@/lib/resource-monitor";
-import { startHeartbeat } from "@/lib/heartbeat-worker";
+import { startHeartbeat, getDiscoveredNodeId } from "@/lib/heartbeat-worker";
 import { reloadStatesFromDisk } from "@/lib/server-manager";
 
 // Self-healing initialization on node startup
@@ -22,14 +22,13 @@ export async function GET(request: NextRequest) {
   }
 
   const resources = getNodeResources();
-  const configured = !!(process.env.NODE_TOKEN && process.env.NODE_ID &&
-    process.env.NODE_TOKEN !== "dev-token-placeholder" &&
-    process.env.NODE_ID !== "dev-node-id");
+  const activeId = getDiscoveredNodeId();
+  const configured = !!(process.env.NODE_TOKEN && process.env.NODE_TOKEN !== "dev-token-placeholder");
 
   return NextResponse.json({
     status: "ONLINE",
-    nodeId: process.env.NODE_ID ?? "not-configured",
-    agentVersion: "1.0.0",
+    nodeId: activeId || process.env.NODE_ID || (configured ? "auto-registered" : "not-configured"),
+    agentVersion: "0.1.0-beta.9",
     configured,
     adminApiUrl: process.env.ADMIN_API_URL ?? "http://localhost:3000",
     resources,

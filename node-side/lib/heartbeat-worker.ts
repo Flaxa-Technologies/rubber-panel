@@ -6,22 +6,22 @@ import { getAllServers } from "./server-manager";
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL ?? "http://localhost:3000";
 const NODE_TOKEN = process.env.NODE_TOKEN ?? "";
-const NODE_ID = process.env.NODE_ID ?? "";
 const INTERVAL_MS = parseInt(process.env.HEARTBEAT_INTERVAL_SECONDS ?? "30") * 1000;
 
 let started = false;
+let discoveredNodeId: string = process.env.NODE_ID ?? "";
+
+export function getDiscoveredNodeId(): string {
+  return discoveredNodeId || process.env.NODE_ID || "";
+}
 
 export function startHeartbeat() {
   if (started) return;
   started = true;
 
-  // Don't start if not configured
+  // Don't start if token not configured
   if (!NODE_TOKEN || NODE_TOKEN === "dev-token-placeholder") {
     console.log("[Heartbeat] NODE_TOKEN not set — heartbeat disabled. Configure .env to connect to admin.");
-    return;
-  }
-  if (!NODE_ID || NODE_ID === "dev-node-id") {
-    console.log("[Heartbeat] NODE_ID not set — heartbeat disabled. Configure .env to connect to admin.");
     return;
   }
 
@@ -38,13 +38,12 @@ async function sendHeartbeat() {
     const servers = await getAllServers();
     
     // Periodically verify actual container statuses if they are marked RUNNING
-    // (This ensures our in-memory state is accurate before sending to admin)
     const { getServerStatus } = await import("./server-manager");
     for (const s of servers) {
       if (s.status === "RUNNING") await getServerStatus(s.id);
     }
 
-    let currentVer = "0.1.0";
+    let currentVer = "0.1.0-beta.9";
     try {
       const fs = await import("fs");
       const path = await import("path");
@@ -52,12 +51,14 @@ async function sendHeartbeat() {
       if (pkg?.version) currentVer = pkg.version;
     } catch {}
 
+    const activeId = discoveredNodeId || process.env.NODE_ID || "";
+
     const payload = {
-      nodeId: NODE_ID,
+      nodeId: activeId,
       agentVersion: currentVer,
       cpuUsage: resources.cpuUsage,
       ramUsage: resources.ramUsage,
-      diskUsage: 0, // TODO: real disk usage
+      diskUsage: 0,
       networkRx: 0,
       networkTx: 0,
       serverStatuses: servers.map(s => ({ id: s.id, status: s.status })),
@@ -68,7 +69,7 @@ async function sendHeartbeat() {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${NODE_TOKEN}`,
-        "X-Node-Id": NODE_ID,
+        "X-Node-Id": activeId,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
         "Bypass-Tunnel-Reminder": "true",
         Accept: "application/json",
@@ -78,15 +79,18 @@ async function sendHeartbeat() {
     });
 
     if (res.ok) {
-      console.log(`[Heartbeat] ✓ OK — ${new Date().toLocaleTimeString()}`);
+      const data = await res.json();
+      if (data?.nodeId && !discoveredNodeId) {
+        discoveredNodeId = data.nodeId;
+      }
+      console.log(`[Heartbeat] ✓ OK (Node: ${discoveredNodeId || "connected"}) — ${new Date().toLocaleTimeString()}`);
+      
       try {
-        const data = await res.json();
         if (data?.config?.cryosleep) {
           const { initCryoSleepEngine } = await import("./cryo-sleep-engine");
           initCryoSleepEngine(data.config.cryosleep);
         }
         if (data?.config?.bootPolicy) {
-          // Sync boot policy
           const { syncBootPolicy } = await import("./cryo-sleep-engine");
           syncBootPolicy(data.config.bootPolicy);
         }
@@ -98,33 +102,27 @@ async function sendHeartbeat() {
             registerCryoServer({
               serverId: s.id,
               serverName: s.name,
-              port: s.port || 25565,
-              serverType: s.serverType === "NODEJS" ? "NODEJS" : "MINECRAFT",
-              enabled: s.cryoSleepEnabled === true,
-              idleMinutes: s.cryoSleepIdleMinutes || 10,
+              serverType: s.serverType,
+              port: s.allocations?.[0]?.port ?? s.internalPort,
+              enabled: !!s.cryoSleepEnabled,
+              idleMinutes: s.cryoSleepIdleMinutes ?? data.config.cryosleep.defaultIdleMinutes ?? 10,
               motd: s.cryoSleepMotd,
             });
-
-            if (s.cryoSleepEnabled === true) {
-              const sleeping = isWakeProxyRunning(s.id);
-              if (!sleeping) {
-                const curStatus = await getServerStatus(s.id);
-                if (!curStatus || curStatus.status !== "RUNNING") {
-                  await hibernateServer(s.id, "Heartbeat auto-sync wake proxy").catch(() => {});
-                }
+            if (s.cryoSleepEnabled) {
+              const live = await getServerStatus(s.id);
+              if (live && live.status === "RUNNING" && !isWakeProxyRunning(s.id)) {
+                hibernateServer(s.id).catch(() => {});
               }
             }
           }
         }
-      } catch (err: any) {
-        console.error("[Heartbeat] Error processing admin config payload:", err);
+      } catch (innerErr) {
+        console.warn("[Heartbeat] Engine sync note:", innerErr);
       }
     } else {
-      const text = await res.text().catch(() => res.status.toString());
-      console.warn(`[Heartbeat] ✗ Admin responded ${res.status}: ${text}`);
+      console.warn(`[Heartbeat] Admin responded with HTTP ${res.status}: ${res.statusText}`);
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Heartbeat] ✗ Failed to reach admin: ${msg}`);
+  } catch (err: any) {
+    console.warn(`[Heartbeat] Failed to ping admin (${ADMIN_API_URL}):`, err.message);
   }
 }

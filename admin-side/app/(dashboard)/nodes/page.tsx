@@ -104,7 +104,7 @@ function AddNodeModal({ open, onClose, onCreated }: { open: boolean; onClose: ()
 
   if (newToken) {
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const quickCmd = `chmod +x start.sh && ./start.sh --admin-url="${origin}" --node-id="${newToken.nodeId}" --node-token="${newToken.token}" --port=3001`;
+    const quickCmd = `curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash -s -- --admin-url="${origin}" --node-id="${newToken.nodeId}" --node-token="${newToken.token}" --port=3001`;
     const envBlock = `NODE_TOKEN=${newToken.token}\nNODE_ID=${newToken.nodeId}\nADMIN_API_URL=${origin}\nAGENT_PORT=3001\nPORT=3001\nHEARTBEAT_INTERVAL_SECONDS=30\nSERVER_DATA_DIR=/var/rubber-panel/servers`;
 
     return (

@@ -20,6 +20,29 @@ echo "             Rubber Panel — Compute Node Daemon Setup              "
 echo "==================================================================="
 echo -e "${NC}"
 
+# Parse optional command-line flags
+INPUT_ADMIN_URL=""
+INPUT_NODE_TOKEN=""
+INPUT_NODE_ID=""
+INPUT_PORT=""
+
+for arg in "$@"; do
+  case $arg in
+    --admin-url=*)
+      INPUT_ADMIN_URL="${arg#*=}"
+      ;;
+    --node-token=*)
+      INPUT_NODE_TOKEN="${arg#*=}"
+      ;;
+    --node-id=*)
+      INPUT_NODE_ID="${arg#*=}"
+      ;;
+    --port=*)
+      INPUT_PORT="${arg#*=}"
+      ;;
+  esac
+done
+
 # Check Root
 if [ "$(id -u)" -ne 0 ]; then
   echo -e "${RED}[Error] This script must be run as root (sudo bash install-node.sh)${NC}"
@@ -41,10 +64,10 @@ fi
 if ! command -v docker >/dev/null 2>&1; then
   echo -e "${CYAN}[2/6] Installing Docker Engine...${NC}"
   curl -fsSL https://get.docker.com | bash
-  systemctl enable docker
-  systemctl start docker
+  systemctl enable docker 2>/dev/null || true
+  systemctl start docker 2>/dev/null || true
 fi
-echo -e "${GREEN}✓ Docker $(docker --version | cut -d',' -f1) ready.${NC}"
+echo -e "${GREEN}✓ Docker $(docker --version 2>/dev/null | cut -d',' -f1 || echo 'Engine') ready.${NC}"
 
 # Install Node.js 20 LTS if not present
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 20 ]; then
@@ -98,17 +121,7 @@ else
   rm -rf "${TEMP_CLONE}"
 fi
 
-# Interactive CLI Form
-echo ""
-echo -e "${LIME}"
-echo "==================================================================="
-echo "                  Node Daemon Configuration Form                   "
-echo "==================================================================="
-echo -e "${NC}"
-echo -e "  ${CYAN}Step 1:${NC} Open your Admin Panel -> ${GREEN}Nodes${NC} -> click ${GREEN}'Add Node'${NC}"
-echo -e "  ${CYAN}Step 2:${NC} Fill in the connection form fields below:"
-echo ""
-
+# Interactive CLI Form if not provided via flags
 prompt_field() {
   local prompt_label="$1"
   local prompt_hint="$2"
@@ -136,26 +149,53 @@ prompt_field() {
   echo ""
 }
 
-NODE_TOKEN=""
-while [ -z "${NODE_TOKEN}" ]; do
-  prompt_field "[1/3] Enter Node Auth Token" "Create a Node in your Admin Panel -> Nodes -> 'Add Node' to obtain and paste this token" "" NODE_TOKEN
-done
+NODE_TOKEN="${INPUT_NODE_TOKEN}"
+NODE_ID="${INPUT_NODE_ID}"
+ADMIN_URL="${INPUT_ADMIN_URL}"
+NODE_PORT="${INPUT_PORT}"
 
-ADMIN_URL=""
-while [ -z "${ADMIN_URL}" ]; do
-  prompt_field "[2/3] Enter Admin Panel URL" "e.g. http://20.192.21.60:3000 or http://localhost:3000" "http://localhost:3000" ADMIN_URL
-done
+if [ -z "${NODE_TOKEN}" ] || [ -z "${ADMIN_URL}" ]; then
+  echo ""
+  echo -e "${LIME}"
+  echo "==================================================================="
+  echo "                  Node Daemon Configuration Form                   "
+  echo "==================================================================="
+  echo -e "${NC}"
+  echo -e "  ${CYAN}Step 1:${NC} Open your Admin Panel -> ${GREEN}Nodes${NC} -> click ${GREEN}'Add Node'${NC}"
+  echo -e "  ${CYAN}Step 2:${NC} Copy the Token and ID, then fill in the fields below:"
+  echo ""
 
-NODE_PORT=""
-prompt_field "[3/3] Enter Node Daemon Port [Default: 3001]" "Port where this compute agent listens (press Enter for 3001)" "3001" NODE_PORT
+  while [ -z "${NODE_TOKEN}" ]; do
+    prompt_field "[1/4] Enter Node Auth Token" "Copy token from Admin Panel -> Nodes -> 'Add Node'" "" NODE_TOKEN
+  done
+
+  if [ -z "${NODE_ID}" ]; then
+    prompt_field "[2/4] Enter Node ID [Optional — will auto-discover if blank]" "Node ID from Admin Panel -> Nodes -> 'Add Node'" "" NODE_ID
+  fi
+
+  while [ -z "${ADMIN_URL}" ]; do
+    prompt_field "[3/4] Enter Admin Panel URL" "e.g. https://your-domain.com or http://localhost:3000" "http://localhost:3000" ADMIN_URL
+  done
+
+  if [ -z "${NODE_PORT}" ]; then
+    prompt_field "[4/4] Enter Node Daemon Port [Default: 3001]" "Port where this compute agent listens (press Enter for 3001)" "3001" NODE_PORT
+  fi
+fi
+
+NODE_PORT=${NODE_PORT:-3001}
 
 # Configure node-side .env
 echo -e "${CYAN}[5/6] Writing configuration (.env)...${NC}"
 cat <<EOF > "${INSTALL_DIR}/.env"
 NODE_PORT=${NODE_PORT}
+PORT=${NODE_PORT}
+AGENT_PORT=${NODE_PORT}
 ADMIN_API_URL="${ADMIN_URL}"
 NODE_TOKEN="${NODE_TOKEN}"
+NODE_ID="${NODE_ID}"
 DATA_DIR="${DATA_DIR}"
+SERVER_DATA_DIR="${DATA_DIR}"
+HEARTBEAT_INTERVAL_SECONDS=30
 GITHUB_REPO="Flaxa-Technologies/rubber-panel"
 EOF
 
