@@ -61,6 +61,10 @@ fi
 
 rm -rf "${TEMP_DIR}"
 
+if command -v pm2 >/dev/null 2>&1; then
+  sudo pm2 stop rubber-node 2>/dev/null || pm2 stop rubber-node 2>/dev/null || true
+fi
+
 echo -e "${CYAN}[3/4] Compiling and building Node Daemon...${NC}"
 cd "${INSTALL_DIR}"
 npm install --include=dev --prefer-offline --no-audit --no-fund
@@ -68,8 +72,8 @@ npm run build
 
 echo -e "${CYAN}[4/4] Reloading Rubber Node process...${NC}"
 if command -v pm2 >/dev/null 2>&1; then
-  sudo pm2 restart rubber-node --update-env 2>/dev/null || pm2 restart rubber-node --update-env 2>/dev/null || (
-    sudo pm2 start ecosystem.config.js 2>/dev/null || pm2 start ecosystem.config.js 2>/dev/null || true
+  sudo pm2 start "${INSTALL_DIR}/ecosystem.config.js" 2>/dev/null || pm2 start "${INSTALL_DIR}/ecosystem.config.js" 2>/dev/null || (
+    sudo pm2 restart rubber-node --update-env 2>/dev/null || pm2 restart rubber-node --update-env 2>/dev/null || true
   )
   sudo pm2 save 2>/dev/null || pm2 save 2>/dev/null || true
 fi
