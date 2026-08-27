@@ -93,11 +93,15 @@ cd "${INSTALL_DIR}/user-side"
 npm install --include=dev --prefer-offline --no-audit --no-fund
 npm run build
 
-# Restart PM2
-echo -e "${CYAN}[5/5] Reloading PM2 services...${NC}"
+# Restart PM2 & Ensure Boot Auto-Start
+echo -e "${CYAN}[5/5] Reloading PM2 services & saving startup state...${NC}"
 if command -v pm2 >/dev/null 2>&1; then
-  # Try root PM2 first, then user PM2
   sudo pm2 restart all 2>/dev/null || pm2 restart all 2>/dev/null || true
+  sudo pm2 save 2>/dev/null || pm2 save 2>/dev/null || true
+  if [ -d /run/systemd/system ] || command -v systemctl >/dev/null 2>&1; then
+    sudo pm2 startup systemd -u root --hp /root 2>/dev/null || sudo pm2 startup 2>/dev/null || true
+    sudo systemctl enable pm2-root 2>/dev/null || true
+  fi
 fi
 
 echo -e "${LIME}"

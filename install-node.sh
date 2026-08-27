@@ -172,9 +172,12 @@ pm2 delete rubber-node 2>/dev/null || true
 pm2 start "${INSTALL_DIR}/ecosystem.config.js"
 pm2 save
 
-if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
-  pm2 startup systemd -u root --hp /root 2>/dev/null || true
+# Ensure systemd auto-start on boot
+if [ -d /run/systemd/system ] || command -v systemctl >/dev/null 2>&1; then
+  pm2 startup systemd -u root --hp /root 2>/dev/null || pm2 startup 2>/dev/null || true
+  systemctl enable pm2-root 2>/dev/null || true
 fi
+pm2 save
 
 echo -e "${LIME}"
 echo "==================================================================="
