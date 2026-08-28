@@ -166,75 +166,271 @@ export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Pro
   return { success: true, path: targetBin };
 }
 
-// Generate or update Pumpkin's configuration.toml with exact allocated Java & Bedrock ports
+// Generate or update Pumpkin's config.toml and configuration.toml with exact allocated Java & Bedrock ports
 export async function ensurePumpkinConfiguration(serverDir: string, javaPort: number, bedrockPort: number) {
-  const configPath = path.join(serverDir, "configuration.toml");
-  let content = "";
+  const configNames = ["config.toml", "configuration.toml", "Pumpkin.toml"];
+  
+  const generateInitialPumpkinToml = (jPort: number, bPort: number) => `# ─── PUMPKIN MINECRAFT CONFIGURATION (RUBBER PANEL) ───
+seed = "1789633435863525713"
+default_difficulty = "Normal"
+op_permission_level = 4
+allow_nether = true
+allow_end = true
+hardcore = false
+tps = 20.0
+default_gamemode = "Survival"
+force_gamemode = false
+scrub_ips = true
+use_favicon = true
+default_level_name = "world"
+allow_chat_reports = false
+white_list = false
+enforce_whitelist = false
 
-  try {
-    content = await fs.readFile(configPath, "utf-8");
-  } catch {
-    content = "";
-  }
+[logging]
+enabled = true
+threads = true
+color = true
+timestamp = true
+file = "latest.log"
 
-  // If configuration does not exist, write the clean initial configuration block
-  if (!content.trim()) {
-    const initialConfig = `# ─── PUMPKIN MINECRAFT CONFIGURATION (RUBBER PANEL) ───
-# Native multithreaded Rust Minecraft server supporting Java & Bedrock Edition
+[resource_pack.java]
+enabled = false
+url = ""
+sha1 = ""
+prompt_message = ""
+force = false
+
+[resource_pack.bedrock]
+enabled = false
+force = false
+packs = []
+
+[world]
+lighting = "default"
+autosave_ticks = 0
+
+[world.chunk]
+type = "anvil"
+write_in_place = false
+
+[world.chunk.compression]
+algorithm = "LZ4"
+level = 6
 
 [networking.query]
+enabled = false
+address = "0.0.0.0:${jPort}"
+
+[networking.rcon]
+enabled = false
+address = "0.0.0.0:25575"
+password = ""
+max_connections = 10
+
+[networking.rcon.logging]
+logged_successfully = true
+wrong_password = true
+commands = true
+quit = true
+
+[networking.proxy]
+enabled = false
+
+[networking.proxy.velocity]
+enabled = false
+secret = ""
+
+[networking.proxy.bungeecord]
+enabled = false
+secret = ""
+
+[networking.lan_broadcast]
 enabled = false
 
 [networking.java]
 enabled = true
-address = "0.0.0.0:${javaPort}"
+address = "0.0.0.0:${jPort}"
+encryption = true
+online_mode = false
+max_players = 1000
+view_distance = 16
+simulation_distance = 10
+keep_alive_time = 15
+motd = "A blazingly fast Pumpkin server powered by Rubber Panel!"
+
+[networking.java.compression]
+enabled = true
+threshold = 256
+level = 4
+
+[networking.java.authentication]
+enabled = true
+fallbacks = []
+profile_by_name_fallbacks = []
+profile_by_uuid_fallbacks = []
+connect_timeout = 5000
+read_timeout = 5000
+prevent_proxy_connections = false
+
+[networking.java.authentication.player_profile]
+allow_banned_players = false
+allowed_actions = ["FORCED_NAME_CHANGE", "USING_BANNED_SKIN"]
+
+[networking.java.authentication.textures]
+enabled = true
+allowed_url_schemes = ["http", "https"]
+allowed_url_domains = [".minecraft.net", ".mojang.com"]
+
+[networking.java.authentication.textures.types]
+skin = true
+cape = true
+elytra = true
+
+[networking.java.packet_limiter]
+enabled = true
+max_packet_rate = 500.0
+burst_capacity = 500.0
+kick_message = "Kicked for spamming packets"
 
 [networking.bedrock]
 enabled = true
+online_mode = false
+max_players = 1000
+view_distance = 16
+simulation_distance = 10
+motd = "A blazingly fast Pumpkin server powered by Rubber Panel!"
+chunk_caching = true
+
+[networking.bedrock.compression]
+enabled = true
+threshold = 256
+level = 4
+
+[networking.bedrock.authentication]
+enabled = true
+connect_timeout = 5000
+read_timeout = 5000
 
 [networking.bedrock.nethernet]
 enabled = true
-address = "0.0.0.0:${bedrockPort}"
+address = "0.0.0.0:${bPort}"
+identity_key = "nethernet-key.der"
+stun_servers = []
 
-[resource_pack]
-enabled = false
+[networking.bedrock.packet_limiter]
+enabled = true
+max_packet_rate = 500.0
+burst_capacity = 500.0
+kick_message = "Kicked for spamming packets"
 
-[basic]
-motd = "A Minecraft Server Powered by Rubber Panel"
-max_players = 20
-view_distance = 10
-simulation_distance = 10
-default_gamemode = "survival"
-difficulty = "normal"
-pvp = true
-hardcore = false
-allow_flight = false
-online_mode = false
-white_list = false
+[commands]
+use_console = true
+use_tty = true
+log_console = true
+broadcast_console_to_ops = true
+default_op_level = 0
+
+[commands.overrides]
+
+[chat]
+format = "<{DISPLAYNAME}> {MESSAGE}"
+
+[chat.anti_spam]
+enabled = true
+spam_threshold = 200
+message_cost = 20
+decay_per_tick = 1
+ops_bypass = true
+
+[pvp]
+enabled = true
+hurt_animation = true
+protect_creative = true
+knockback = true
+swing = true
+
+[server_links]
+enabled = true
+bug_report = "https://github.com/Pumpkin-MC/Pumpkin/issues"
+support = ""
+status = ""
+feedback = ""
+community = ""
+website = ""
+forums = ""
+news = ""
+announcements = ""
+
+[server_links.custom]
+
+[player_data]
+save_player_data = true
+save_player_cron_interval = 300
+
+[fun]
+april_fools = true
+
+[recipe]
+send_recipes = true
+
+[plugins]
+enabled = true
+hot_reload = false
+ask_permission_confirmation = true
+allow_unsigned = true
+allowed_permissions = []
+blocked_permissions = []
+inherit_env = false
+loopback_only = false
+verify_signatures = true
+
+[plugins.overrides]
+
+[advancement]
+save_advancements = true
 `;
-    await fs.writeFile(configPath, initialConfig, "utf-8");
-    return;
+
+  for (const cfgName of configNames) {
+    const configPath = path.join(serverDir, cfgName);
+    let content = "";
+    try {
+      content = await fs.readFile(configPath, "utf-8");
+    } catch {
+      content = "";
+    }
+
+    if (!content.trim()) {
+      await fs.writeFile(configPath, generateInitialPumpkinToml(javaPort, bedrockPort), "utf-8");
+      console.log(`[PumpkinAgent] Generated initial ${cfgName} (Java :${javaPort}, Bedrock :${bedrockPort})`);
+    } else {
+      let updated = content;
+
+      // Update Java address
+      if (updated.includes("[networking.java]")) {
+        updated = updated.replace(/(\[networking\.java\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${javaPort}$2`);
+      } else {
+        updated += `\n\n[networking.java]\nenabled = true\naddress = "0.0.0.0:${javaPort}"\n`;
+      }
+
+      // Update Bedrock NetherNet address
+      if (updated.includes("[networking.bedrock.nethernet]")) {
+        updated = updated.replace(/(\[networking\.bedrock\.nethernet\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${bedrockPort}$2`);
+      } else if (updated.includes("[networking.bedrock]")) {
+        updated = updated.replace(/\[networking\.bedrock\][^\[]*/m, (match) => {
+          return `${match}\n[networking.bedrock.nethernet]\nenabled = true\naddress = "0.0.0.0:${bedrockPort}"\n`;
+        });
+      } else {
+        updated += `\n\n[networking.bedrock]\nenabled = true\n\n[networking.bedrock.nethernet]\nenabled = true\naddress = "0.0.0.0:${bedrockPort}"\n`;
+      }
+
+      // Ensure query port matches or disabled
+      if (updated.includes("[networking.query]")) {
+        updated = updated.replace(/(\[networking\.query\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${javaPort}$2`);
+      }
+
+      await fs.writeFile(configPath, updated, "utf-8");
+      console.log(`[PumpkinAgent] Synchronized ports in existing ${cfgName} (Java :${javaPort}, Bedrock :${bedrockPort})`);
+    }
   }
-
-  // If configuration exists, update the port addresses without destroying custom user settings
-  let updated = content;
-
-  // Ensure query is disabled
-  if (updated.includes("[networking.query]")) {
-    updated = updated.replace(/\[networking\.query\][^\[]*/m, "[networking.query]\nenabled = false\n\n");
-  }
-
-  // Update Java address
-  if (updated.includes("[networking.java]")) {
-    updated = updated.replace(/address\s*=\s*"[^"]*"/, `address = "0.0.0.0:${javaPort}"`);
-  }
-
-  // Update Bedrock NetherNet address
-  if (updated.includes("[networking.bedrock.nethernet]")) {
-    updated = updated.replace(/(\[networking\.bedrock\.nethernet\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${bedrockPort}$2`);
-  } else if (!updated.includes("[networking.bedrock]")) {
-    updated += `\n\n[networking.bedrock]\nenabled = true\n\n[networking.bedrock.nethernet]\nenabled = true\naddress = "0.0.0.0:${bedrockPort}"\n`;
-  }
-
-  await fs.writeFile(configPath, updated, "utf-8");
 }
