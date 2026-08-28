@@ -8,7 +8,7 @@ import {
   RotateCcw, ChevronLeft, ChevronRight, Trash2, Pencil,
   HardDrive, Cpu, Network, Shield, Upload, Check, Filter, User, Lock, FolderOpen,
   ExternalLink, Terminal, ArrowLeftRight, Zap, ShieldAlert, FastForward,
-  Calendar, Clock, Cloud, Coffee, Sparkles, Box, Gamepad2, Code, Database, Globe, Download
+  Calendar, Clock, Cloud, Coffee, Sparkles, Box, Gamepad2, Code, Database, Globe, Download, Flame
 } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 
@@ -1489,45 +1489,57 @@ function ServersPageContent() {
                         </Field>
                       )}
 
-                      {/* Java Runtime Version Selector */}
-                      <Field label="Java Runtime Environment" hint="Auto-recommended based on software version, or choose custom JDK.">
-                        <div className="grid grid-cols-3 gap-2">
-                          {javaVersions.map(jv => {
-                            const isSelected = form.javaVersion === jv.version || form.javaVersionId === jv.id;
-                            return (
-                              <button
-                                key={jv.id}
-                                type="button"
-                                onClick={() => setForm(f => ({ ...f, javaVersion: jv.version, javaVersionId: jv.id }))}
-                                className="flex flex-col items-start p-3 rounded-xl border text-left transition-all relative overflow-hidden"
-                                style={isSelected
-                                  ? { backgroundColor: "var(--color-rp-accent-glow)", borderColor: "var(--color-rp-accent)" }
-                                  : { backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
-                              >
-                                <div className="flex items-center justify-between w-full mb-1">
-                                  <div className="flex items-center gap-1.5 font-bold text-xs" style={{ color: isSelected ? "var(--color-rp-accent)" : "var(--color-rp-text)" }}>
-                                    <Coffee className="w-3.5 h-3.5" />
-                                    <span>{jv.name}</span>
+                      {/* Java Runtime Version Selector — Only for JVM-based Minecraft software */}
+                      {selectedSoftware?.name !== "Pumpkin" && selectedSoftware?.type !== "PUMPKIN" && form.serverType !== "PUMPKIN" ? (
+                        <Field label="Java Runtime Environment" hint="Auto-recommended based on software version, or choose custom JDK.">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {javaVersions.map(jv => {
+                              const isSelected = form.javaVersion === jv.version || form.javaVersionId === jv.id;
+                              return (
+                                <button
+                                  key={jv.id}
+                                  type="button"
+                                  onClick={() => setForm(f => ({ ...f, javaVersion: jv.version, javaVersionId: jv.id }))}
+                                  className="flex flex-col items-start p-3 rounded-xl border text-left transition-all relative overflow-hidden"
+                                  style={isSelected
+                                    ? { backgroundColor: "var(--color-rp-accent-glow)", borderColor: "var(--color-rp-accent)" }
+                                    : { backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                                >
+                                  <div className="flex items-center justify-between w-full mb-1">
+                                    <div className="flex items-center gap-1.5 font-bold text-xs" style={{ color: isSelected ? "var(--color-rp-accent)" : "var(--color-rp-text)" }}>
+                                      <Coffee className="w-3.5 h-3.5" />
+                                      <span>{jv.name}</span>
+                                    </div>
+                                    {jv.isDefault && (
+                                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                        Default
+                                      </span>
+                                    )}
                                   </div>
-                                  {jv.isDefault && (
-                                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                      Default
+                                  <p className="text-[10.5px] line-clamp-1 opacity-70" style={{ color: "var(--color-rp-text-muted)" }}>
+                                    {jv.description || `Java ${jv.version} JVM`}
+                                  </p>
+                                  {jv.node && (
+                                    <span className="text-[9px] mt-1 text-sky-400 font-mono">
+                                      Node: {jv.node.name}
                                     </span>
                                   )}
-                                </div>
-                                <p className="text-[10.5px] line-clamp-1 opacity-70" style={{ color: "var(--color-rp-text-muted)" }}>
-                                  {jv.description || `Java ${jv.version} JVM`}
-                                </p>
-                                {jv.node && (
-                                  <span className="text-[9px] mt-1 text-sky-400 font-mono">
-                                    Node: {jv.node.name}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </Field>
+                      ) : (
+                        <div className="p-3.5 rounded-xl border border-orange-500/25 bg-orange-500/10 space-y-1">
+                          <div className="flex items-center gap-2 text-xs font-bold text-orange-400">
+                            <Flame className="w-4 h-4" />
+                            <span>Native Rust Core Engine — Zero Java Runtime Needed</span>
+                          </div>
+                          <p className="text-[11px] text-zinc-300 leading-relaxed">
+                            Pumpkin is built in pure Rust and runs directly as a compiled native Linux binary. It does not require any JVM or Java installation.
+                          </p>
                         </div>
-                      </Field>
+                      )}
 
                       {/* Docker template */}
                       <Field label="Docker Template (optional)">
@@ -2433,45 +2445,57 @@ function ServersPageContent() {
                           </Field>
                         )}
 
-                        {/* Java Runtime Environment */}
-                        <Field label="Java Runtime Environment" hint="JDK execution version used to run this server.">
-                          <div className="grid grid-cols-3 gap-2">
-                            {javaVersions.map(jv => {
-                              const isSelected = editForm.javaVersion === jv.version || editForm.javaVersionId === jv.id;
-                              return (
-                                <button
-                                  key={jv.id}
-                                  type="button"
-                                  onClick={() => setEditForm(f => ({ ...f, javaVersion: jv.version, javaVersionId: jv.id }))}
-                                  className="flex flex-col items-start p-3 rounded-xl border text-left transition-all relative overflow-hidden"
-                                  style={isSelected
-                                    ? { backgroundColor: "var(--color-rp-accent-glow)", borderColor: "var(--color-rp-accent)" }
-                                    : { backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
-                                >
-                                  <div className="flex items-center justify-between w-full mb-1">
-                                    <div className="flex items-center gap-1.5 font-bold text-xs" style={{ color: isSelected ? "var(--color-rp-accent)" : "var(--color-rp-text)" }}>
-                                      <Coffee className="w-3.5 h-3.5" />
-                                      <span>{jv.name}</span>
+                        {/* Java Runtime Environment — Only for JVM software */}
+                        {selectedSw?.name !== "Pumpkin" && selectedSw?.type !== "PUMPKIN" && editForm.serverType !== "PUMPKIN" ? (
+                          <Field label="Java Runtime Environment" hint="JDK execution version used to run this server.">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {javaVersions.map(jv => {
+                                const isSelected = editForm.javaVersion === jv.version || editForm.javaVersionId === jv.id;
+                                return (
+                                  <button
+                                    key={jv.id}
+                                    type="button"
+                                    onClick={() => setEditForm(f => ({ ...f, javaVersion: jv.version, javaVersionId: jv.id }))}
+                                    className="flex flex-col items-start p-3 rounded-xl border text-left transition-all relative overflow-hidden"
+                                    style={isSelected
+                                      ? { backgroundColor: "var(--color-rp-accent-glow)", borderColor: "var(--color-rp-accent)" }
+                                      : { backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                                  >
+                                    <div className="flex items-center justify-between w-full mb-1">
+                                      <div className="flex items-center gap-1.5 font-bold text-xs" style={{ color: isSelected ? "var(--color-rp-accent)" : "var(--color-rp-text)" }}>
+                                        <Coffee className="w-3.5 h-3.5" />
+                                        <span>{jv.name}</span>
+                                      </div>
+                                      {jv.isDefault && (
+                                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                          Default
+                                        </span>
+                                      )}
                                     </div>
-                                    {jv.isDefault && (
-                                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                        Default
+                                    <p className="text-[10.5px] line-clamp-1 opacity-70" style={{ color: "var(--color-rp-text-muted)" }}>
+                                      {jv.description || `Java ${jv.version} JVM`}
+                                    </p>
+                                    {jv.node && (
+                                      <span className="text-[9px] mt-1 text-sky-400 font-mono">
+                                        Node: {jv.node.name}
                                       </span>
                                     )}
-                                  </div>
-                                  <p className="text-[10.5px] line-clamp-1 opacity-70" style={{ color: "var(--color-rp-text-muted)" }}>
-                                    {jv.description || `Java ${jv.version} JVM`}
-                                  </p>
-                                  {jv.node && (
-                                    <span className="text-[9px] mt-1 text-sky-400 font-mono">
-                                      Node: {jv.node.name}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </Field>
+                        ) : (
+                          <div className="p-3.5 rounded-xl border border-orange-500/25 bg-orange-500/10 space-y-1">
+                            <div className="flex items-center gap-2 text-xs font-bold text-orange-400">
+                              <Flame className="w-4 h-4" />
+                              <span>Native Rust Core Engine</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-300">
+                              Pumpkin runs as a compiled Linux binary with native Java Edition and Bedrock Edition NetherNet networking.
+                            </p>
                           </div>
-                        </Field>
+                        )}
                       </>
                     )}
                   </div>

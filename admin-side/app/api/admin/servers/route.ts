@@ -367,13 +367,20 @@ export async function POST(request: NextRequest) {
       include: cleanSoftwareVersionId ? { versions: { where: { id: cleanSoftwareVersionId } } } : { versions: true },
     });
     if (sw) {
-      softwareType = itzgTypeMap[sw.type] ?? (sw.type === "PUMPKIN" ? "PUMPKIN" : "PAPER");
+      softwareType = itzgTypeMap[sw.type] ?? (sw.type === "PUMPKIN" || sw.name?.toLowerCase().includes("pumpkin") ? "PUMPKIN" : "PAPER");
       const ver = cleanSoftwareVersionId ? sw.versions?.[0] : null;
       if (ver) softwareVersion = ver.version;
     }
   }
 
-  const isPumpkin = softwareType === "PUMPKIN" || rest.serverType === "PUMPKIN";
+  const isPumpkin = 
+    softwareType === "PUMPKIN" || 
+    rest.serverType === "PUMPKIN" || 
+    softwareVersion.toLowerCase().startsWith("pumpkin-");
+
+  if (isPumpkin) {
+    softwareType = "PUMPKIN";
+  }
 
   // Determine Bedrock Port for Pumpkin servers
   let bedrockPort = assignedPort + 1;

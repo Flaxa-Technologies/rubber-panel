@@ -6,6 +6,38 @@ import { isAdminRole } from "@/lib/rbac";
 
 const DEFAULT_JAVA_VERSIONS = [
   {
+    name: "Java 25 (Latest LTS)",
+    version: "25",
+    dockerImage: "itzg/minecraft-server:java25",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Next-generation Java 25 LTS runtime with enhanced JVM & ZGC optimizations",
+  },
+  {
+    name: "Java 24",
+    version: "24",
+    dockerImage: "itzg/minecraft-server:java24",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Modern Java 24 performance release",
+  },
+  {
+    name: "Java 23",
+    version: "23",
+    dockerImage: "itzg/minecraft-server:java23",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Cutting-edge Java 23 development runtime",
+  },
+  {
+    name: "Java 22",
+    version: "22",
+    dockerImage: "itzg/minecraft-server:java22",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Modern performance release with latest JVM optimizations",
+  },
+  {
     name: "Java 21 (LTS)",
     version: "21",
     dockerImage: "itzg/minecraft-server:java21",
@@ -37,31 +69,17 @@ const DEFAULT_JAVA_VERSIONS = [
     isDefault: false,
     description: "Required for vintage Minecraft 1.12.2 and older modpacks",
   },
-  {
-    name: "Java 22",
-    version: "22",
-    dockerImage: "itzg/minecraft-server:java22",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Modern performance release with latest JVM optimizations",
-  },
-  {
-    name: "Java 23",
-    version: "23",
-    dockerImage: "itzg/minecraft-server:java23",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Cutting-edge Java 23 development runtime",
-  },
 ];
 
 async function ensureDefaultJavaVersions() {
-  const count = await db.javaVersion.count();
-  if (count === 0) {
-    for (const jv of DEFAULT_JAVA_VERSIONS) {
+  for (const jv of DEFAULT_JAVA_VERSIONS) {
+    const existing = await db.javaVersion.findFirst({
+      where: { version: jv.version, nodeId: null },
+    });
+    if (!existing) {
       await db.javaVersion.create({ data: jv });
+      console.log(`[JavaVersions] Added runtime: ${jv.name}`);
     }
-    console.log("[JavaVersions] Seeded default Java runtimes");
   }
 }
 

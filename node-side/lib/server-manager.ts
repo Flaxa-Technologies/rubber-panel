@@ -315,23 +315,32 @@ export async function reloadStatesFromDisk() {
 
 // ─── DOCKER LIFECYCLE ────────────────────────────────────────────────────
 
-function detectRuntime(sType: string, dImage: string) {
+function detectRuntime(sType: string, dImage: string, env?: Record<string, any>) {
   const t = (sType || "").toUpperCase();
   const img = (dImage || "").toLowerCase();
+  const ver = (env?.VERSION || env?.version || "").toLowerCase();
+  const envType = (env?.TYPE || env?.type || "").toUpperCase();
+  const envServerType = (env?.SERVER_TYPE || env?.serverType || "").toUpperCase();
 
-  const isNodeJs = t === "NODEJS" || img.startsWith("node:") || img.includes("bun") || img.includes("deno");
-  const isPython = t === "PYTHON" || img.startsWith("python:") || img.includes("pytorch");
-  const isRust = t === "RUST" || img.startsWith("rust:") || img.includes("rustlang");
-  const isPhp = t === "PHP" || img.startsWith("php:") || img.includes("php");
-  const isGo = t === "GO" || t === "GOLANG" || img.startsWith("golang:");
-  const isRuby = t === "RUBY" || img.startsWith("ruby:");
-  const isWeb = t === "WEB" || img.includes("nginx") || img.includes("caddy") || img.includes("httpd") || img.includes("traefik");
-  const isDatabase = t === "DATABASE" || t === "MYSQL" || t === "POSTGRES" || t === "REDIS" || t === "MONGO" ||
+  const isPumpkin = 
+    t === "PUMPKIN" || 
+    envType === "PUMPKIN" || 
+    envServerType === "PUMPKIN" || 
+    ver.startsWith("pumpkin-") || 
+    img.includes("pumpkin");
+
+  const isNodeJs = !isPumpkin && (t === "NODEJS" || img.startsWith("node:") || img.includes("bun") || img.includes("deno"));
+  const isPython = !isPumpkin && (t === "PYTHON" || img.startsWith("python:") || img.includes("pytorch"));
+  const isRust = !isPumpkin && (t === "RUST" || img.startsWith("rust:") || img.includes("rustlang"));
+  const isPhp = !isPumpkin && (t === "PHP" || img.startsWith("php:") || img.includes("php"));
+  const isGo = !isPumpkin && (t === "GO" || t === "GOLANG" || img.startsWith("golang:"));
+  const isRuby = !isPumpkin && (t === "RUBY" || img.startsWith("ruby:"));
+  const isWeb = !isPumpkin && (t === "WEB" || img.includes("nginx") || img.includes("caddy") || img.includes("httpd") || img.includes("traefik"));
+  const isDatabase = !isPumpkin && (t === "DATABASE" || t === "MYSQL" || t === "POSTGRES" || t === "REDIS" || t === "MONGO" ||
     img.includes("mysql") || img.includes("postgres") || img.includes("redis") || img.includes("mongo") ||
-    img.includes("mariadb") || img.includes("rabbitmq") || img.includes("elastic") || img.includes("meili");
-  const isGame = t === "GAME" || t.includes("PALWORLD") || t.includes("RUST") || t.includes("VALHEIM") || t.includes("CS2") || t.includes("TERRARIA") || t.includes("ZOMBOID") || t.includes("ARK") || t.includes("7DTD") || t.includes("TF2") || t.includes("ENSHROUDED") ||
-    img.includes("steam") || img.includes("palworld") || img.includes("terraria") || img.includes("valheim") || img.includes("tshock") || img.includes("didstopia") || img.includes("hermsi") || img.includes("vinanr") || img.includes("skarlso") || img.includes("cm2network");
-  const isPumpkin = t === "PUMPKIN" || img.includes("pumpkin");
+    img.includes("mariadb") || img.includes("rabbitmq") || img.includes("elastic") || img.includes("meili"));
+  const isGame = !isPumpkin && (t === "GAME" || t.includes("PALWORLD") || t.includes("RUST") || t.includes("VALHEIM") || t.includes("CS2") || t.includes("TERRARIA") || t.includes("ZOMBOID") || t.includes("ARK") || t.includes("7DTD") || t.includes("TF2") || t.includes("ENSHROUDED") ||
+    img.includes("steam") || img.includes("palworld") || img.includes("terraria") || img.includes("valheim") || img.includes("tshock") || img.includes("didstopia") || img.includes("hermsi") || img.includes("vinanr") || img.includes("skarlso") || img.includes("cm2network"));
   const isMinecraft = !isPumpkin && !isNodeJs && !isPython && !isRust && !isPhp && !isGo && !isRuby && !isWeb && !isDatabase && !isGame &&
     (t === "MINECRAFT" || t === "PAPER" || t === "PURPUR" || t === "FABRIC" || t === "FORGE" || t === "VANILLA" || t === "SPIGOT" || t === "VELOCITY" || t === "BUNGEECORD" || img.includes("minecraft"));
 
@@ -362,7 +371,7 @@ export async function createServer(params: CreateServerParams): Promise<{ succes
   const sType = env.SERVER_TYPE || env.TYPE || "MINECRAFT";
   const dImage = env.DOCKER_IMAGE || "";
 
-  const runtime = detectRuntime(sType, dImage);
+  const runtime = detectRuntime(sType, dImage, env);
 
   // Determine standard default startup commands if not provided
   let effectiveStartup = params.startupCommand || env.CUSTOM_SERVER || env.STARTUP_CMD || "";
@@ -574,6 +583,16 @@ export async function createServer(params: CreateServerParams): Promise<{ succes
       "</html>",
     ].join("\n");
     try { await fs.writeFile(indexPath, indexHtmlContent, { flag: "wx" }); } catch {}
+  } else if (runtime.isPumpkin) {
+    // Pumpkin (Rust Minecraft Server) Initialization
+    const javaPort = parseInt(env.JAVA_PORT || `${assignedPort}`) || assignedPort;
+    const bedrockPort = parseInt(env.BEDROCK_PORT || `${assignedPort + 1}`) || (assignedPort + 1);
+    try {
+      const { ensurePumpkinConfiguration } = await import("./pumpkin-agent");
+      await ensurePumpkinConfiguration(dir, javaPort, bedrockPort);
+    } catch (pErr: any) {
+      console.warn("[ServerManager] Failed to pre-configure Pumpkin:", pErr?.message);
+    }
   } else if (runtime.isMinecraft) {
     // Accept EULA automatically
     await fs.writeFile(path.join(dir, "eula.txt"), "eula=true\n", "utf-8");
@@ -687,7 +706,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
   const env = { ...(info.environment || {}) };
   const sType = env.SERVER_TYPE || env.TYPE || "MINECRAFT";
   const dImageRaw = env.DOCKER_IMAGE || "";
-  const runtime = detectRuntime(sType, dImageRaw);
+  const runtime = detectRuntime(sType, dImageRaw, env);
 
   const securityEnabled = env.SECURITY_PROTECTION !== "false";
 

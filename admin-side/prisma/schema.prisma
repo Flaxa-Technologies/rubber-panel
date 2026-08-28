@@ -381,22 +381,29 @@ model SoftwareVersion {
 // ─── TEMPLATES ───────────────────────────────────────────────────────────────
 
 model Template {
-  id            String   @id @default(uuid())
-  name          String
-  description   String?
-  softwareType  String?
-  startupCmd    String?
-  environment   String   @default("{}")
-  dockerImage   String?
-  allowedPaths  String   @default("[\"/plugins\",\"/mods\",\"/config\",\"/world\"]")
-  protectedPaths String  @default("[\"/server.jar\",\"/start.sh\"]")
-  defaultRam    Int      @default(1024)
-  defaultCpu    Int      @default(100)
-  defaultDisk   Int      @default(5120)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  category       String   @default("MINECRAFT") // "MINECRAFT" | "CUSTOM" | "COMMUNITY"
+  softwareType   String?  // e.g. "PAPER", "FABRIC", "PUMPKIN"
+  softwareName   String?  // e.g. "Paper", "Fabric", "Pumpkin"
+  version        String?  // e.g. "1.21.4"
+  startupCmd     String?
+  environment    String   @default("{}")
+  dockerImage    String?
+  allowedPaths   String   @default("[\"/plugins\",\"/mods\",\"/config\",\"/world\"]")
+  protectedPaths String   @default("[\"/server.jar\",\"/start.sh\"]")
+  zipPath        String?  // path to uploaded .zip archive
+  zipSize        Int?     // bytes
+  tags           String   @default("[]") // JSON string array
+  isOfficial     Boolean  @default(false)
+  defaultRam     Int      @default(1024)
+  defaultCpu     Int      @default(100)
+  defaultDisk    Int      @default(5120)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  servers       Server[]
+  servers        Server[]
 
   @@map("templates")
 }
