@@ -20,8 +20,11 @@ export interface ServerInfo {
   disk?: number;
   cpuUsage?: number;
   ramUsageMb?: number;
+  ramPercent?: number;
   diskUsedBytes?: number;
   diskUsedMb?: number;
+  netRx?: string;
+  netTx?: string;
   uptime?: number;
   environment?: Record<string, string>;
   startupCommand?: string;
@@ -326,7 +329,8 @@ function detectRuntime(sType: string, dImage: string) {
   const isDatabase = t === "DATABASE" || t === "MYSQL" || t === "POSTGRES" || t === "REDIS" || t === "MONGO" ||
     img.includes("mysql") || img.includes("postgres") || img.includes("redis") || img.includes("mongo") ||
     img.includes("mariadb") || img.includes("rabbitmq") || img.includes("elastic") || img.includes("meili");
-  const isGame = t === "GAME" || img.includes("steam") || img.includes("palworld") || img.includes("terraria") || img.includes("valheim");
+  const isGame = t === "GAME" || t.includes("PALWORLD") || t.includes("RUST") || t.includes("VALHEIM") || t.includes("CS2") || t.includes("TERRARIA") || t.includes("ZOMBOID") || t.includes("ARK") || t.includes("7DTD") || t.includes("TF2") || t.includes("ENSHROUDED") ||
+    img.includes("steam") || img.includes("palworld") || img.includes("terraria") || img.includes("valheim") || img.includes("tshock") || img.includes("didstopia") || img.includes("hermsi") || img.includes("vinanr") || img.includes("skarlso") || img.includes("cm2network");
   const isMinecraft = !isNodeJs && !isPython && !isRust && !isPhp && !isGo && !isRuby && !isWeb && !isDatabase && !isGame &&
     (t === "MINECRAFT" || t === "PAPER" || t === "PURPUR" || t === "FABRIC" || t === "FORGE" || t === "VANILLA" || t === "SPIGOT" || t === "VELOCITY" || t === "BUNGEECORD" || img.includes("minecraft"));
 
@@ -972,6 +976,37 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
       ];
+    } else if (runtime.isGame) {
+      // SteamCMD & Multi-Game Dedicated Server Execution (Palworld, Rust, Valheim, CS2, Terraria, ARK, etc.)
+      const dockerImage = env.DOCKER_IMAGE || "cm2network/steamcmd:latest";
+      const internalPort = env.INTERNAL_PORT || "27015";
+      const volumePath = env.VOLUME_PATH || (dockerImage.includes("palworld") ? "/palworld" : dockerImage.includes("valheim") ? "/config" : dockerImage.includes("rust") ? "/steamcmd/rust" : "/data");
+      delete env.DOCKER_IMAGE;
+      delete env.INTERNAL_PORT;
+      delete env.VOLUME_PATH;
+
+      const envArgs = buildEnvArgs(env);
+      const startCmd = info.startupCommand?.trim();
+
+      appendLog(serverId, `[Panel] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} TCP/UDP)...`);
+      if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+
+      dockerArgs = [
+        "run", "-d",
+        "--name", containerName,
+        "-p", `${assignedPort}:${internalPort}/tcp`,
+        "-p", `${assignedPort}:${internalPort}/udp`,
+        "-v", `${getServerDir(serverId)}:${volumePath}`,
+        "-m", `${info.ram}m`,
+        `--cpus=${cpuLimit}`,
+        "--restart=no",
+        ...envArgs,
+        dockerImage,
+      ];
+
+      if (startCmd) {
+        dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
+      }
     } else {
       // Generic Custom Container Image
       const dockerImage = env.DOCKER_IMAGE || "alpine:latest";
@@ -1154,6 +1189,80 @@ export async function calculateServerDiskBytes(serverId: string): Promise<number
   return getDirSize(dir);
 }
 
+interface CachedDockerStats {
+  cpuUsage: number;
+  ramUsageMb: number;
+  ramLimitMb: number;
+  ramPercent: number;
+  netRx: string;
+  netTx: string;
+  fetchedAt: number;
+}
+
+const statsCache = new Map<string, CachedDockerStats>();
+
+export async function fetchLiveDockerStats(containerName: string, fallbackRamLimit = 1024): Promise<CachedDockerStats> {
+  const cached = statsCache.get(containerName);
+  const now = Date.now();
+  if (cached && (now - cached.fetchedAt) < 1200) {
+    return cached;
+  }
+
+  let cpuUsage = 0;
+  let ramUsageMb = 0;
+  let ramLimitMb = fallbackRamLimit;
+  let ramPercent = 0;
+  let netRx = "0 B";
+  let netTx = "0 B";
+
+  try {
+    const { stdout } = await execAsync(`docker stats --no-stream --format "{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" ${containerName}`);
+    const parts = stdout.trim().split("\t");
+    if (parts.length >= 2) {
+      // 1. CPU
+      cpuUsage = parseFloat(parts[0].replace("%", "").trim()) || 0;
+
+      // 2. Memory (e.g. "450.2MiB / 2.000GiB" or "1.23GiB / 4GiB")
+      const memParts = parts[1].split("/");
+      if (memParts.length >= 2) {
+        const usedStr = memParts[0].trim().toLowerCase();
+        const limStr = memParts[1].trim().toLowerCase();
+
+        if (usedStr.endsWith("gib")) ramUsageMb = Math.round(parseFloat(usedStr) * 1024);
+        else if (usedStr.endsWith("mib")) ramUsageMb = Math.round(parseFloat(usedStr));
+        else if (usedStr.endsWith("kib") || usedStr.endsWith("kb")) ramUsageMb = Math.round(parseFloat(usedStr) / 1024);
+        else if (usedStr.endsWith("b")) ramUsageMb = Math.round(parseFloat(usedStr) / (1024 * 1024));
+
+        if (limStr.endsWith("gib")) ramLimitMb = Math.round(parseFloat(limStr) * 1024);
+        else if (limStr.endsWith("mib")) ramLimitMb = Math.round(parseFloat(limStr));
+
+        if (ramLimitMb > 0) {
+          ramPercent = parseFloat(((ramUsageMb / ramLimitMb) * 100).toFixed(1));
+        }
+      }
+
+      // 3. Net I/O (e.g. "1.2MB / 5.4MB")
+      if (parts[2] && parts[2].includes("/")) {
+        const [rx, tx] = parts[2].split("/").map(s => s.trim());
+        netRx = rx || "0 B";
+        netTx = tx || "0 B";
+      }
+    }
+  } catch {}
+
+  const result: CachedDockerStats = {
+    cpuUsage,
+    ramUsageMb,
+    ramLimitMb,
+    ramPercent,
+    netRx,
+    netTx,
+    fetchedAt: now,
+  };
+  statsCache.set(containerName, result);
+  return result;
+}
+
 export async function getServerStatus(serverId: string): Promise<ServerInfo | undefined> {
   const dir = getServerDir(serverId);
   const exists = await fs.stat(dir).then(() => true).catch(() => false);
@@ -1174,7 +1283,7 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
     } catch {
       state = {
         id: serverId,
-        name: "Minecraft Server",
+        name: "Server Instance",
         status: (isSleeping ? "SLEEPING" : "OFFLINE") as ServerStatus,
         ram: 1024,
         cpu: 100,
@@ -1196,11 +1305,32 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
     state.isCryoSleeping = true;
   }
 
+  const containerName = getContainerName(serverId);
+  let cpuUsage = 0;
+  let ramUsageMb = 0;
+  let ramPercent = 0;
+  let netRx = "0 B";
+  let netTx = "0 B";
+
+  if (state.status === "RUNNING") {
+    const live = await fetchLiveDockerStats(containerName, state.ram || 1024);
+    cpuUsage = live.cpuUsage;
+    ramUsageMb = live.ramUsageMb;
+    ramPercent = live.ramPercent;
+    netRx = live.netRx;
+    netTx = live.netTx;
+  }
+
   try {
     const diskBytes = await calculateServerDiskBytes(serverId);
     const diskUsedMb = Math.round(diskBytes / (1024 * 1024));
     return {
       ...state,
+      cpuUsage,
+      ramUsageMb,
+      ramPercent,
+      netRx,
+      netTx,
       diskUsedBytes: diskBytes,
       diskUsedMb,
       isCryoSleeping: isSleeping,
@@ -1209,10 +1339,42 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
   } catch {
     return {
       ...state,
+      cpuUsage,
+      ramUsageMb,
+      ramPercent,
+      netRx,
+      netTx,
       isCryoSleeping: isSleeping,
       status: isSleeping ? "SLEEPING" : state.status,
     };
   }
+}
+
+export async function getServerLiveStats(serverId: string) {
+  const status = await getServerStatus(serverId);
+  if (!status) return null;
+
+  const diskLimitMb = status.disk || 10240;
+  const diskUsedMb = status.diskUsedMb || 0;
+  const diskPercent = diskLimitMb > 0 ? parseFloat(((diskUsedMb / diskLimitMb) * 100).toFixed(1)) : 0;
+
+  return {
+    id: serverId,
+    name: status.name,
+    status: status.status,
+    isCryoSleeping: status.isCryoSleeping || false,
+    cpuUsage: status.cpuUsage || 0,
+    cpuLimit: status.cpu || 100,
+    ramUsageMb: status.ramUsageMb || 0,
+    ramLimitMb: status.ram || 1024,
+    ramPercent: status.ramPercent || 0,
+    diskUsedMb,
+    diskLimitMb,
+    diskPercent,
+    netRx: status.netRx || "0 B",
+    netTx: status.netTx || "0 B",
+    timestamp: Date.now(),
+  };
 }
 
 export async function getAllServers(): Promise<ServerInfo[]> {
