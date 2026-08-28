@@ -98,8 +98,15 @@ export default function Sidebar() {
     return () => clearInterval(interval);
   }, []);
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
+  const isActive = (href: string) => {
+    if (pathname === href) return true;
+    const allHrefs = [...navItems, ...systemItems].map(i => i.href);
+    const hasMoreSpecificMatch = allHrefs.some(
+      other => other !== href && other.startsWith(href + "/") && (pathname === other || pathname.startsWith(other + "/"))
+    );
+    if (hasMoreSpecificMatch) return false;
+    return pathname.startsWith(href + "/");
+  };
 
   return (
     <aside
