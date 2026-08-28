@@ -391,8 +391,20 @@ verify_signatures = true
 save_advancements = true
 `;
 
-  for (const cfgName of configNames) {
-    const configPath = path.join(serverDir, cfgName);
+  // Ensure config/ directory exists for native Pumpkin engine discovery
+  const configSubDir = path.join(serverDir, "config");
+  await fs.mkdir(configSubDir, { recursive: true }).catch(() => {});
+
+  const configFilesToSync = [
+    path.join(configSubDir, "configuration.toml"), // Official Pumpkin standard path
+    path.join(configSubDir, "config.toml"),
+    path.join(configSubDir, "Pumpkin.toml"),
+    path.join(serverDir, "configuration.toml"),
+    path.join(serverDir, "config.toml"),
+    path.join(serverDir, "Pumpkin.toml"),
+  ];
+
+  for (const configPath of configFilesToSync) {
     let content = "";
     try {
       content = await fs.readFile(configPath, "utf-8");
@@ -402,7 +414,7 @@ save_advancements = true
 
     if (!content.trim()) {
       await fs.writeFile(configPath, generateInitialPumpkinToml(javaPort, bedrockPort), "utf-8");
-      console.log(`[PumpkinAgent] Generated initial ${cfgName} (Java :${javaPort}, Bedrock :${bedrockPort})`);
+      console.log(`[PumpkinAgent] Generated initial config at ${configPath} (Java :${javaPort}, Bedrock :${bedrockPort})`);
     } else {
       let updated = content;
 
@@ -430,7 +442,7 @@ save_advancements = true
       }
 
       await fs.writeFile(configPath, updated, "utf-8");
-      console.log(`[PumpkinAgent] Synchronized ports in existing ${cfgName} (Java :${javaPort}, Bedrock :${bedrockPort})`);
+      console.log(`[PumpkinAgent] Synchronized ports in ${configPath} (Java :${javaPort}, Bedrock :${bedrockPort})`);
     }
   }
 }
