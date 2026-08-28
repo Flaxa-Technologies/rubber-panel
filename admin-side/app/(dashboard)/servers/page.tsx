@@ -1416,16 +1416,29 @@ function ServersPageContent() {
                       </div>
 
                       {/* Software grid */}
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {softwareList.map(s => (
-                          <button key={s.id}
-                            onClick={() => setForm(f => ({ ...f, softwareId: s.id === f.softwareId ? "" : s.id, softwareVersionId: "" }))}
-                            className="flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-medium transition-all"
+                          <button key={s.id} type="button"
+                            onClick={() => {
+                              const isP = s.name === "Pumpkin" || s.type === "PUMPKIN";
+                              setForm(f => ({
+                                ...f,
+                                softwareId: s.id === f.softwareId ? "" : s.id,
+                                softwareVersionId: "",
+                                portCount: isP ? String(Math.max(2, parseInt(f.portCount) || 1)) : f.portCount,
+                                serverType: isP ? "PUMPKIN" : "MINECRAFT",
+                              }));
+                            }}
+                            className="p-3 rounded-lg border text-left transition-all"
                             style={form.softwareId === s.id
-                              ? { backgroundColor: "var(--color-rp-accent-glow)", borderColor: "var(--color-rp-accent)", color: "var(--color-rp-accent)" }
-                              : { backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)", color: "var(--color-rp-text-muted)" }}>
-                            <span>{s.name}</span>
-                            <span className="text-[10px] opacity-60">
+                              ? { backgroundColor: "var(--color-rp-accent-glow)", borderColor: "var(--color-rp-accent)" }
+                              : { backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}>
+                            <div className="font-semibold text-xs flex items-center justify-between"
+                              style={{ color: form.softwareId === s.id ? "var(--color-rp-accent)" : "var(--color-rp-text)" }}>
+                              <span>{s.name}</span>
+                              {form.softwareId === s.id && <Check className="w-3.5 h-3.5" />}
+                            </div>
+                            <span className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
                               {form.showStableOnly
                                 ? `${s.versions.filter(v => v.isStable).length} stable`
                                 : `${s.versions.length} versions`}
@@ -1448,16 +1461,31 @@ function ServersPageContent() {
                             <option value="">
                               {form.showStableOnly ? "(Latest stable)" : "(Latest — may be unstable)"}
                             </option>
-                            {filteredVersions.map(v => (
-                              <option key={v.id} value={v.id}>
-                                {v.version}{!v.isStable ? " (unstable)" : ""}
-                              </option>
-                            ))}
+                            {filteredVersions.map(v => {
+                              const isPumpkinVer = v.version.startsWith("pumpkin-");
+                              const displayName = isPumpkinVer
+                                ? (v.version.includes("nightly")
+                                  ? `Pumpkin Nightly (Commit: ${v.version.replace("pumpkin-nightly-", "")})`
+                                  : `Pumpkin ${v.version.replace("pumpkin-", "")}`)
+                                : v.version;
+
+                              return (
+                                <option key={v.id} value={v.id}>
+                                  {displayName}{!v.isStable && !isPumpkinVer ? " (unstable)" : ""}
+                                </option>
+                              );
+                            })}
                           </select>
                           <p className="text-xs mt-1" style={{ color: "var(--color-rp-text-dim)" }}>
                             {filteredVersions.length} version{filteredVersions.length !== 1 ? "s" : ""} shown
                             {form.showStableOnly ? " · toggle off to see unstable/latest" : " · toggle 'Stable Only' to filter"}
                           </p>
+                          {(selectedSoftware.name === "Pumpkin" || selectedSoftware.type === "PUMPKIN") && (
+                            <div className="mt-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-xs text-orange-300 flex items-center gap-2">
+                              <span>🔥</span>
+                              <span><strong>Pumpkin Rust Core:</strong> Automatically allocates 2 network ports for Java Edition &amp; Bedrock Edition cross-play.</span>
+                            </div>
+                          )}
                         </Field>
                       )}
 

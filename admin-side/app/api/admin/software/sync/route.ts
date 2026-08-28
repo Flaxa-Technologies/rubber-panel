@@ -521,6 +521,18 @@ export async function POST(request: NextRequest) {
       results["Geyser"] = geyserVersions.length;
     }
 
+    // ─── 16. Pumpkin (Rust MC - Java + Bedrock) ─────────────────────────
+    {
+      try {
+        const { syncPumpkinReleases } = await import("@/lib/pumpkin-service");
+        const pumpkinRes = await syncPumpkinReleases();
+        results["Pumpkin"] = pumpkinRes.builds.length;
+      } catch (pErr: any) {
+        console.warn("[SoftwareSync] Pumpkin sync error:", pErr?.message);
+        results["Pumpkin"] = 0;
+      }
+    }
+
     return NextResponse.json({ success: true, versions: results });
   } catch (error: any) {
     console.error("Sync Error:", error);

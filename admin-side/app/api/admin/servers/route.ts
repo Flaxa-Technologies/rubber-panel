@@ -355,6 +355,7 @@ export async function POST(request: NextRequest) {
     CURSEFORGE: "CURSEFORGE",
     MODRINTH: "MODRINTH",
     CUSTOM: "CUSTOM",
+    PUMPKIN: "PUMPKIN",
   };
 
   let softwareType = "PAPER";
@@ -366,10 +367,19 @@ export async function POST(request: NextRequest) {
       include: cleanSoftwareVersionId ? { versions: { where: { id: cleanSoftwareVersionId } } } : { versions: true },
     });
     if (sw) {
-      softwareType = itzgTypeMap[sw.type] ?? "PAPER";
+      softwareType = itzgTypeMap[sw.type] ?? (sw.type === "PUMPKIN" ? "PUMPKIN" : "PAPER");
       const ver = cleanSoftwareVersionId ? sw.versions?.[0] : null;
       if (ver) softwareVersion = ver.version;
     }
+  }
+
+  const isPumpkin = softwareType === "PUMPKIN" || rest.serverType === "PUMPKIN";
+
+  // Determine Bedrock Port for Pumpkin servers
+  let bedrockPort = assignedPort + 1;
+  if (allocatedIds.length > 1) {
+    const secondAlloc = await db.allocation.findUnique({ where: { id: allocatedIds[1] } });
+    if (secondAlloc) bedrockPort = secondAlloc.port;
   }
 
   const ramMb = rest.ram;
@@ -386,26 +396,28 @@ export async function POST(request: NextRequest) {
   }
 
   const environment: Record<string, string> = {
-    SERVER_TYPE: customImg ? (customImg.category === "DATABASE" ? "DATABASE" : customImg.name.toUpperCase().includes("PYTHON") ? "PYTHON" : customImg.name.toUpperCase().includes("RUST") ? "RUST" : "CUSTOM") : (rest.serverType || "MINECRAFT"),
+    SERVER_TYPE: isPumpkin ? "PUMPKIN" : customImg ? (customImg.category === "DATABASE" ? "DATABASE" : customImg.name.toUpperCase().includes("PYTHON") ? "PYTHON" : customImg.name.toUpperCase().includes("RUST") ? "RUST" : "CUSTOM") : (rest.serverType || "MINECRAFT"),
     NODE_VERSION: rest.nodeVersion || "20",
     SECURITY_PROTECTION: String(rest.securityProtection !== false),
     CRYO_SLEEP_ENABLED: String(Boolean(rest.cryoSleepEnabled)),
     CRYO_SLEEP_IDLE_MINUTES: String(rest.cryoSleepIdleMinutes ?? 10),
     CRYO_SLEEP_MOTD: rest.cryoSleepMotd || "",
-    DOCKER_IMAGE: isCustomImage ? customImg!.dockerImage : isNodeJs ? `node:${rest.nodeVersion || "20"}-alpine` : dockerImage,
-    INTERNAL_PORT: isCustomImage ? String(customImg!.internalPort || 8080) : isNodeJs ? "3000" : "25565",
+    DOCKER_IMAGE: isPumpkin ? "debian:bookworm-slim" : isCustomImage ? customImg!.dockerImage : isNodeJs ? `node:${rest.nodeVersion || "20"}-alpine` : dockerImage,
+    INTERNAL_PORT: isPumpkin ? `${assignedPort}` : isCustomImage ? String(customImg!.internalPort || 8080) : isNodeJs ? "3000" : "25565",
     EULA: "TRUE",
-    TYPE: isCustomImage ? "CUSTOM" : isNodeJs ? "NODEJS" : softwareType,
+    TYPE: isPumpkin ? "PUMPKIN" : isCustomImage ? "CUSTOM" : isNodeJs ? "NODEJS" : softwareType,
     VERSION: isNodeJs ? (rest.nodeVersion || "20") : softwareVersion,
     JAVA_VERSION: rest.javaVersion || "21",
+    JAVA_PORT: `${assignedPort}`,
+    BEDROCK_PORT: `${bedrockPort}`,
     MEMORY: `${ramMb}M`,
     JVM_XX_OPTS: `-Xms${xms}M`,
     SERVER_PORT: `${assignedPort}`,
-    ENABLE_RCON: isNodeJs || isCustomImage ? "false" : "true",
+    ENABLE_RCON: isNodeJs || isCustomImage || isPumpkin ? "false" : "true",
     RCON_PASSWORD: `rp-${server.id.slice(0, 8)}`,
     RCON_PORT: "25575",
     ONLINE_MODE: "false",
-    USE_AIKAR_FLAGS: isNodeJs || isCustomImage ? "false" : "true",
+    USE_AIKAR_FLAGS: isNodeJs || isCustomImage || isPumpkin ? "false" : "true",
     ...customParsedEnv,
     ...(rest.startupCommand && (softwareType === "CUSTOM" || isCustomImage) ? { CUSTOM_SERVER: rest.startupCommand } : {}),
   };

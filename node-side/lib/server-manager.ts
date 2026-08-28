@@ -331,11 +331,13 @@ function detectRuntime(sType: string, dImage: string) {
     img.includes("mariadb") || img.includes("rabbitmq") || img.includes("elastic") || img.includes("meili");
   const isGame = t === "GAME" || t.includes("PALWORLD") || t.includes("RUST") || t.includes("VALHEIM") || t.includes("CS2") || t.includes("TERRARIA") || t.includes("ZOMBOID") || t.includes("ARK") || t.includes("7DTD") || t.includes("TF2") || t.includes("ENSHROUDED") ||
     img.includes("steam") || img.includes("palworld") || img.includes("terraria") || img.includes("valheim") || img.includes("tshock") || img.includes("didstopia") || img.includes("hermsi") || img.includes("vinanr") || img.includes("skarlso") || img.includes("cm2network");
-  const isMinecraft = !isNodeJs && !isPython && !isRust && !isPhp && !isGo && !isRuby && !isWeb && !isDatabase && !isGame &&
+  const isPumpkin = t === "PUMPKIN" || img.includes("pumpkin");
+  const isMinecraft = !isPumpkin && !isNodeJs && !isPython && !isRust && !isPhp && !isGo && !isRuby && !isWeb && !isDatabase && !isGame &&
     (t === "MINECRAFT" || t === "PAPER" || t === "PURPUR" || t === "FABRIC" || t === "FORGE" || t === "VANILLA" || t === "SPIGOT" || t === "VELOCITY" || t === "BUNGEECORD" || img.includes("minecraft"));
 
   let label = "Custom Container";
-  if (isPhp) label = "PHP";
+  if (isPumpkin) label = "Pumpkin MC";
+  else if (isPhp) label = "PHP";
   else if (isPython) label = "Python";
   else if (isRust) label = "Rust";
   else if (isGo) label = "Golang";
@@ -346,7 +348,7 @@ function detectRuntime(sType: string, dImage: string) {
   else if (isGame) label = "Game Server";
   else if (isMinecraft) label = "Minecraft";
 
-  return { isNodeJs, isPython, isRust, isPhp, isGo, isRuby, isWeb, isDatabase, isGame, isMinecraft, label };
+  return { isNodeJs, isPython, isRust, isPhp, isGo, isRuby, isWeb, isDatabase, isGame, isPumpkin, isMinecraft, label };
 }
 
 export async function createServer(params: CreateServerParams): Promise<{ success: boolean; error?: string }> {
@@ -940,6 +942,73 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       if (startCmd) {
         dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
       }
+    } else if (runtime.isPumpkin) {
+      // Pumpkin (Rust Minecraft Server - Native Java + Bedrock) Execution
+      const sDir = getServerDir(serverId);
+      const javaPort = parseInt(env.JAVA_PORT || `${assignedPort}`) || assignedPort;
+      const bedrockPort = parseInt(env.BEDROCK_PORT || `${assignedPort + 1}`) || (assignedPort + 1);
+
+      const dockerImage = env.DOCKER_IMAGE || "debian:bookworm-slim";
+      delete env.DOCKER_IMAGE;
+
+      // 1. Ensure configuration.toml is generated with allocated Java and Bedrock ports
+      const { ensurePumpkinConfiguration } = await import("./pumpkin-agent");
+      await ensurePumpkinConfiguration(sDir, javaPort, bedrockPort);
+
+      // 2. Ensure pumpkin binary exists in server directory
+      const localBin = path.join(sDir, "pumpkin");
+      let binExists = false;
+      try {
+        const stat = await fs.stat(localBin);
+        binExists = stat.size > 100000;
+      } catch {}
+
+      if (!binExists) {
+        // Attempt to copy from node cache (.data/software/pumpkin/<commit>/pumpkin)
+        const commit = (env.VERSION || "").replace("pumpkin-nightly-", "").replace("pumpkin-", "") || "nightly";
+        const cachedBin = path.join(process.cwd(), ".data", "software", "pumpkin", commit, "pumpkin");
+        try {
+          await fs.copyFile(cachedBin, localBin);
+          await fs.chmod(localBin, 0o755);
+          binExists = true;
+        } catch {
+          // If not in cache, trigger auto-install on node
+          const { installPumpkinBinaryOnNode } = await import("./pumpkin-agent");
+          const dlRes = await installPumpkinBinaryOnNode({
+            versionId: env.VERSION || "pumpkin-nightly-latest",
+            commitSha: commit,
+            x64Url: "https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-X64-Linux",
+            arm64Url: "https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-ARM64-Linux",
+          });
+          if (dlRes.success && dlRes.path) {
+            await fs.copyFile(dlRes.path, localBin);
+            await fs.chmod(localBin, 0o755);
+            binExists = true;
+          }
+        }
+      }
+
+      const envArgs = buildEnvArgs(env);
+      appendLog(serverId, `[Panel] Launching Pumpkin (Rust MC) on Java port :${javaPort} and Bedrock port :${bedrockPort}...`);
+      appendLog(serverId, `[Panel] Version: ${env.VERSION || "Nightly"}`);
+
+      dockerArgs = [
+        "run", "-d",
+        "--name", containerName,
+        "-p", `${javaPort}:${javaPort}/tcp`,
+        "-p", `${javaPort}:${javaPort}/udp`,
+        "-p", `${bedrockPort}:${bedrockPort}/udp`,
+        "-p", `${bedrockPort}:${bedrockPort}/tcp`,
+        "-w", "/data",
+        "-v", `${sDir}:/data`,
+        "-m", `${info.ram}m`,
+        `--cpus=${cpuLimit}`,
+        "--restart=no",
+        ...envArgs,
+        dockerImage,
+        "sh", "-c",
+        "chmod +x ./pumpkin 2>/dev/null; exec ./pumpkin"
+      ];
     } else if (runtime.isMinecraft) {
       // Minecraft Server Execution
       if (!env.EULA) env.EULA = "TRUE";

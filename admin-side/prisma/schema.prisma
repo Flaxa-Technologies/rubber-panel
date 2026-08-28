@@ -557,3 +557,32 @@ model UpdateRecord {
   @@map("update_records")
 }
 
+// ─── PUMPKIN RUST MINECRAFT BUILDS ──────────────────────────────────────────
+// Tracks rolling nightly builds & stable versions with commit SHAs and digests
+
+model PumpkinBuild {
+  id              String    @id @default(uuid())
+  versionId       String    @unique // e.g. "pumpkin-nightly-9e9f1b5" or "pumpkin-v0.1.0"
+  commitSha       String    // e.g. "9e9f1b5"
+  tag             String    @default("nightly") // "nightly" | "v0.1.0"
+  versionSequence String    @default("1.0.0") // sequence e.g. "1.0.0", "1.0.1", "1.0.2"
+  javaVersion     String?   @default("1.21.4")
+  bedrockVersion  String?   @default("1.21.50")
+  generatedAt     DateTime?
+  publishedAt     DateTime?
+  isNightly       Boolean   @default(true)
+  isLatest        Boolean   @default(false)
+  isOutdated      Boolean   @default(false)
+  x64Url          String?
+  x64Sha256       String?
+  x64Size         Int?
+  arm64Url        String?
+  arm64Sha256     String?
+  arm64Size       Int?
+  syncedNodes     String    @default("[]") // JSON string array of Node IDs that have cached this binary
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("pumpkin_builds")
+}
+

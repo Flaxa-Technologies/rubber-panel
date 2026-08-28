@@ -24,6 +24,7 @@ import {
   Box,
   Activity,
   Download,
+  Flame,
 } from "lucide-react";
 
 
@@ -39,6 +40,7 @@ const navItems = [
   { href: "/allocations", label: "Port Management", icon: Network },
   { href: "/images", label: "Container Images", icon: Box },
   { href: "/software", label: "Software", icon: Package },
+  { href: "/software/pumpkin", label: "Pumpkin (Rust MC)", icon: Flame },
   { href: "/templates", label: "Templates", icon: FileCode2 },
   { href: "/backups", label: "Backups", icon: Archive },
 ];

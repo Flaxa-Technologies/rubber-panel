@@ -6,7 +6,7 @@ import {
   Package, Info, ExternalLink, RefreshCw, Search, Check, Filter,
   Layers, Terminal, Sparkles, ChevronRight, X, Box, Coffee, Plus,
   Download, Database, Code, Server, HardDrive, Trash2, CheckCircle2,
-  Cpu, Zap, Shield, Globe
+  Cpu, Zap, Shield, Globe, Flame
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
@@ -69,6 +69,7 @@ const typeColors: Record<string, string> = {
   FORGE: "rgba(249,115,22,0.15)",
   FABRIC: "rgba(234,179,8,0.15)",
   SPIGOT: "rgba(239,68,68,0.15)",
+  PUMPKIN: "rgba(249,115,22,0.15)",
   PROXY: "rgba(168,85,247,0.15)",
   BUNGEECORD: "rgba(14,165,233,0.15)",
   VELOCITY: "rgba(59,130,246,0.15)",
@@ -363,6 +364,14 @@ export default function SoftwarePage() {
             <Coffee className="w-4 h-4" />
             <span>Java Runtimes ({javaVersions.length})</span>
           </button>
+
+          <Link
+            href="/software/pumpkin"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20"
+          >
+            <Flame className="w-4 h-4 text-orange-400" />
+            <span>Pumpkin (Rust MC)</span>
+          </Link>
         </div>
       </div>
 
