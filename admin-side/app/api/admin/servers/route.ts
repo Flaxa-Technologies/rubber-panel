@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         owner: { select: { id: true, username: true, email: true } },
         node: { select: { id: true, name: true, status: true } },
         software: { select: { name: true, type: true } },
-        allocations: { select: { id: true, ip: true, port: true }, orderBy: { createdAt: "asc" } },
+        allocations: { select: { id: true, ip: true, port: true }, orderBy: { port: "asc" } },
       },
     }),
     db.server.count({ where }),
@@ -134,67 +134,8 @@ export async function POST(request: NextRequest) {
   const totalPortsNeeded = Math.max(1, portCount || 1);
   const allocatedIds: string[] = [];
 
-  // Primary allocation
-  if (allocationId) {
-    const alloc = await db.allocation.findUnique({ where: { id: allocationId } });
-    if (!alloc || alloc.nodeId !== nodeId || alloc.assigned || alloc.disabled) {
-      return NextResponse.json({ error: "Selected primary allocation is unavailable or invalid" }, { status: 400 });
-    }
-    allocatedIds.push(alloc.id);
-  } else {
-    // Pick an available, non-disabled, non-25565 allocation
-    const freeAllocation = await db.allocation.findFirst({
-      where: { 
-        nodeId, 
-        assigned: false,
-        disabled: false,
-        port: { not: 25565 }
-      },
-      orderBy: { port: "asc" },
-    });
-    
-    if (freeAllocation) {
-      allocatedIds.push(freeAllocation.id);
-    } else {
-      // Generate a new random port
-      const rangeStart = Math.max(25566, node.portRangeStart ?? 25566);
-      const rangeEnd = Math.max(rangeStart + 100, node.portRangeEnd ?? 29999);
-      
-      const usedPorts = await db.allocation.findMany({
-        where: { nodeId },
-        select: { port: true },
-      });
-      const usedPortSet = new Set(usedPorts.map(p => p.port));
-      usedPortSet.add(25565);
-      
-      let nextPort = -1;
-      const pool: number[] = [];
-      for (let p = rangeStart; p <= rangeEnd; p++) {
-        if (!usedPortSet.has(p)) pool.push(p);
-      }
-      if (pool.length > 0) {
-        nextPort = pool[Math.floor(Math.random() * pool.length)];
-      }
-      
-      if (nextPort === -1) {
-        return NextResponse.json({ error: "No free ports available on this node" }, { status: 400 });
-      }
-      
-      const newAlloc = await db.allocation.create({
-        data: {
-          nodeId,
-          ip: node.fqdn,
-          port: nextPort,
-          assigned: false,
-          disabled: false,
-        },
-      });
-      allocatedIds.push(newAlloc.id);
-    }
-  }
-
-  // Allocate specific ports if provided
-  if (specificPorts && Array.isArray(specificPorts)) {
+  // 1. Process specific ports FIRST if provided
+  if (specificPorts && Array.isArray(specificPorts) && specificPorts.length > 0) {
     for (const p of specificPorts) {
       if (typeof p === "number" && p >= 1024 && p <= 65535) {
         let alloc = await db.allocation.findFirst({
@@ -212,7 +153,65 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Allocate remaining ports to fulfill portCount
+  // 2. If allocationId override was selected and not already in list
+  if (allocationId && !allocatedIds.includes(allocationId)) {
+    const alloc = await db.allocation.findUnique({ where: { id: allocationId } });
+    if (alloc && alloc.nodeId === nodeId && !alloc.assigned && !alloc.disabled) {
+      allocatedIds.push(alloc.id);
+    }
+  }
+
+  // 3. If NO specific ports and NO allocationId were provided, select a random unassigned allocation or create a new random port
+  if (allocatedIds.length === 0) {
+    const freeAllocations = await db.allocation.findMany({
+      where: { 
+        nodeId, 
+        assigned: false, 
+        disabled: false, 
+        port: { not: 25565 } 
+      },
+    });
+
+    if (freeAllocations.length > 0) {
+      // Pick randomly from free allocations so it does NOT always default to lowest port (25566)
+      const picked = freeAllocations[Math.floor(Math.random() * freeAllocations.length)];
+      allocatedIds.push(picked.id);
+    } else {
+      // Generate a random port from node port range
+      const rangeStart = Math.max(25566, node.portRangeStart ?? 25566);
+      const rangeEnd = Math.max(rangeStart + 200, node.portRangeEnd ?? 29999);
+      
+      const usedPorts = await db.allocation.findMany({
+        where: { nodeId },
+        select: { port: true },
+      });
+      const usedPortSet = new Set(usedPorts.map(p => p.port));
+      usedPortSet.add(25565);
+
+      const pool: number[] = [];
+      for (let p = rangeStart; p <= rangeEnd; p++) {
+        if (!usedPortSet.has(p)) pool.push(p);
+      }
+
+      if (pool.length === 0) {
+        return NextResponse.json({ error: "No free ports available on this node" }, { status: 400 });
+      }
+
+      const randomP = pool[Math.floor(Math.random() * pool.length)];
+      const newAlloc = await db.allocation.create({
+        data: {
+          nodeId,
+          ip: node.fqdn,
+          port: randomP,
+          assigned: false,
+          disabled: false,
+        }
+      });
+      allocatedIds.push(newAlloc.id);
+    }
+  }
+
+  // 4. Fulfill remaining ports if totalPortsNeeded > allocatedIds.length
   while (allocatedIds.length < totalPortsNeeded) {
     const freeAlloc = await db.allocation.findFirst({
       where: {
@@ -228,31 +227,32 @@ export async function POST(request: NextRequest) {
     if (freeAlloc) {
       allocatedIds.push(freeAlloc.id);
     } else {
-      // Generate a new port
       const rangeStart = Math.max(25566, node.portRangeStart ?? 25566);
       const rangeEnd = Math.max(rangeStart + 200, node.portRangeEnd ?? 29999);
-      
+
       const usedPorts = await db.allocation.findMany({
         where: { nodeId },
         select: { port: true },
       });
       const usedPortSet = new Set(usedPorts.map(p => p.port));
       usedPortSet.add(25565);
-
-      let nextP = -1;
-      for (let p = rangeStart; p <= rangeEnd; p++) {
-        if (!usedPortSet.has(p)) {
-          nextP = p;
-          break;
-        }
+      for (const id of allocatedIds) {
+        const a = await db.allocation.findUnique({ where: { id }, select: { port: true } });
+        if (a) usedPortSet.add(a.port);
       }
-      if (nextP === -1) break;
 
+      const pool: number[] = [];
+      for (let p = rangeStart; p <= rangeEnd; p++) {
+        if (!usedPortSet.has(p)) pool.push(p);
+      }
+      if (pool.length === 0) break;
+
+      const randomP = pool[Math.floor(Math.random() * pool.length)];
       const newAlloc = await db.allocation.create({
         data: {
           nodeId,
           ip: node.fqdn,
-          port: nextP,
+          port: randomP,
           assigned: false,
           disabled: false,
         }
