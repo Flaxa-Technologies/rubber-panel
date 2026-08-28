@@ -10,6 +10,7 @@ import {
 import type { FileEntry } from "@/lib/types";
 import { formatBytes } from "@/lib/server-utils";
 import ConfirmationDialog from "@/components/ui/ConfirmationDialog";
+import AdvancedFileEditor from "./AdvancedFileEditor";
 
 interface FileManagerPanelProps {
   serverId: string;
@@ -322,63 +323,38 @@ export default function FileManagerPanel({ serverId, allowedPaths, protectedPath
     setDeleting(false);
   }
 
-  const pathParts = currentPath.split("/").filter(Boolean);
-
   if (editingFile) {
     const thisFileProtected = isProtected(editingFile.path);
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              onClick={() => setEditingFile(null)}
-              className="btn-secondary-dark"
-              style={{ padding: "5px 10px", fontSize: 12 }}
-            >
-              <ArrowLeft size={13} /> Back
-            </button>
-            <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "var(--text-pure)", fontWeight: 600 }}>
-              {editingFile.path}
-            </span>
-          </div>
-
-          {!thisFileProtected && (
-            <button
-              onClick={saveFile}
-              disabled={saving}
-              className="btn-solid-white"
-              style={{ padding: "6px 14px", fontSize: 12 }}
-            >
-              {saving ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
-              <span>Save Changes</span>
-            </button>
-          )}
-        </div>
-
-        <div className="saas-card" style={{ padding: 0, overflow: "hidden", height: "calc(100vh - 320px)", minHeight: 400 }}>
-          <textarea
-            value={editingFile.content}
-            onChange={(e) => !thisFileProtected && setEditingFile({ ...editingFile, content: e.target.value })}
-            readOnly={thisFileProtected}
-            style={{
-              width: "100%",
-              height: "100%",
-              background: "#000000",
-              color: "#e4e4e7",
-              padding: 16,
-              fontFamily: "'SFMono-Regular', Consolas, Menlo, monospace",
-              fontSize: 12.5,
-              lineHeight: 1.6,
-              outline: "none",
-              border: "none",
-              resize: "none",
-            }}
-            spellCheck={false}
-          />
-        </div>
-      </div>
+      <AdvancedFileEditor
+        filePath={editingFile.path}
+        initialContent={editingFile.content}
+        isProtected={thisFileProtected}
+        onSave={async (newContent) => {
+          const res = await fetch(`/api/user/servers/${serverId}/files`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({ path: editingFile.path, content: newContent, action: "write" }),
+          });
+          if (res.ok) {
+            setSuccess(`Saved ${editingFile.path}`);
+            setTimeout(() => setSuccess(""), 3000);
+            setEditingFile({ path: editingFile.path, content: newContent });
+          } else {
+            const err = await res.json().catch(() => ({}));
+            setError(err.error || "Failed to save file.");
+            throw new Error(err.error || "Failed to save file.");
+          }
+        }}
+        onClose={() => {
+          setEditingFile(null);
+          loadFiles(currentPath);
+        }}
+      />
     );
   }
+
+  const pathParts = currentPath.split("/").filter(Boolean);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
