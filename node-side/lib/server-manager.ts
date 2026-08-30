@@ -322,30 +322,42 @@ function detectRuntime(sType: string, dImage: string, env?: Record<string, any>)
   const envType = (env?.TYPE || env?.type || "").toUpperCase();
   const envServerType = (env?.SERVER_TYPE || env?.serverType || "").toUpperCase();
 
+  const isCodeSandbox =
+    t === "CODESANDBOX" ||
+    t === "CODESPACE" ||
+    t === "SANDBOX" ||
+    envType === "CODESANDBOX" ||
+    envServerType === "CODESANDBOX" ||
+    img.includes("code-server") ||
+    img.includes("codercom") ||
+    Boolean(env?.IS_SANDBOX === "true" || env?.isSandbox === "true");
+
   const isPumpkin = 
+    !isCodeSandbox && (
     t === "PUMPKIN" || 
     envType === "PUMPKIN" || 
     envServerType === "PUMPKIN" || 
     ver.startsWith("pumpkin-") || 
-    img.includes("pumpkin");
+    img.includes("pumpkin"));
 
-  const isNodeJs = !isPumpkin && (t === "NODEJS" || img.startsWith("node:") || img.includes("bun") || img.includes("deno"));
-  const isPython = !isPumpkin && (t === "PYTHON" || img.startsWith("python:") || img.includes("pytorch"));
-  const isRust = !isPumpkin && (t === "RUST" || img.startsWith("rust:") || img.includes("rustlang"));
-  const isPhp = !isPumpkin && (t === "PHP" || img.startsWith("php:") || img.includes("php"));
-  const isGo = !isPumpkin && (t === "GO" || t === "GOLANG" || img.startsWith("golang:"));
-  const isRuby = !isPumpkin && (t === "RUBY" || img.startsWith("ruby:"));
-  const isWeb = !isPumpkin && (t === "WEB" || img.includes("nginx") || img.includes("caddy") || img.includes("httpd") || img.includes("traefik"));
-  const isDatabase = !isPumpkin && (t === "DATABASE" || t === "MYSQL" || t === "POSTGRES" || t === "REDIS" || t === "MONGO" ||
+  const isNodeJs = !isCodeSandbox && !isPumpkin && (t === "NODEJS" || img.startsWith("node:") || img.includes("bun") || img.includes("deno"));
+  const isPython = !isCodeSandbox && !isPumpkin && (t === "PYTHON" || img.startsWith("python:") || img.includes("pytorch"));
+  const isRust = !isCodeSandbox && !isPumpkin && (t === "RUST" || img.startsWith("rust:") || img.includes("rustlang"));
+  const isPhp = !isCodeSandbox && !isPumpkin && (t === "PHP" || img.startsWith("php:") || img.includes("php"));
+  const isGo = !isCodeSandbox && !isPumpkin && (t === "GO" || t === "GOLANG" || img.startsWith("golang:"));
+  const isRuby = !isCodeSandbox && !isPumpkin && (t === "RUBY" || img.startsWith("ruby:"));
+  const isWeb = !isCodeSandbox && !isPumpkin && (t === "WEB" || img.includes("nginx") || img.includes("caddy") || img.includes("httpd") || img.includes("traefik"));
+  const isDatabase = !isCodeSandbox && !isPumpkin && (t === "DATABASE" || t === "MYSQL" || t === "POSTGRES" || t === "REDIS" || t === "MONGO" ||
     img.includes("mysql") || img.includes("postgres") || img.includes("redis") || img.includes("mongo") ||
     img.includes("mariadb") || img.includes("rabbitmq") || img.includes("elastic") || img.includes("meili"));
-  const isGame = !isPumpkin && (t === "GAME" || t.includes("PALWORLD") || t.includes("RUST") || t.includes("VALHEIM") || t.includes("CS2") || t.includes("TERRARIA") || t.includes("ZOMBOID") || t.includes("ARK") || t.includes("7DTD") || t.includes("TF2") || t.includes("ENSHROUDED") ||
+  const isGame = !isCodeSandbox && !isPumpkin && (t === "GAME" || t.includes("PALWORLD") || t.includes("RUST") || t.includes("VALHEIM") || t.includes("CS2") || t.includes("TERRARIA") || t.includes("ZOMBOID") || t.includes("ARK") || t.includes("7DTD") || t.includes("TF2") || t.includes("ENSHROUDED") ||
     img.includes("steam") || img.includes("palworld") || img.includes("terraria") || img.includes("valheim") || img.includes("tshock") || img.includes("didstopia") || img.includes("hermsi") || img.includes("vinanr") || img.includes("skarlso") || img.includes("cm2network"));
-  const isMinecraft = !isPumpkin && !isNodeJs && !isPython && !isRust && !isPhp && !isGo && !isRuby && !isWeb && !isDatabase && !isGame &&
+  const isMinecraft = !isCodeSandbox && !isPumpkin && !isNodeJs && !isPython && !isRust && !isPhp && !isGo && !isRuby && !isWeb && !isDatabase && !isGame &&
     (t === "MINECRAFT" || t === "PAPER" || t === "PURPUR" || t === "FABRIC" || t === "FORGE" || t === "VANILLA" || t === "SPIGOT" || t === "VELOCITY" || t === "BUNGEECORD" || img.includes("minecraft"));
 
   let label = "Custom Container";
-  if (isPumpkin) label = "Pumpkin MC";
+  if (isCodeSandbox) label = "Code Sandbox (VS Code)";
+  else if (isPumpkin) label = "Pumpkin MC";
   else if (isPhp) label = "PHP";
   else if (isPython) label = "Python";
   else if (isRust) label = "Rust";
@@ -357,7 +369,7 @@ function detectRuntime(sType: string, dImage: string, env?: Record<string, any>)
   else if (isGame) label = "Game Server";
   else if (isMinecraft) label = "Minecraft";
 
-  return { isNodeJs, isPython, isRust, isPhp, isGo, isRuby, isWeb, isDatabase, isGame, isPumpkin, isMinecraft, label };
+  return { isNodeJs, isPython, isRust, isPhp, isGo, isRuby, isWeb, isDatabase, isGame, isPumpkin, isMinecraft, isCodeSandbox, label };
 }
 
 export async function createServer(params: CreateServerParams): Promise<{ success: boolean; error?: string }> {
@@ -583,6 +595,22 @@ export async function createServer(params: CreateServerParams): Promise<{ succes
       "</html>",
     ].join("\n");
     try { await fs.writeFile(indexPath, indexHtmlContent, { flag: "wx" }); } catch {}
+  } else if (runtime.isCodeSandbox) {
+    // Generate initial Code Sandbox Workspace README and package template
+    const welcomeFile = path.join(dir, "README.md");
+    const welcomeContent = `# 🚀 ${params.name} — Cloud Code Sandbox
+
+Welcome to your cloud-hosted **VS Code development environment** powered by Rubber Panel!
+
+## 🛠️ Features:
+- **Full VS Code in Browser**: Terminal, extensions, git integration, syntax highlighting, and live previews.
+- **Persistent Workspace**: All files in this folder are safely persisted on your compute node.
+- **Port Forwarding**: Test web apps and APIs directly on your allocated panel ports.
+
+---
+*Powered by Rubber Panel Cloud IDE Engine*
+`;
+    try { await fs.writeFile(welcomeFile, welcomeContent, { flag: "wx" }); } catch {}
   } else if (runtime.isPumpkin) {
     // Pumpkin (Rust Minecraft Server) Initialization
     const javaPort = parseInt(env.JAVA_PORT || `${assignedPort}`) || assignedPort;
@@ -961,6 +989,43 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       if (startCmd) {
         dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
       }
+    } else if (runtime.isCodeSandbox) {
+      // Cloud Code Sandbox (VS Code Web Server) Execution
+      const sDir = getServerDir(serverId);
+      const dockerImage = env.DOCKER_IMAGE || "codercom/code-server:latest";
+      delete env.DOCKER_IMAGE;
+
+      const internalPort = 8080;
+      const sandboxPassword = env.SANDBOX_PASSWORD || "";
+      const authArg = sandboxPassword ? "password" : "none";
+      if (sandboxPassword) {
+        env.PASSWORD = sandboxPassword;
+      }
+
+      // Ensure directory permissions for code-server user
+      try {
+        await fs.chmod(sDir, 0o777);
+      } catch {}
+
+      const envArgs = buildEnvArgs(env);
+      appendLog(serverId, `[Panel] Launching Cloud Code Sandbox (VS Code IDE) on host port :${assignedPort}...`);
+      appendLog(serverId, `[Panel] Image: ${dockerImage} | Auth: ${authArg}`);
+
+      dockerArgs = [
+        "run", "-d",
+        "--name", containerName,
+        "-p", `${assignedPort}:${internalPort}/tcp`,
+        "-v", `${sDir}:/home/coder/project`,
+        "-m", `${info.ram}m`,
+        `--cpus=${cpuLimit}`,
+        "--restart=no",
+        ...envArgs,
+        dockerImage,
+        "code-server",
+        "--bind-addr", "0.0.0.0:8080",
+        "--auth", authArg,
+        "/home/coder/project"
+      ];
     } else if (runtime.isPumpkin) {
       // Pumpkin (Rust Minecraft Server - Native Java + Bedrock) Execution
       const sDir = getServerDir(serverId);

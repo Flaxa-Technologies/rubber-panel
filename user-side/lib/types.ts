@@ -51,6 +51,14 @@ export interface UserServer {
   cryoSleepCustomMotdAllowed?: boolean;
   cryoSleepMotd?: string | null;
   isCryoSleeping?: boolean;
+  // Code Sandbox / Cloud IDE
+  isSandbox?: boolean;
+  sandboxDailyHoursLimit?: number | null;
+  sandboxUsedMinutesToday?: number;
+  sandboxAutoShutdownMinutes?: number;
+  sandboxLastUsedDate?: string | null;
+  sandboxPassword?: string | null;
+  sandboxRuntime?: string | null;
 }
 
 export interface FileEntry {

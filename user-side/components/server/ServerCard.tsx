@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Server, MemoryStick, Cpu, HardDrive, ArrowRight, Copy, Check, Moon, Zap } from "lucide-react";
+import { Server, MemoryStick, Cpu, HardDrive, ArrowRight, Copy, Check, Moon, Zap, Code2, ExternalLink, Clock } from "lucide-react";
 import type { UserServer } from "@/lib/types";
 import { formatDisk, formatRam, getServerAddress } from "@/lib/server-utils";
 import PowerControls from "./PowerControls";
@@ -71,8 +71,11 @@ export function StatusPill({ status, suspended }: { status: string; suspended: b
 export default function ServerCard({ server, onActionComplete }: ServerCardProps) {
   const address = getServerAddress(server);
   const [copied, setCopied] = useState(false);
+  const isSandbox = server.isSandbox || server.serverType === "CODESANDBOX";
 
-  const softwareLabel = server.software
+  const softwareLabel = isSandbox
+    ? `Code Sandbox · ${server.sandboxRuntime || "VS Code"}`
+    : server.software
     ? `${server.software.name}${server.softwareVersion?.version ? ` ${server.softwareVersion.version}` : ""}`
     : server.serverType === "NODEJS"
     ? `Node.js v${server.nodeVersion || "20"}`
@@ -96,13 +99,29 @@ export default function ServerCard({ server, onActionComplete }: ServerCardProps
     }
   };
 
+  const primaryAlloc = server.allocations?.[0];
+  const idePort = primaryAlloc?.port || 25590;
+  const nodeFqdn = server.node?.fqdn || "localhost";
+  const ideUrl = `http://${nodeFqdn}:${idePort}`;
+
   return (
     <div className="saas-card saas-card-interactive" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Top Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--bg-surface-elevated)", border: "1px solid var(--border-medium)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", flexShrink: 0 }}>
-            <Server size={15} />
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            background: isSandbox ? "rgba(163, 230, 53, 0.12)" : "var(--bg-surface-elevated)",
+            border: isSandbox ? "1px solid rgba(163, 230, 53, 0.3)" : "1px solid var(--border-medium)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: isSandbox ? "var(--accent-lime)" : "var(--text-secondary)",
+            flexShrink: 0
+          }}>
+            {isSandbox ? <Code2 size={16} /> : <Server size={15} />}
           </div>
           <div style={{ minWidth: 0 }}>
             <Link 
@@ -114,6 +133,22 @@ export default function ServerCard({ server, onActionComplete }: ServerCardProps
             </Link>
             <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span>{server.node.name} · {softwareLabel}</span>
+              {isSandbox && server.sandboxDailyHoursLimit !== undefined && (
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: server.sandboxDailyHoursLimit ? "rgba(56, 189, 248, 0.15)" : "rgba(163, 230, 53, 0.15)",
+                  color: server.sandboxDailyHoursLimit ? "#38bdf8" : "var(--accent-lime)",
+                  border: server.sandboxDailyHoursLimit ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(163, 230, 53, 0.3)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}>
+                  <Clock size={10} /> {server.sandboxDailyHoursLimit ? `${server.sandboxDailyHoursLimit}h/day` : "Unlimited"}
+                </span>
+              )}
               {server.cryoSleepEnabled && (
                 <span style={{
                   fontSize: 10,

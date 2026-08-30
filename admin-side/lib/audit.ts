@@ -35,6 +35,9 @@ export type AuditAction =
   | "BACKUP_CREATED"
   | "BACKUP_DELETED"
   | "BACKUP_RESTORED"
+  | "CODESANDBOX_CREATE"
+  | "CODESANDBOX_EDIT"
+  | "CODESANDBOX_DELETE"
   | "UPDATE_APPLIED";
 
 interface AuditLogParams {

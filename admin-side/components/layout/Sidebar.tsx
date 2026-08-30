@@ -25,6 +25,7 @@ import {
   Activity,
   Download,
   Flame,
+  Code2,
 } from "lucide-react";
 
 
@@ -35,6 +36,7 @@ const navItems = [
   { href: "/users", label: "Users", icon: Users },
   { href: "/resources", label: "Resource Quotas", icon: Sparkles },
   { href: "/servers", label: "Servers", icon: Server },
+  { href: "/sandboxes", label: "Code Sandboxes", icon: Code2 },
   { href: "/cryo-sleep", label: "Cryo-Sleep", icon: Zap },
   { href: "/nodes", label: "Nodes", icon: MonitorSpeaker },
   { href: "/allocations", label: "Port Management", icon: Network },

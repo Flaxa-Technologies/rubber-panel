@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Terminal, FolderOpen, Network, Archive, Settings,
-  Users, Clock, Blocks, Sliders, Webhook, ArrowLeftRight
+  Users, Clock, Blocks, Sliders, Webhook, ArrowLeftRight, Code2
 } from "lucide-react";
 import { useServer } from "@/components/server/ServerContext";
 
@@ -25,15 +25,24 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
   const pathname = usePathname();
   const { server } = useServer();
 
+  const isSandbox = server?.isSandbox || server?.serverType === "CODESANDBOX";
   const isNodeJs = server?.serverType === "NODEJS" || server?.software?.type === "NODEJS";
   
-  // Filter tabs for Node.js vs Minecraft
+  // Filter tabs for Code Sandbox / Node.js vs Minecraft
   let tabs = baseTabs.filter(tab => {
-    if (isNodeJs && (tab.path === "addons" || tab.path === "properties")) {
+    if ((isSandbox || isNodeJs) && (tab.path === "addons" || tab.path === "properties")) {
       return false;
     }
     return true;
   });
+
+  // Prepend Cloud IDE tab if this is a Code Sandbox
+  if (isSandbox) {
+    tabs = [
+      { name: "Cloud IDE", path: "ide", icon: Code2 },
+      ...tabs,
+    ];
+  }
 
   // Show Transfer tab if enabled by administration
   if (server?.allowNodeTransfer) {

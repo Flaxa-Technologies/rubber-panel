@@ -38,6 +38,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       serverType: true, nodeVersion: true, securityProtection: true, securitySuspendedUntil: true, securityQuarantineReason: true,
       javaVersion: true, javaVersionId: true,
       cryoSleepEnabled: true, cryoSleepIdleMinutes: true, cryoSleepCustomMotdAllowed: true, cryoSleepMotd: true,
+      isSandbox: true, sandboxRuntime: true, sandboxDailyHoursLimit: true, sandboxUsedMinutesToday: true,
+      sandboxAutoShutdownMinutes: true, sandboxPassword: true,
       node: { select: { id: true, name: true, status: true, fqdn: true, port: true } },
       software: { select: { name: true, type: true } },
       softwareVersion: { select: { version: true } },

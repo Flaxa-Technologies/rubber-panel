@@ -178,6 +178,15 @@ model Server {
   cryoSleepMotd            String?
   autoStartOnBoot          Boolean   @default(false)
 
+  // Code Sandbox / Cloud IDE (GitHub Codespaces-like)
+  isSandbox                Boolean   @default(false)
+  sandboxDailyHoursLimit   Int?      @default(0) // 0 = Unlimited, >0 = Max Hours Per Day
+  sandboxUsedMinutesToday  Int       @default(0)
+  sandboxAutoShutdownMinutes Int     @default(30) // 0 = Disabled, >0 = Auto-shutdown idle minutes
+  sandboxLastUsedDate      String?   // "YYYY-MM-DD"
+  sandboxPassword          String?   // Web IDE Access Password
+  sandboxRuntime           String?   @default("fullstack") // "nodejs" | "python" | "rust" | "golang" | "java" | "fullstack" | "universal"
+
   uuid            String    @unique @default(uuid())
   internalPort    Int?
   dockerId        String?
