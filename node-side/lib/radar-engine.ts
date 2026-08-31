@@ -153,11 +153,8 @@ export function normalizeIp(ip: string): string {
 
 export function isIpTrusted(ip: string): boolean {
   const clean = normalizeIp(ip);
-  if (!clean || clean === "127.0.0.1" || clean === "::1" || clean === "localhost") return true;
+  if (!clean || clean === "127.0.0.1" || clean === "::1" || clean === "localhost" || clean === "0.0.0.0") return true;
   if (trustedIpsSet.has(clean) || trustedIpsSet.has(ip.trim())) return true;
-  for (const prefix of RFC1918_PREFIXES) {
-    if (clean.startsWith(prefix)) return true;
-  }
   return false;
 }
 
@@ -186,9 +183,17 @@ export async function initRadarChain() {
   if (!isLinux) return;
   try {
     // Create RUBBER_RADAR chain if not exists
-    await runCmd("iptables -N RUBBER_RADAR");
-    // Ensure rule is hooked at top of INPUT chain
-    const check = await runCmd("iptables -C INPUT -j RUBBER_RADAR");
+    await runCmd("iptables -N RUBBER_RADAR 2>/dev/null || true");
+
+    // Ensure control ports (SSH, Web, Node) are ALWAYS immune from drops
+    const controlPortsList = Array.from(CONTROL_PORTS).join(",");
+    const checkControl = await runCmd(`iptables -C RUBBER_RADAR -p tcp -m multiport --dports ${controlPortsList} -j RETURN 2>/dev/null || true`);
+    if (!checkControl) {
+      await runCmd(`iptables -I RUBBER_RADAR 1 -p tcp -m multiport --dports ${controlPortsList} -j RETURN`);
+    }
+
+    // Ensure RUBBER_RADAR is hooked at top of INPUT chain
+    const check = await runCmd("iptables -C INPUT -j RUBBER_RADAR 2>/dev/null || true");
     if (!check) {
       await runCmd("iptables -I INPUT 1 -j RUBBER_RADAR");
     }
@@ -202,7 +207,7 @@ async function applyIptablesBan(ip: string) {
   const clean = normalizeIp(ip);
   if (isIpTrusted(clean)) return;
   try {
-    await runCmd(`iptables -I RUBBER_RADAR 1 -s ${clean} -j DROP -m comment --comment "Rubber Radar Ban"`);
+    await runCmd(`iptables -A RUBBER_RADAR -s ${clean} -j DROP -m comment --comment "Rubber Radar Ban"`);
   } catch {}
 }
 
