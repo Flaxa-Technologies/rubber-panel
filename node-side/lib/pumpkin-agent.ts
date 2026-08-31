@@ -407,13 +407,13 @@ save_advancements = true
   for (const configPath of configFilesToSync) {
     let content = "";
     try {
-      content = await fs.readFile(configPath, "utf-8");
+      content = await fs.readFile(/*turbopackIgnore: true*/ configPath, "utf-8");
     } catch {
       content = "";
     }
 
     if (!content.trim()) {
-      await fs.writeFile(configPath, generateInitialPumpkinToml(javaPort, bedrockPort), "utf-8");
+      await fs.writeFile(/*turbopackIgnore: true*/ configPath, generateInitialPumpkinToml(javaPort, bedrockPort), "utf-8");
       console.log(`[PumpkinAgent] Generated initial config at ${configPath} (Java :${javaPort}, Bedrock :${bedrockPort})`);
     } else {
       let updated = content;

@@ -82,7 +82,7 @@ function scanServerDataSizeMb(): number {
   }
 
   const dataDir = process.env.DATA_DIR ?? process.env.SERVER_DATA_DIR ?? "/var/rubber-panel/servers";
-  if (!fs.existsSync(dataDir)) {
+  if (!fs.existsSync(/*turbopackIgnore: true*/ dataDir)) {
     cachedServerDiskUsedMb = 0;
     lastDiskScan = now;
     return 0;
