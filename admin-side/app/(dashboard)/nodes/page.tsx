@@ -560,8 +560,21 @@ export default function NodesPage() {
   const totalServers = nodes.reduce((sum, n) => sum + (n._count?.servers || 0), 0);
   const totalRunningServers = nodes.reduce((sum, n) => sum + (n.serversRunning || 0), 0);
   const totalCryoServers = nodes.reduce((sum, n) => sum + (n.serversCryo || 0), 0);
-  const totalAllocatedRamGb = (nodes.reduce((sum, n) => sum + (n.totalAllocatedRam || 0), 0) / 1024).toFixed(1);
-  const totalCapacityRamGb = (nodes.reduce((sum, n) => sum + (n.effectiveMaxRam || n.maxRam || 0), 0) / 1024).toFixed(1);
+
+  const totalLiveUsedRamMb = nodes.reduce((sum, n) => {
+    if (n.hostUsedRam != null) return sum + n.hostUsedRam;
+    if (n.hostTotalRam != null) return sum + (n.ramUsage / 100) * n.hostTotalRam;
+    return sum + (n.ramUsage / 100) * (n.maxRam || 8192);
+  }, 0);
+  const totalPhysicalRamMb = nodes.reduce((sum, n) => sum + (n.hostTotalRam || n.effectiveMaxRam || n.maxRam || 8192), 0);
+  const totalAllocatedRamMb = nodes.reduce((sum, n) => sum + (n.totalAllocatedRam || 0), 0);
+  const totalCapacityRamMb = nodes.reduce((sum, n) => sum + (n.effectiveMaxRam || n.maxRam || 8192), 0);
+
+  const totalLiveUsedRamGb = (totalLiveUsedRamMb / 1024).toFixed(1);
+  const totalPhysicalRamGb = (totalPhysicalRamMb / 1024).toFixed(1);
+  const totalAllocatedRamGb = (totalAllocatedRamMb / 1024).toFixed(1);
+  const totalCapacityRamGb = (totalCapacityRamMb / 1024).toFixed(1);
+  const fleetLiveRamPct = totalPhysicalRamMb > 0 ? Math.round((totalLiveUsedRamMb / totalPhysicalRamMb) * 100) : 0;
   const nodesWithWarnings = nodes.filter(n => n.isRamCritical || n.isRamWarning || n.isCpuWarning || n.isDiskWarning).length;
 
   return (
@@ -614,14 +627,22 @@ export default function NodesPage() {
 
         <div className="p-4 rounded-xl border relative overflow-hidden" style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}>
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Total Allocated RAM</p>
+            <p className="text-xs font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Fleet Memory Load</p>
             <Cpu className="w-4 h-4 text-lime-400" />
           </div>
-          <p className="text-xl font-extrabold mt-2" style={{ color: "var(--color-rp-text)" }}>
-            {totalAllocatedRamGb} <span className="text-xs font-normal text-muted-foreground">/ {parseFloat(totalCapacityRamGb) > 0 ? `${totalCapacityRamGb} GB` : "∞ Capacity"}</span>
+          <p className="text-xl font-extrabold mt-2 flex items-baseline gap-1.5" style={{ color: "var(--color-rp-text)" }}>
+            <span>{totalLiveUsedRamGb}</span>
+            <span className="text-xs font-normal" style={{ color: "var(--color-rp-text-muted)" }}>
+              / {totalPhysicalRamGb} GB ({fleetLiveRamPct}%)
+            </span>
           </p>
-          <div className="mt-2.5 text-[11px]" style={{ color: "var(--color-rp-text-muted)" }}>
-            Across {totalServers} provisioned servers
+          <div className="mt-2.5 text-[11px] flex items-center justify-between" style={{ color: "var(--color-rp-text-muted)" }}>
+            <span>Allocated: <strong>{totalAllocatedRamGb} GB</strong> across {totalServers} servers</span>
+            {totalAllocatedRamMb > totalCapacityRamMb && (
+              <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                {Math.round((totalAllocatedRamMb / (totalCapacityRamMb || 1)) * 100)}% Overcommit
+              </span>
+            )}
           </div>
         </div>
 
