@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { recordIncomingTraffic, isIpBanned } from "@/lib/radar-engine";
+import { recordIncomingTraffic, isIpBanned, isIpTrusted, normalizeIp } from "@/lib/radar-engine";
 
 export async function proxy(request: NextRequest) {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const realIp = request.headers.get("x-real-ip")?.trim();
-  const ip = forwarded || realIp || "127.0.0.1";
+  const ip = normalizeIp(forwarded || realIp || "127.0.0.1");
 
-  // Check if IP is actively banned by Radar
-  if (isIpBanned(ip)) {
+  // Check if IP is actively banned by Radar (trusted IPs are never blocked)
+  if (!isIpTrusted(ip) && isIpBanned(ip)) {
     return new NextResponse(
       JSON.stringify({
         error: "ACCESS_DENIED_RADAR_MITIGATION",
@@ -28,7 +28,9 @@ export async function proxy(request: NextRequest) {
   const estBytesIn = Math.max(contentLength, 350); // Header + body estimate
   const estBytesOut = 450; // Response estimate
 
-  recordIncomingTraffic(estBytesIn, estBytesOut, ip, 3001);
+  if (!isIpTrusted(ip)) {
+    recordIncomingTraffic(estBytesIn, estBytesOut, ip, 3001);
+  }
 
   return NextResponse.next();
 }

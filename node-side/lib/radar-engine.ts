@@ -115,8 +115,6 @@ let lastCheckTime = Date.now();
 let droppedPacketsCounter = 0;
 let isLinux = process.platform === "linux";
 
-// ─── TRUSTED IP / RFC1918 VERIFICATION ──────────────────────────────────────
-
 const RFC1918_PREFIXES = [
   "10.",
   "192.168.",
@@ -140,12 +138,23 @@ const RFC1918_PREFIXES = [
   "::1",
   "fe80:",
   "0.0.0.0",
+  "localhost",
 ];
 
+export const CONTROL_PORTS = new Set([22, 80, 443, 3000, 3001, 3002]);
+
+export function normalizeIp(ip: string): string {
+  let clean = (ip || "").trim().replace(/^\[|\]$/g, "");
+  if (clean.startsWith("::ffff:")) {
+    clean = clean.substring(7);
+  }
+  return clean;
+}
+
 export function isIpTrusted(ip: string): boolean {
-  const clean = ip.trim();
-  if (!clean) return true;
-  if (trustedIpsSet.has(clean)) return true;
+  const clean = normalizeIp(ip);
+  if (!clean || clean === "127.0.0.1" || clean === "::1" || clean === "localhost") return true;
+  if (trustedIpsSet.has(clean) || trustedIpsSet.has(ip.trim())) return true;
   for (const prefix of RFC1918_PREFIXES) {
     if (clean.startsWith(prefix)) return true;
   }
@@ -156,7 +165,7 @@ export function updateTrustedIps(ips: string[]) {
   trustedIpsSet.clear();
   for (const ip of ips) {
     if (ip && ip.trim()) {
-      trustedIpsSet.add(ip.trim());
+      trustedIpsSet.add(normalizeIp(ip));
     }
   }
 }
@@ -190,22 +199,25 @@ export async function initRadarChain() {
 
 async function applyIptablesBan(ip: string) {
   if (!isLinux) return;
+  const clean = normalizeIp(ip);
+  if (isIpTrusted(clean)) return;
   try {
-    await runCmd(`iptables -I RUBBER_RADAR 1 -s ${ip} -j DROP -m comment --comment "Rubber Radar Ban"`);
+    await runCmd(`iptables -I RUBBER_RADAR 1 -s ${clean} -j DROP -m comment --comment "Rubber Radar Ban"`);
   } catch {}
 }
 
 async function removeIptablesBan(ip: string) {
   if (!isLinux) return;
+  const clean = normalizeIp(ip);
   try {
-    await runCmd(`iptables -D RUBBER_RADAR -s ${ip} -j DROP -m comment --comment "Rubber Radar Ban"`);
+    await runCmd(`iptables -D RUBBER_RADAR -s ${clean} -j DROP -m comment --comment "Rubber Radar Ban"`);
   } catch {}
 }
 
 // ─── IP & BAN MANAGEMENT ───────────────────────────────────────────────────
 
 export function getCountryInfo(ip: string): { code: string; name: string } {
-  return lookupCountry(ip);
+  return lookupCountry(normalizeIp(ip));
 }
 
 export function banIp(
@@ -216,8 +228,13 @@ export function banIp(
   serverId?: string,
   manual = false
 ): boolean {
-  const cleanIp = ip.trim();
+  const cleanIp = normalizeIp(ip);
   if (isIpTrusted(cleanIp)) {
+    return false;
+  }
+
+  const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
+  if (port && (CONTROL_PORTS.has(port) || port === agentPort)) {
     return false;
   }
 
@@ -326,7 +343,12 @@ export function recordIncomingTraffic(
 // ─── SLIDING WINDOW CONNS / SEC TRACKER ─────────────────────────────────────
 
 export function recordConnection(ip: string, port: number, serverId?: string, now = Date.now()): number {
-  const cleanIp = ip.trim();
+  const cleanIp = normalizeIp(ip);
+  const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
+
+  if (CONTROL_PORTS.has(port) || port === agentPort || isIpTrusted(cleanIp)) {
+    return 0;
+  }
 
   const key = `${cleanIp}:${port}`;
   let w = connWindows.get(key);
@@ -341,9 +363,6 @@ export function recordConnection(ip: string, port: number, serverId?: string, no
   // Filter timestamps within sliding window
   w.timestamps = w.timestamps.filter((t) => now - t < 10000);
   const count = w.timestamps.length;
-
-  // Don't auto-ban trusted IPs (localhost, RFC1918, whitelist)
-  if (isIpTrusted(cleanIp)) return count;
 
   // Determine effective threshold
   let effectiveMaxConn = globalThreshold.maxConnPerIpPerWindow;
@@ -453,6 +472,8 @@ async function scanActiveConnections() {
       }
     }
 
+    const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
+
     if (isLinux) {
       // Scan established connections via ss on Linux
       const out = await runCmd("ss -H -t -o state established");
@@ -467,7 +488,14 @@ async function scanActiveConnections() {
             const localPort = parseInt(local.split(":").pop() || "0", 10);
             const peerIp = peer.split(":")[0]?.replace(/^\[|\]$/g, "");
 
-            if (localPort >= 1024 && localPort <= 65535 && peerIp && !isIpTrusted(peerIp)) {
+            if (
+              localPort >= 1024 &&
+              localPort <= 65535 &&
+              !CONTROL_PORTS.has(localPort) &&
+              localPort !== agentPort &&
+              peerIp &&
+              !isIpTrusted(peerIp)
+            ) {
               recordConnection(peerIp, localPort, undefined, now);
             }
           }
@@ -487,8 +515,14 @@ async function scanActiveConnections() {
             const localPort = parseInt(local.split(":").pop() || "0", 10);
             const peerIp = peer.split(":")[0]?.replace(/^\[|\]$/g, "");
 
-            // Only track game server ports (e.g. 25500-30000 or ports > 1024)
-            if (localPort >= 25500 && localPort <= 30000 && peerIp && !isIpTrusted(peerIp)) {
+            // Only track game server ports (e.g. 25500-30000 or non-control ports)
+            if (
+              localPort >= 1024 &&
+              !CONTROL_PORTS.has(localPort) &&
+              localPort !== agentPort &&
+              peerIp &&
+              !isIpTrusted(peerIp)
+            ) {
               recordConnection(peerIp, localPort, undefined, now);
             }
           }

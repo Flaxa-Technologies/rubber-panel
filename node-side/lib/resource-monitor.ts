@@ -131,7 +131,15 @@ function getHostDiskStats() {
   }
 }
 
+let lastResourcesCache: NodeResources | null = null;
+let lastResourcesTime = 0;
+
 export function getNodeResources(): NodeResources {
+  const now = Date.now();
+  if (lastResourcesCache && now - lastResourcesTime < 1500) {
+    return lastResourcesCache;
+  }
+
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const usedMem = totalMem - freeMem;
@@ -144,7 +152,7 @@ export function getNodeResources(): NodeResources {
   const diskStats = getHostDiskStats();
   const serversDiskUsedMb = scanServerDataSizeMb();
 
-  return {
+  lastResourcesCache = {
     cpuUsage: parseFloat(cachedCpuUsage.toFixed(1)),
     ramUsage,
     ramUsedMb,
@@ -161,6 +169,9 @@ export function getNodeResources(): NodeResources {
     loadAvg: os.loadavg(),
     uptime: os.uptime(),
   };
+  lastResourcesTime = now;
+
+  return lastResourcesCache;
 }
 
 export async function sendHeartbeat(): Promise<void> {
