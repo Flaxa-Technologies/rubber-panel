@@ -15,6 +15,7 @@ export interface ServerInfo {
   pid?: number;
   dockerId?: string;
   port?: number;
+  internalPort?: number;
   ram: number;
   cpu: number;
   disk?: number;
@@ -41,6 +42,7 @@ export interface CreateServerParams {
   cpu: number;
   disk: number;
   port?: number;
+  internalPort?: number;
   softwareVersion?: string;
   startupCommand?: string;
   environment?: Record<string, string>;
@@ -846,6 +848,7 @@ Welcome to your cloud-hosted **VS Code development environment** powered by Rubb
     ram: params.ram,
     cpu: params.cpu,
     port: assignedPort,
+    internalPort: params.internalPort,
     startupCommand: effectiveStartup || undefined,
     environment: env,
   };
@@ -865,6 +868,7 @@ export async function updateServerInfo(serverId: string, patch: Partial<ServerIn
 
   if (patch.name !== undefined) info.name = patch.name;
   if (patch.port !== undefined) info.port = patch.port;
+  if (patch.internalPort !== undefined) info.internalPort = patch.internalPort;
   if (patch.ram !== undefined) info.ram = patch.ram;
   if (patch.cpu !== undefined) info.cpu = patch.cpu;
   if (patch.disk !== undefined) info.disk = patch.disk;
@@ -903,6 +907,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
   // ─── 2. RUN SECURITY SCAN (IF PROTECTION LAYER ENABLED) ─────────────────
   const env = { ...(info.environment || {}) };
+  const customInternalPort = env.INTERNAL_PORT || env.PORT || (info.internalPort ? String(info.internalPort) : undefined);
   const sType = env.SERVER_TYPE || env.TYPE || "MINECRAFT";
   const dImageRaw = env.DOCKER_IMAGE || "";
   const runtime = detectRuntime(sType, dImageRaw, env);
@@ -1140,7 +1145,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const { internalPort, protocol } = await resolveContainerPortMapping(
         dockerImage,
         assignedPort,
-        env.INTERNAL_PORT || env.PORT
+        customInternalPort
       );
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
@@ -1332,7 +1337,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const { internalPort, protocol } = await resolveContainerPortMapping(
         dockerImage,
         assignedPort,
-        env.INTERNAL_PORT || env.PORT || "27015"
+        customInternalPort || "27015"
       );
       const volumePath = env.VOLUME_PATH || (dockerImage.includes("palworld") ? "/palworld" : dockerImage.includes("valheim") ? "/config" : dockerImage.includes("rust") ? "/steamcmd/rust" : "/data");
       delete env.DOCKER_IMAGE;
@@ -1374,7 +1379,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const { internalPort, protocol } = await resolveContainerPortMapping(
         dockerImage,
         assignedPort,
-        env.INTERNAL_PORT || env.PORT
+        customInternalPort
       );
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;

@@ -158,6 +158,7 @@ export default function SettingsPage() {
   const [selectedNodeVersion, setSelectedNodeVersion] = useState<string>(server.nodeVersion || "20");
   const [securityProtection, setSecurityProtection] = useState<boolean>(server.securityProtection !== false);
   const [cryoSleepMotd, setCryoSleepMotd] = useState<string>(server.cryoSleepMotd ?? "");
+  const [internalPort, setInternalPort] = useState(server.internalPort ? String(server.internalPort) : "");
 
   const [javaVersions, setJavaVersions] = useState<JavaVersionItem[]>([]);
   const [loadingJava, setLoadingJava] = useState(!isNodeJs);
@@ -180,6 +181,7 @@ export default function SettingsPage() {
     if (server.nodeVersion) setSelectedNodeVersion(server.nodeVersion);
     setSecurityProtection(server.securityProtection !== false);
     setCryoSleepMotd(server.cryoSleepMotd ?? "");
+    setInternalPort(server.internalPort ? String(server.internalPort) : "");
   }, [server, isNodeJs]);
 
   // Load available Java versions for Minecraft server
@@ -221,6 +223,7 @@ export default function SettingsPage() {
         name: name.trim(),
         startupCommand: startupCmd.trim() || (isNodeJs ? "node server.js" : undefined),
         cryoSleepMotd: cryoSleepMotd.trim() || undefined,
+        internalPort: internalPort.trim() ? parseInt(internalPort.trim(), 10) : null,
       };
 
       if (isNodeJs) {
@@ -703,8 +706,8 @@ export default function SettingsPage() {
         </Section>
 
         {/* Software / Engine Details */}
-        <Section title="Environment & Runtime" description="Operating runtime and execution parameters">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+        <Section title="Environment & Runtime" description="Operating runtime, container entrypoints, and port routing">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 14 }}>
             <Field label="Platform Type">
               <input value={isNodeJs ? "Node.js JavaScript Runtime" : (server.software?.name ?? "Minecraft")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
             </Field>
@@ -712,6 +715,20 @@ export default function SettingsPage() {
               <input value={isNodeJs ? `Node.js v${server.nodeVersion || "20"}` : (server.softwareVersion?.version ?? "Latest")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
             </Field>
           </div>
+
+          <Field
+            label="Internal Container Port (Manual Override)"
+            hint="Port the container listens on internally (e.g. 3306 for MySQL, 5432 for Postgres, 80 for Nginx, 3000 for Node/Web, 6379 for Redis). Leave blank for auto-detection via Docker inspect."
+          >
+            <input
+              type="number"
+              value={internalPort}
+              onChange={e => setInternalPort(e.target.value)}
+              placeholder="Auto-detected from image (e.g. 3306, 80, 5432, 6379)"
+              className="saas-input"
+              style={{ fontFamily: "monospace", fontSize: 12.5 }}
+            />
+          </Field>
         </Section>
 
         {saveError && (

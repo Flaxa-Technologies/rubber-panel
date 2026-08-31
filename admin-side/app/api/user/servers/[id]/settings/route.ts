@@ -47,11 +47,47 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
   }
 
+  if (body.internalPort !== undefined) {
+    const portNum = body.internalPort ? parseInt(String(body.internalPort), 10) : null;
+    dataUpdate.internalPort = portNum && portNum > 0 ? portNum : null;
+    try {
+      const currentEnv = JSON.parse(server.environment || "{}");
+      if (portNum && portNum > 0) {
+        currentEnv.INTERNAL_PORT = String(portNum);
+      } else {
+        delete currentEnv.INTERNAL_PORT;
+      }
+      dataUpdate.environment = JSON.stringify(currentEnv);
+    } catch {}
+  }
+
+  if (body.environment !== undefined) {
+    try {
+      const parsed = typeof body.environment === "string" ? JSON.parse(body.environment) : body.environment;
+      dataUpdate.environment = JSON.stringify(parsed);
+      if (parsed.INTERNAL_PORT) {
+        dataUpdate.internalPort = parseInt(String(parsed.INTERNAL_PORT), 10) || null;
+      }
+    } catch {}
+  }
+
   const updated = await db.server.update({
     where: { id },
     data: dataUpdate,
-    select: { id: true, name: true, startupCommand: true, javaVersion: true, javaVersionId: true, cryoSleepMotd: true },
+    select: { id: true, name: true, startupCommand: true, javaVersion: true, javaVersionId: true, cryoSleepMotd: true, internalPort: true, environment: true },
   });
+
+  if (server.nodeId) {
+    let envToSend: any = undefined;
+    if (dataUpdate.environment) {
+      try { envToSend = JSON.parse(dataUpdate.environment); } catch {}
+    }
+    sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "PATCH", {
+      name: dataUpdate.name ?? server.name,
+      startupCommand: dataUpdate.startupCommand ?? server.startupCommand,
+      environment: envToSend,
+    }).catch(() => {});
+  }
 
   if (body.cryoSleepMotd !== undefined && server.nodeId) {
     sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}/cryosleep`, "POST", {

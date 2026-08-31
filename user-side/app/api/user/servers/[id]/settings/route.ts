@@ -22,6 +22,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ...(body.javaVersion !== undefined ? { javaVersion: body.javaVersion } : {}),
         ...(body.javaVersionId !== undefined ? { javaVersionId: body.javaVersionId } : {}),
         ...(body.cryoSleepMotd !== undefined ? { cryoSleepMotd: body.cryoSleepMotd } : {}),
+        ...(body.internalPort !== undefined ? { internalPort: body.internalPort } : {}),
+        ...(body.environment !== undefined ? { environment: body.environment } : {}),
       },
     }
   );

@@ -10,6 +10,7 @@ const createSchema = z.object({
   cpu: z.number().int().min(1).max(400),
   disk: z.number().int().min(512),
   port: z.number().int().optional(),
+  internalPort: z.number().int().optional(),
   softwareVersion: z.string().optional(),
   startupCommand: z.string().optional(),
   environment: z.record(z.string(), z.string()).optional(),

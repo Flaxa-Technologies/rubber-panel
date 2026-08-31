@@ -29,6 +29,7 @@ export interface UserServer {
   createdAt?: string;
   startupCommand?: string | null;
   port?: number;
+  internalPort?: number | null;
   node: { id?: string; name: string; status: string; fqdn?: string; port?: number };
   software: { name: string; type: string } | null;
   softwareVersion: { version: string } | null;
