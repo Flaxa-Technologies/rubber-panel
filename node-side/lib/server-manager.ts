@@ -250,18 +250,29 @@ function attachLogs(serverId: string) {
   function onLine(data: Buffer) {
     const lines = data.toString().split("\n");
     for (const line of lines) {
-      if (line.trim()) {
-        appendLog(serverId, line);
-        // If paper jar finished downloading, trigger sync
-        if (line.includes("Downloading") || line.includes("Done") || line.includes("Starting minecraft server")) {
-          syncServerJar(serverId).catch(() => {});
-        }
-        // Player join / leave tracking for Cryo-Sleep
-        if (line.includes("joined the game") || line.includes("logged in with entity id")) {
-          import("./cryo-sleep-engine").then(({ updateServerPlayerCount }) => {
-            updateServerPlayerCount(serverId, 1);
-          }).catch(() => {});
-        }
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Filter internal RCON connect/disconnect noise & socket flood disconnect warnings
+      if (
+        trimmed.includes("Thread RCON Client") ||
+        trimmed.includes("RCON Listener") ||
+        trimmed.includes("handleDisconnection() called twice")
+      ) {
+        continue;
+      }
+
+      appendLog(serverId, line);
+
+      // If paper jar finished downloading, trigger sync
+      if (line.includes("Downloading") || line.includes("Done") || line.includes("Starting minecraft server")) {
+        syncServerJar(serverId).catch(() => {});
+      }
+      // Player join / leave tracking for Cryo-Sleep
+      if (line.includes("joined the game") || line.includes("logged in with entity id")) {
+        import("./cryo-sleep-engine").then(({ updateServerPlayerCount }) => {
+          updateServerPlayerCount(serverId, 1);
+        }).catch(() => {});
       }
     }
   }
