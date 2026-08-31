@@ -1074,6 +1074,14 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
 
+      const dataDir = (dockerImage.includes("mysql") || dockerImage.includes("mariadb"))
+        ? "/var/lib/mysql"
+        : dockerImage.includes("postgres")
+        ? "/var/lib/postgresql/data"
+        : dockerImage.includes("mongo")
+        ? "/data/db"
+        : "/data";
+
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
@@ -1084,7 +1092,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "run", "-d",
         "--name", containerName,
         "-p", `${assignedPort}:${internalPort}`,
-        "-v", `${getServerDir(serverId)}:/data`,
+        "-v", `${getServerDir(serverId)}:${dataDir}`,
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",

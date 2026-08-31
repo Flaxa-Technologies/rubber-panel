@@ -27,10 +27,11 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
 
   const isSandbox = (server?.isSandbox || server?.serverType === "CODESANDBOX") && server?.serverType !== "MINECRAFT";
   const isNodeJs = server?.serverType === "NODEJS" || server?.software?.type === "NODEJS";
+  const isDatabase = server?.serverType === "DATABASE" || server?.software?.type === "DATABASE";
   
-  // Filter tabs for Code Sandbox / Node.js vs Minecraft
+  // Filter tabs for Code Sandbox / Node.js / Database vs Minecraft
   let tabs = baseTabs.filter(tab => {
-    if ((isSandbox || isNodeJs) && (tab.path === "addons" || tab.path === "properties")) {
+    if ((isSandbox || isNodeJs || isDatabase) && (tab.path === "addons" || tab.path === "properties")) {
       return false;
     }
     return true;
