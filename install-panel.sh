@@ -95,13 +95,16 @@ if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | sort -V | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 fi
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.35"
+  LATEST_TAG="v0.1.0-beta.36"
 fi
 echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
 
 # Download Release Zips
 ADMIN_ZIP_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/admin-side.zip"
 USER_ZIP_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/user-side.zip"
+
+echo -e "${CYAN}Stopping running panel services...${NC}"
+pm2 stop rubber-admin rubber-user 2>/dev/null || true
 
 mkdir -p "${INSTALL_DIR}/admin-side"
 mkdir -p "${INSTALL_DIR}/user-side"

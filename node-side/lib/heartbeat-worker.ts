@@ -83,21 +83,43 @@ async function sendHeartbeat() {
       },
     };
 
-    const res = await fetch(`${ADMIN_API_URL}/api/node/heartbeat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${NODE_TOKEN}`,
-        "X-Node-Id": activeId,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
-        "Bypass-Tunnel-Reminder": "true",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
-    });
+    const adminCandidates = Array.from(new Set([
+      ADMIN_API_URL,
+      "http://127.0.0.1:3000",
+      "http://localhost:3000",
+    ].filter(Boolean)));
 
-    if (res.ok) {
+    let res: Response | null = null;
+    let lastErr = "";
+
+    for (const targetUrl of adminCandidates) {
+      try {
+        const candidateRes = await fetch(`${targetUrl}/api/node/heartbeat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${NODE_TOKEN}`,
+            "X-Node-Id": activeId,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
+            "Bypass-Tunnel-Reminder": "true",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(3500),
+        });
+
+        if (candidateRes.ok) {
+          res = candidateRes;
+          break;
+        } else {
+          lastErr = `HTTP ${candidateRes.status}`;
+        }
+      } catch (e: any) {
+        lastErr = e?.message || "Connection failed";
+      }
+    }
+
+    if (res && res.ok) {
       const data = await res.json();
       if (data?.nodeId && !discoveredNodeId) {
         discoveredNodeId = data.nodeId;
@@ -153,9 +175,9 @@ async function sendHeartbeat() {
         console.warn("[Heartbeat] Engine sync note:", innerErr);
       }
     } else {
-      console.warn(`[Heartbeat] Admin responded with HTTP ${res.status}: ${res.statusText}`);
+      console.warn(`[Heartbeat] Could not reach admin panel (${adminCandidates.join(", ")}): ${lastErr}`);
     }
   } catch (err: any) {
-    console.warn(`[Heartbeat] Failed to ping admin (${ADMIN_API_URL}):`, err.message);
+    console.warn(`[Heartbeat] Heartbeat routine error:`, err.message);
   }
 }

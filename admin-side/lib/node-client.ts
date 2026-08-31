@@ -71,29 +71,43 @@ export async function sendNodeCommand(
     }
 
     const baseUrl = getNodeBaseUrl(node);
-    const url = `${baseUrl}${endpoint}`;
+    const candidateUrls = Array.from(new Set([
+      `${baseUrl}${endpoint}`,
+      `http://127.0.0.1:${node.port}${endpoint}`,
+      `http://localhost:${node.port}${endpoint}`,
+    ]));
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${node.authToken}`,
-        "X-Rubber-Panel": "admin",
-        "Bypass-Tunnel-Reminder": "true",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
-        Accept: "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(20000),
-    });
+    let lastError = "Failed to connect to node";
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: errorText };
+    for (const url of candidateUrls) {
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${node.authToken}`,
+            "X-Rubber-Panel": "admin",
+            "Bypass-Tunnel-Reminder": "true",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
+            Accept: "application/json",
+          },
+          body: body ? JSON.stringify(body) : undefined,
+          signal: AbortSignal.timeout(3500),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          return { success: false, error: errorText || `HTTP ${response.status}` };
+        }
+
+        const data = await response.json();
+        return { success: true, data };
+      } catch (err: any) {
+        lastError = err?.message || "Connection failed";
+      }
     }
 
-    const data = await response.json();
-    return { success: true, data };
+    return { success: false, error: lastError };
   } catch (error) {
     return {
       success: false,

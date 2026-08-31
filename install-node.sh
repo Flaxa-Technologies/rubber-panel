@@ -104,8 +104,10 @@ if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | sort -V | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 fi
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.35"
+  LATEST_TAG="v0.1.0-beta.36"
 fi
+
+pm2 stop rubber-node 2>/dev/null || true
 
 NODE_ZIP_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/node-side.zip"
 curl -sL "${NODE_ZIP_URL}" -o node-side.zip || true
