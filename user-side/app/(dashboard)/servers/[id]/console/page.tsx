@@ -61,17 +61,17 @@ export default function ConsolePage() {
   };
 
   // Metric values
-  const currentRamMb = stats?.ramUsageMb ?? (isRunning ? Math.round(server.ram * 0.25) : 0);
-  const totalRamMb = stats?.ramLimitMb ?? server.ram ?? 1024;
-  const ramPercent = stats?.ramPercent ?? (totalRamMb > 0 ? parseFloat(((currentRamMb / totalRamMb) * 100).toFixed(1)) : 0);
+  const currentRamMb = typeof stats?.ramUsageMb === "number" ? stats.ramUsageMb : (isRunning ? Math.round((Number(server?.ram) || 1024) * 0.25) : 0);
+  const totalRamMb = typeof stats?.ramLimitMb === "number" ? stats.ramLimitMb : (Number(server?.ram) || 1024);
+  const ramPercent = typeof stats?.ramPercent === "number" ? stats.ramPercent : (totalRamMb > 0 ? parseFloat(((currentRamMb / totalRamMb) * 100).toFixed(1)) : 0);
 
-  const currentCpuPerc = stats?.cpuUsage ?? 0;
-  const maxCpuLimit = stats?.cpuLimit ?? server.cpu ?? 100;
+  const currentCpuPerc = Number(stats?.cpuUsage || 0) || 0;
+  const maxCpuLimit = typeof stats?.cpuLimit === "number" ? stats.cpuLimit : (Number(server?.cpu) || 100);
   const cpuPercentOfLimit = maxCpuLimit > 0 ? Math.min(100, Math.max(0, (currentCpuPerc / maxCpuLimit) * 100)) : 0;
 
-  const currentDiskMb = stats?.diskUsedMb ?? (server.diskUsedMb || 0);
-  const totalDiskMb = stats?.diskLimitMb ?? server.disk ?? 10240;
-  const diskPercent = stats?.diskPercent ?? (totalDiskMb > 0 ? parseFloat(((currentDiskMb / totalDiskMb) * 100).toFixed(1)) : 0);
+  const currentDiskMb = typeof stats?.diskUsedMb === "number" ? stats.diskUsedMb : (Number(server?.diskUsedMb) || 0);
+  const totalDiskMb = typeof stats?.diskLimitMb === "number" ? stats.diskLimitMb : (Number(server?.disk) || 10240);
+  const diskPercent = typeof stats?.diskPercent === "number" ? stats.diskPercent : (totalDiskMb > 0 ? parseFloat(((currentDiskMb / totalDiskMb) * 100).toFixed(1)) : 0);
 
   // Color dynamics
   const ramColor = ramPercent > 90 ? "#ef4444" : ramPercent > 75 ? "#f59e0b" : "#38bdf8";
@@ -142,7 +142,7 @@ export default function ConsolePage() {
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-pure)", marginTop: 6, display: "flex", alignItems: "baseline", gap: 4, flexWrap: "wrap" }}>
             <span>{currentCpuPerc.toFixed(1)}%</span>
             <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
-              / {maxCpuLimit}% ({(maxCpuLimit / 100).toFixed(1)} Cores)
+              / {maxCpuLimit}% ({((Number(maxCpuLimit) || 100) / 100).toFixed(1)} Cores)
             </span>
           </div>
           {/* Animated CPU Bar */}
@@ -170,11 +170,11 @@ export default function ConsolePage() {
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-pure)", marginTop: 6, display: "flex", alignItems: "baseline", gap: 4, flexWrap: "wrap" }}>
             <span>
               {currentDiskMb >= 1024
-                ? `${(currentDiskMb / 1024).toFixed(2)} GB`
+                ? `${((Number(currentDiskMb) || 0) / 1024).toFixed(2)} GB`
                 : `${currentDiskMb} MB`}
             </span>
             <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
-              / {(totalDiskMb / 1024).toFixed(1)} GB
+              / {((Number(totalDiskMb) || 10240) / 1024).toFixed(1)} GB
             </span>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399", marginLeft: "auto" }}>
               {diskPercent}%

@@ -45,6 +45,7 @@ interface OpPlayer {
 }
 
 function classifyLine(text: string): LogLine["type"] {
+  if (typeof text !== "string") text = String(text || "");
   const l = text.toLowerCase();
   if (l.includes("[error]") || l.includes("exception") || l.includes("fatal") || l.includes("crashed")) return "error";
   if (l.includes("[warn]") || l.includes("warning")) return "warn";
@@ -251,13 +252,13 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
 
   // Filtered Players for Active Tab
   let activeList: any[] = [];
-  if (playerTab === "online") activeList = onlinePlayers;
-  else if (playerTab === "banned") activeList = bannedPlayers;
-  else if (playerTab === "whitelist") activeList = whitelistPlayers;
-  else if (playerTab === "ops") activeList = opsPlayers;
+  if (playerTab === "online") activeList = Array.isArray(onlinePlayers) ? onlinePlayers : [];
+  else if (playerTab === "banned") activeList = Array.isArray(bannedPlayers) ? bannedPlayers : [];
+  else if (playerTab === "whitelist") activeList = Array.isArray(whitelistPlayers) ? whitelistPlayers : [];
+  else if (playerTab === "ops") activeList = Array.isArray(opsPlayers) ? opsPlayers : [];
 
-  const filteredList = activeList.filter(p =>
-    (p.name || "").toLowerCase().includes(playerSearch.toLowerCase())
+  const filteredList = (activeList || []).filter(p =>
+    p && (p.name || "").toLowerCase().includes((playerSearch || "").toLowerCase())
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredList.length / PLAYERS_PER_PAGE));

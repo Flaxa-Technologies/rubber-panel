@@ -37,9 +37,12 @@ yarn-debug.log*
 yarn-error.log*
 
 # Runtime data & Game Server Containers
-.data/
-servers/
-data/
+/.data/
+/servers/
+/data/
+admin-side/.data/
+node-side/.data/
+user-side/.data/
 
 # OS metadata
 .DS_Store
