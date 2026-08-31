@@ -57,9 +57,12 @@ interface NodeItem {
   serversCryo: number;
   serversStopped: number;
   ramUsedPercent: number;
+  ramAllocatedPercent?: number;
   diskUsedPercent: number;
+  diskAllocatedPercent?: number;
   isRamWarning: boolean;
   isRamCritical: boolean;
+  isRamOverallocated?: boolean;
   isCpuWarning: boolean;
   isDiskWarning: boolean;
   _count: { servers: number; allocations: number };
@@ -696,7 +699,9 @@ export default function NodesPage() {
                   <div className="px-4 py-2 text-xs font-bold flex items-center justify-between" style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#f87171", borderBottom: "1px solid rgba(239,68,68,0.3)" }}>
                     <div className="flex items-center gap-2">
                       <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 animate-pulse" />
-                      <span>CRITICAL RAM ALLOCATION: {(node.totalAllocatedRam / 1024).toFixed(1)} GB allocated (OOM Crash Risk)</span>
+                      <span>
+                        CRITICAL HOST RAM: {node.ramUsage}% live load ({node.hostUsedRam != null && node.hostTotalRam != null ? `${(node.hostUsedRam / 1024).toFixed(1)} / ${(node.hostTotalRam / 1024).toFixed(1)} GB` : `${node.ramUsage}%`}) — High OOM Risk
+                      </span>
                     </div>
                   </div>
                 )}
@@ -746,37 +751,52 @@ export default function NodesPage() {
 
                   {/* Resource Gauges & Telemetry */}
                   <div className="space-y-3 pt-1">
-                    {/* RAM Bar */}
+                    {/* Host Live RAM & Allocation Telemetry */}
                     <div>
                       <div className="flex items-center justify-between text-xs mb-1.5">
                         <span className="font-semibold flex items-center gap-1.5" style={{ color: "var(--color-rp-text)" }}>
                           <Cpu className="w-3.5 h-3.5 text-lime-400" />
-                          <span>RAM Allocation &amp; Capacity</span>
+                          <span>Host RAM (Live Load)</span>
                           {node.isAutoRam && (
                             <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-lime-500/10 text-lime-400 border border-lime-500/20">
                               Auto (HW - 1GB)
                             </span>
                           )}
                         </span>
-                        <span className="font-mono text-xs font-semibold" style={{ color: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "var(--color-rp-text)" }}>
-                          {(node.totalAllocatedRam / 1024).toFixed(1)} GB / {((node.effectiveMaxRam || node.maxRam || 8192) / 1024).toFixed(1)} GB ({node.ramUsedPercent}%)
+                        <span
+                          className="font-mono text-xs font-semibold"
+                          style={{
+                            color: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "var(--color-rp-text)",
+                          }}
+                        >
+                          {node.hostUsedRam != null && node.hostTotalRam != null
+                            ? `${(node.hostUsedRam / 1024).toFixed(1)} / ${(node.hostTotalRam / 1024).toFixed(1)} GB (${node.ramUsage}%)`
+                            : `${node.ramUsage}%`}
                         </span>
                       </div>
+                      {/* Live Usage Progress Bar */}
                       <div className="w-full h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.min(100, Math.max(4, node.ramUsedPercent))}%`,
+                            width: `${Math.min(100, Math.max(3, node.ramUsage))}%`,
                             backgroundColor: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "#a3e635",
                           }}
                         />
                       </div>
                       <div className="flex justify-between items-center text-[10px] mt-1.5" style={{ color: "var(--color-rp-text-muted)" }}>
                         <span className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
-                          <span>Host Machine: <strong>{node.hostUsedRam != null && node.hostTotalRam != null ? `${(node.hostUsedRam / 1024).toFixed(1)} / ${(node.hostTotalRam / 1024).toFixed(1)} GB` : `${node.ramUsage}%`}</strong> ({node.ramUsage}% Global Load)</span>
+                          <span>
+                            Allocated: <strong>{(node.totalAllocatedRam / 1024).toFixed(1)} GB</strong> / {((node.effectiveMaxRam || node.maxRam || 8192) / 1024).toFixed(1)} GB
+                          </span>
                         </span>
-                        <span>Server Allocations: <strong>{(node.totalAllocatedRam / 1024).toFixed(1)} GB</strong></span>
+                        {node.totalAllocatedRam > (node.effectiveMaxRam || 8192) ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            Overcommitted ({Math.round((node.totalAllocatedRam / (node.effectiveMaxRam || 8192)) * 100)}%)
+                          </span>
+                        ) : (
+                          <span>{Math.round((node.totalAllocatedRam / ((node.effectiveMaxRam || node.maxRam || 8192) || 1)) * 100)}% Allocated</span>
+                        )}
                       </div>
                     </div>
 

@@ -93,8 +93,11 @@ export async function GET(request: NextRequest) {
       ? (node.maxDisk as number)
       : Math.max(1024, (node.hostTotalDisk || 102400) - 5120);
 
-    const ramAllocatedPercent = Math.min(100, Math.round((totalAllocatedRam / (effectiveMaxRam || 1)) * 100));
-    const diskAllocatedPercent = Math.min(100, Math.round((totalAllocatedDisk / (effectiveMaxDisk || 1)) * 100));
+    const ramAllocatedPercent = Math.round((totalAllocatedRam / (effectiveMaxRam || 1)) * 100);
+    const diskAllocatedPercent = Math.round((totalAllocatedDisk / (effectiveMaxDisk || 1)) * 100);
+    const hostRamUsagePct = node.ramUsage ?? (node.hostTotalRam && node.hostUsedRam ? Math.round((node.hostUsedRam / node.hostTotalRam) * 100) : 0);
+    const hostDiskUsagePct = node.diskUsage ?? (node.hostTotalDisk && node.hostUsedDisk ? Math.round((node.hostUsedDisk / node.hostTotalDisk) * 100) : 0);
+    const hostCpuUsagePct = node.cpuUsage ?? 0;
 
     return {
       id: node.id,
@@ -108,9 +111,9 @@ export async function GET(request: NextRequest) {
       maintenanceMode: node.maintenanceMode,
       agentVersion: node.agentVersion,
       lastHeartbeat: node.lastHeartbeat,
-      cpuUsage: node.cpuUsage ?? 0,
-      ramUsage: node.ramUsage ?? 0,
-      diskUsage: node.diskUsage ?? 0,
+      cpuUsage: hostCpuUsagePct,
+      ramUsage: hostRamUsagePct,
+      diskUsage: hostDiskUsagePct,
       networkRx: node.networkRx,
       networkTx: node.networkTx,
       maxCpu: node.maxCpu,
@@ -139,12 +142,15 @@ export async function GET(request: NextRequest) {
       serversRunning,
       serversCryo,
       serversStopped,
-      ramUsedPercent: ramAllocatedPercent,
-      diskUsedPercent: diskAllocatedPercent,
-      isRamWarning: (node.ramUsage ?? 0) >= 80 || (totalAllocatedRam / effectiveMaxRam) >= 0.85,
-      isRamCritical: (node.ramUsage ?? 0) >= 92 || (totalAllocatedRam / effectiveMaxRam) >= 0.98,
-      isCpuWarning: (node.cpuUsage ?? 0) >= 85,
-      isDiskWarning: (node.diskUsage ?? 0) >= 85,
+      ramUsedPercent: hostRamUsagePct,
+      ramAllocatedPercent,
+      diskUsedPercent: hostDiskUsagePct,
+      diskAllocatedPercent,
+      isRamWarning: hostRamUsagePct >= 80,
+      isRamCritical: hostRamUsagePct >= 92,
+      isRamOverallocated: totalAllocatedRam > effectiveMaxRam,
+      isCpuWarning: hostCpuUsagePct >= 85,
+      isDiskWarning: hostDiskUsagePct >= 85,
       _count: node._count,
     };
   });
