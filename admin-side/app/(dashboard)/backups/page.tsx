@@ -23,6 +23,7 @@ import {
   Lock,
   EyeOff,
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 
 interface BackupItem {
@@ -157,7 +158,7 @@ export default function AdminBackupsPage() {
   }
 
   async function copyRedirectUri() {
-    await navigator.clipboard.writeText(redirectUri);
+    await copyToClipboard(redirectUri);
     setCopiedRedirect(true);
     setTimeout(() => setCopiedRedirect(false), 2000);
   }

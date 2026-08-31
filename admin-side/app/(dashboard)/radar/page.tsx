@@ -27,6 +27,7 @@ import {
   Loader2,
   Flame,
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface FleetStats {
   totalNodes: number;
@@ -162,7 +163,7 @@ export default function RadarAdminPage() {
   }, []);
 
   async function handleCopy(ip: string) {
-    await navigator.clipboard.writeText(ip);
+    await copyToClipboard(ip);
     setCopiedIp(ip);
     setTimeout(() => setCopiedIp(null), 1500);
   }

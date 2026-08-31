@@ -43,20 +43,21 @@ export function getPrimaryAllocation(server: UserServer) {
 export function getServerAddress(server: UserServer): string {
   const allocation = server.allocations?.[0];
   const port = allocation?.port ?? server.port ?? 25565;
+  const currentHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
 
-  if (allocation?.ip && allocation.ip !== "0.0.0.0" && allocation.ip !== "127.0.0.1") {
+  if (allocation?.ip && allocation.ip !== "0.0.0.0" && allocation.ip !== "127.0.0.1" && allocation.ip !== "localhost") {
     return `${allocation.ip}:${port}`;
   }
 
-  if (server.node?.fqdn && server.node.fqdn !== "127.0.0.1" && server.node.fqdn !== "localhost") {
+  if (server.node?.fqdn && server.node.fqdn !== "127.0.0.1" && server.node.fqdn !== "localhost" && server.node.fqdn !== "0.0.0.0") {
     return `${server.node.fqdn}:${port}`;
   }
 
-  if (allocation?.ip) {
+  if (allocation?.ip && allocation.ip !== "0.0.0.0") {
     return `${allocation.ip}:${port}`;
   }
 
-  return `127.0.0.1:${port}`;
+  return `${currentHost}:${port}`;
 }
 
 export function formatAllocation(allocation: { ip: string; port: number } | null) {

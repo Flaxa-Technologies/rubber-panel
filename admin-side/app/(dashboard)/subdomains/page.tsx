@@ -24,6 +24,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface Domain {
   id: string;
@@ -155,7 +156,7 @@ export default function SubdomainsAdminPage() {
   }, []);
 
   async function handleCopy(text: string) {
-    await navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     setCopiedFqdn(text);
     setTimeout(() => setCopiedFqdn(null), 1500);
   }

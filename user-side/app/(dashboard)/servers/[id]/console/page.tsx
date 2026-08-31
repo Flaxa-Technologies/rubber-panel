@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useServer } from "@/components/server/ServerContext";
 import ConsolePanel from "@/components/server/ConsolePanel";
 import { formatRam, getServerAddress } from "@/lib/server-utils";
+import { copyToClipboard } from "@/lib/clipboard";
 import { StatusPill } from "@/components/server/ServerCard";
 import { Cpu, HardDrive, Activity, Globe, Layers, Copy, Check, ArrowUpRight, ArrowDownLeft, Zap } from "lucide-react";
 
@@ -52,9 +53,9 @@ export default function ConsolePage() {
     };
   }, [server.id, isRunning]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!fullAddress || fullAddress === "—") return;
-    navigator.clipboard.writeText(fullAddress);
+    await copyToClipboard(fullAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

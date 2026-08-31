@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Input, Toggle } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface NodeItem {
   id: string;
@@ -117,8 +118,8 @@ function SetupCommandModal({
             </div>
             <button
               type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(quickCmd);
+              onClick={async () => {
+                await copyToClipboard(quickCmd);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 3000);
               }}
@@ -148,7 +149,7 @@ function SetupCommandModal({
               </div>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(origin)}
+                onClick={() => copyToClipboard(origin)}
                 className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
                 title="Copy Admin URL"
                 style={{ color: "var(--color-rp-text-muted)" }}>
@@ -163,7 +164,7 @@ function SetupCommandModal({
               </div>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(data.nodeId)}
+                onClick={() => copyToClipboard(data.nodeId)}
                 className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
                 title="Copy Node ID"
                 style={{ color: "var(--color-rp-text-muted)" }}>
@@ -178,7 +179,7 @@ function SetupCommandModal({
               </div>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(data.token)}
+                onClick={() => copyToClipboard(data.token)}
                 className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
                 title="Copy Node Token"
                 style={{ color: "var(--color-rp-accent)" }}>

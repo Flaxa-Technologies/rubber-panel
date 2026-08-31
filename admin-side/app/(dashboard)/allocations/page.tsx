@@ -5,6 +5,7 @@ import {
   Network, Plus, Trash2, RefreshCw, Server, CheckCircle2, 
   Circle, Ban, Power, Search, Filter, Layers, Copy, Check, AlertTriangle, Loader2 
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface Allocation {
   id: string;
@@ -127,8 +128,8 @@ export default function PortManagementPage() {
     }
   }
 
-  const copyPort = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+  const copyPort = async (text: string, id: string) => {
+    await copyToClipboard(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   };

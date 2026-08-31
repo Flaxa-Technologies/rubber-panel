@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Server, MemoryStick, Cpu, HardDrive, ArrowRight, Copy, Check, Moon, Zap, Code2, ExternalLink, Clock } from "lucide-react";
 import type { UserServer } from "@/lib/types";
 import { formatDisk, formatRam, getServerAddress } from "@/lib/server-utils";
+import { copyToClipboard } from "@/lib/clipboard";
 import PowerControls from "./PowerControls";
 import { useState } from "react";
 
@@ -89,19 +90,22 @@ export default function ServerCard({ server, onActionComplete }: ServerCardProps
     ? "Custom Container"
     : "Minecraft";
 
-  const copyIp = (e: React.MouseEvent) => {
+  const copyIp = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (address && address !== "—") {
-      navigator.clipboard.writeText(address);
+      await copyToClipboard(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }
   };
 
   const primaryAlloc = server.allocations?.[0];
-  const idePort = primaryAlloc?.port || 25590;
-  const nodeFqdn = server.node?.fqdn || "localhost";
+  const idePort = primaryAlloc?.port || (server as any).port || 25565;
+  const currentHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+  const nodeFqdn = server.node?.fqdn && server.node.fqdn !== "127.0.0.1" && server.node.fqdn !== "localhost" && server.node.fqdn !== "0.0.0.0"
+    ? server.node.fqdn
+    : currentHost;
   const ideUrl = `http://${nodeFqdn}:${idePort}`;
 
   return (

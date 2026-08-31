@@ -5,6 +5,7 @@ import {
   FileCode2, Copy, Check, Info, Plus, Upload, Trash2, ShieldCheck,
   HardDrive, Cpu, Layers, Sparkles, AlertCircle, X, Download, Flame, Box
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface TemplateItem {
   id: string;
@@ -68,8 +69,8 @@ export default function TemplatesPage() {
     loadTemplates();
   }, []);
 
-  function copyId(name: string) {
-    navigator.clipboard.writeText(name.toLowerCase().replace(/\s/g, "-"));
+  async function copyId(name: string) {
+    await copyToClipboard(name.toLowerCase().replace(/\s/g, "-"));
     setCopied(name);
     setTimeout(() => setCopied(null), 2000);
   }

@@ -6,6 +6,7 @@ import PowerControls from "./PowerControls";
 import { ArrowLeft, Copy, Check, Globe, Shield, Moon } from "lucide-react";
 import Link from "next/link";
 import { getServerAddress } from "@/lib/server-utils";
+import { copyToClipboard } from "@/lib/clipboard";
 import { StatusPill } from "./ServerCard";
 
 interface ServerHeaderProps {
@@ -18,9 +19,9 @@ export default function ServerHeader({ server, onActionComplete, onOptimisticSta
   const fullAddress = getServerAddress(server);
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!fullAddress || fullAddress === "—") return;
-    navigator.clipboard.writeText(fullAddress);
+    await copyToClipboard(fullAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

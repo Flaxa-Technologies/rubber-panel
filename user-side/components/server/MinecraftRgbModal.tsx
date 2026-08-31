@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import {
   Sparkles, Copy, Check, Plus, Minus, X, ArrowDownToLine, RefreshCw, Palette, ExternalLink
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export type MinecraftColorFormat =
   | "nickname"
@@ -217,9 +218,9 @@ export default function MinecraftRgbModal({ open, onClose, onInsert }: Minecraft
     return output;
   }, [message, colors, format, prefix, bold, italic, underline, strikethrough, customPattern]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!formatText) return;
-    navigator.clipboard.writeText(formatText);
+    await copyToClipboard(formatText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

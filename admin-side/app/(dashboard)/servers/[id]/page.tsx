@@ -11,6 +11,7 @@ import {
   FileText, Copy, Check, Globe, Code, Database, Box,
 } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface ServerDetail {
   id: string;
@@ -340,15 +341,16 @@ export default function AdminServerManagePage() {
   const primaryAlloc = server.allocations?.[0];
   const port = primaryAlloc?.port ?? 25565;
   const rawIp = primaryAlloc?.ip;
-  const fullAddress = (rawIp && rawIp !== "0.0.0.0" && rawIp !== "127.0.0.1")
+  const currentHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+  const fullAddress = (rawIp && rawIp !== "0.0.0.0" && rawIp !== "127.0.0.1" && rawIp !== "localhost")
     ? `${rawIp}:${port}`
-    : (server.node?.fqdn && server.node.fqdn !== "127.0.0.1" && server.node.fqdn !== "localhost")
+    : (server.node?.fqdn && server.node.fqdn !== "127.0.0.1" && server.node.fqdn !== "localhost" && server.node.fqdn !== "0.0.0.0")
       ? `${server.node.fqdn}:${port}`
-      : primaryAlloc ? `${primaryAlloc.ip}:${primaryAlloc.port}` : "—";
+      : `${currentHost}:${port}`;
 
-  const handleCopyAddress = () => {
+  const handleCopyAddress = async () => {
     if (!fullAddress || fullAddress === "—") return;
-    navigator.clipboard.writeText(fullAddress);
+    await copyToClipboard(fullAddress);
     setCopiedAddress(true);
     setTimeout(() => setCopiedAddress(false), 2000);
   };

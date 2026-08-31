@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import ConfirmationDialog from "@/components/ui/ConfirmationDialog";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface ConsolePanelProps {
   serverId: string;
@@ -193,9 +194,9 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
     }
   }
 
-  function handleCopyLogs() {
+  async function handleCopyLogs() {
     const text = lines.map(l => l.text).join("\n");
-    navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Info,
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface SubdomainItem {
   id: string;
@@ -116,7 +117,7 @@ export default function UserSubdomainsPage() {
   }, []);
 
   async function handleCopy(address: string) {
-    await navigator.clipboard.writeText(address);
+    await copyToClipboard(address);
     setCopiedAddress(address);
     setTimeout(() => setCopiedAddress(null), 1500);
   }

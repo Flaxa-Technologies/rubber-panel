@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Key, Copy, Check, Eye, EyeOff, Shield, Info, AlertTriangle, Users, MonitorSpeaker } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 // In a full implementation this would be database-backed.
 // For now show the internal secrets used by user-side/node-side.
@@ -9,8 +10,8 @@ export default function ApiKeysPage() {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  function copy(text: string, label: string) {
-    navigator.clipboard.writeText(text);
+  async function copy(text: string, label: string) {
+    await copyToClipboard(text);
     setCopied(label);
     setTimeout(() => setCopied(null), 2000);
   }

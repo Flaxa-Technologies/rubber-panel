@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, X
 } from "lucide-react";
 import MinecraftRgbModal from "./MinecraftRgbModal";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface AdvancedFileEditorProps {
   filePath: string;
@@ -242,8 +243,8 @@ export default function AdvancedFileEditor({
     }
   };
 
-  const handleCopyAll = () => {
-    navigator.clipboard.writeText(content);
+  const handleCopyAll = async () => {
+    await copyToClipboard(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
