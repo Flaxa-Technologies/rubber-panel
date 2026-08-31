@@ -21,6 +21,29 @@ echo "              Admin Portal (:3000) & User Portal (:3002)           "
 echo "==================================================================="
 echo -e "${NC}"
 
+# Parse optional command-line flags
+INPUT_DOMAIN=""
+INPUT_EMAIL=""
+INPUT_USERNAME=""
+INPUT_PASSWORD=""
+
+for arg in "$@"; do
+  case $arg in
+    --domain=*)
+      INPUT_DOMAIN="${arg#*=}"
+      ;;
+    --email=*)
+      INPUT_EMAIL="${arg#*=}"
+      ;;
+    --username=*)
+      INPUT_USERNAME="${arg#*=}"
+      ;;
+    --password=*)
+      INPUT_PASSWORD="${arg#*=}"
+      ;;
+  esac
+done
+
 # Check Root
 if [ "$(id -u)" -ne 0 ]; then
   echo -e "${RED}[Error] This script must be run as root (sudo bash install-panel.sh)${NC}"
@@ -149,19 +172,23 @@ prompt_field() {
 }
 
 # Prompt for domain / hostname
-PANEL_HOST=""
-prompt_field "[1/4] Panel Domain or Public IP [Default: ${SERVER_IP}]" "The IP address or domain used to access your panel in browser" "${SERVER_IP}" PANEL_HOST
+PANEL_HOST="${INPUT_DOMAIN:-${PANEL_HOST}}"
+if [ -z "${PANEL_HOST}" ]; then
+  prompt_field "[1/4] Panel Domain or Public IP [Default: ${SERVER_IP}]" "The IP address or domain used to access your panel in browser" "${SERVER_IP}" PANEL_HOST
+fi
 
 # Prompt for Admin Credentials
-ADMIN_EMAIL=""
+ADMIN_EMAIL="${INPUT_EMAIL:-${ADMIN_EMAIL}}"
 while [ -z "${ADMIN_EMAIL}" ]; do
   prompt_field "[2/4] Super Admin Email Address" "Primary email address for logging into the Admin Panel" "" ADMIN_EMAIL
 done
 
-ADMIN_USERNAME=""
-prompt_field "[3/4] Super Admin Username [Default: admin]" "Username for the administrator account" "admin" ADMIN_USERNAME
+ADMIN_USERNAME="${INPUT_USERNAME:-${ADMIN_USERNAME}}"
+if [ -z "${ADMIN_USERNAME}" ]; then
+  prompt_field "[3/4] Super Admin Username [Default: admin]" "Username for the administrator account" "admin" ADMIN_USERNAME
+fi
 
-ADMIN_PASSWORD=""
+ADMIN_PASSWORD="${INPUT_PASSWORD:-${ADMIN_PASSWORD}}"
 while [ -z "${ADMIN_PASSWORD}" ]; do
   prompt_field "[4/4] Super Admin Password" "Choose a strong password for your super admin account" "" ADMIN_PASSWORD
 done
