@@ -25,7 +25,7 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
   const pathname = usePathname();
   const { server } = useServer();
 
-  const isSandbox = server?.isSandbox || server?.serverType === "CODESANDBOX";
+  const isSandbox = (server?.isSandbox || server?.serverType === "CODESANDBOX") && server?.serverType !== "MINECRAFT";
   const isNodeJs = server?.serverType === "NODEJS" || server?.software?.type === "NODEJS";
   
   // Filter tabs for Code Sandbox / Node.js vs Minecraft
@@ -36,8 +36,8 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
     return true;
   });
 
-  // Prepend Cloud IDE tab if this is a Code Sandbox
-  if (isSandbox) {
+  // Prepend Cloud IDE tab ONLY if strictly a Code Sandbox
+  if (isSandbox && server?.serverType === "CODESANDBOX") {
     tabs = [
       { name: "Cloud IDE", path: "ide", icon: Code2 },
       ...tabs,

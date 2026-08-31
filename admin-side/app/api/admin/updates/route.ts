@@ -17,14 +17,14 @@ export async function GET(request: NextRequest) {
 
   const force = request.nextUrl.searchParams.get("force") === "true";
 
-  // Check cache (15 min)
+  // Check cache (15s instead of 15m so new releases show immediately)
   if (!force) {
     const cached = await db.setting.findUnique({ where: { key: "updates.cache" } });
     if (cached) {
       const cachedAt = await db.setting.findUnique({ where: { key: "updates.cacheAt" } });
       if (cachedAt) {
         const age = Date.now() - new Date(cachedAt.value).getTime();
-        if (age < 15 * 60 * 1000) {
+        if (age < 15 * 1000) {
           return NextResponse.json(JSON.parse(cached.value));
         }
       }

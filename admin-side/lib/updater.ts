@@ -58,7 +58,7 @@ export type UpdateProgress = {
 // ── In-Memory Cache ───────────────────────────────────────────────────────────
 
 let cachedReleases: { data: GitHubRelease[]; timestamp: number } | null = null;
-const CACHE_TTL_MS = 120_000; // 2 minutes
+const CACHE_TTL_MS = 15_000; // 15 seconds
 
 // ── Internal Helpers ──────────────────────────────────────────────────────────
 
