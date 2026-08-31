@@ -80,16 +80,20 @@ export default function ServerLayout({ children }: { children: React.ReactNode }
         setServer(data);
         setError("");
       } else {
-        if (!server) {
-          setError("Server not found or access denied.");
-        }
+        setServer(prev => {
+          if (!prev) setError("Server not found or access denied.");
+          return prev;
+        });
       }
     } catch {
-      if (!server) setError("Failed to connect to server API.");
+      setServer(prev => {
+        if (!prev) setError("Failed to connect to server API.");
+        return prev;
+      });
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [id, server]);
+  }, [id]);
 
   useEffect(() => { 
     loadServer(true); 

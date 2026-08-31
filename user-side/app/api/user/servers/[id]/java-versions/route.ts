@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-
-const ADMIN_API_URL = process.env.ADMIN_API_URL ?? "http://localhost:3000";
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "";
+import { adminApiFetch } from "@/lib/api-client";
 
 export async function GET(
   req: NextRequest,
@@ -18,15 +16,12 @@ export async function GET(
   }
 
   try {
-    const res = await fetch(`${ADMIN_API_URL}/api/user/servers/${id}/java-versions?userId=${userId}`, {
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Secret": INTERNAL_SECRET,
-      },
-    });
-
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    const { data, error, status } = await adminApiFetch<object>(
+      `/api/user/servers/${id}/java-versions`,
+      { userId }
+    );
+    if (error) return NextResponse.json({ error }, { status });
+    return NextResponse.json(data);
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to load Java versions" }, { status: 500 });
   }

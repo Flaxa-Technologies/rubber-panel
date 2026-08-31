@@ -27,9 +27,9 @@ const NODEJS_VERSIONS = [
   { version: "23", name: "Node.js 23 (Latest)", description: "Cutting-edge Node.js runtime for modern development and experimentation." },
 ];
 
-function MinecraftMotdPreview({ text }: { text: string }) {
+function MinecraftMotdPreview({ text }: { text: any }) {
   const defaultText = "§bRubber Panel §8| §3Server is in Cryo-Sleep\\n§e§lClick to Connect & Auto-Wake Instance!";
-  const raw = (text || defaultText).replace(/\\n/g, "\n");
+  const raw = String(text || defaultText).replace(/\\n/g, "\n");
 
   const lines = raw.split("\n");
 
@@ -150,6 +150,9 @@ export default function SettingsPage() {
   const { server, refreshServer } = useServer();
 
   const isNodeJs = server.serverType === "NODEJS" || server.software?.type === "NODEJS";
+  const isDatabase = server.serverType === "DATABASE" || server.software?.type === "DATABASE";
+  const isCustom = server.serverType === "CUSTOM";
+  const isMinecraft = !isNodeJs && !isDatabase && !isCustom && (server.serverType === "MINECRAFT" || !server.serverType || !!server.software);
 
   const [name, setName] = useState(server.name);
   const [startupCmd, setStartupCmd] = useState(server.startupCommand ?? (isNodeJs ? "node server.js" : ""));
@@ -161,7 +164,7 @@ export default function SettingsPage() {
   const [internalPort, setInternalPort] = useState(server.internalPort ? String(server.internalPort) : "");
 
   const [javaVersions, setJavaVersions] = useState<JavaVersionItem[]>([]);
-  const [loadingJava, setLoadingJava] = useState(!isNodeJs);
+  const [loadingJava, setLoadingJava] = useState(isMinecraft);
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -186,7 +189,7 @@ export default function SettingsPage() {
 
   // Load available Java versions for Minecraft server
   const loadJavaVersions = useCallback(async () => {
-    if (isNodeJs) return;
+    if (!isMinecraft) return;
     setLoadingJava(true);
     try {
       const res = await fetch(`/api/user/servers/${server.id}/java-versions`);
@@ -205,13 +208,13 @@ export default function SettingsPage() {
     } finally {
       setLoadingJava(false);
     }
-  }, [server.id, isNodeJs]);
+  }, [server.id, isMinecraft]);
 
   useEffect(() => {
-    if (!isNodeJs) {
+    if (isMinecraft) {
       loadJavaVersions();
     }
-  }, [loadJavaVersions, isNodeJs]);
+  }, [loadJavaVersions, isMinecraft]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -399,7 +402,7 @@ export default function SettingsPage() {
               })}
             </div>
           </Section>
-        ) : (
+        ) : isMinecraft ? (
           <Section
             title="Java Runtime Environment"
             description="Select the JDK runtime version available on your server node."
@@ -531,7 +534,7 @@ export default function SettingsPage() {
               </div>
             )}
           </Section>
-        )}
+        ) : null}
 
         {/* Node.js Security Protection Shield Card */}
         {isNodeJs && (
@@ -607,98 +610,100 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        {/* Cryo-Sleep (0-RAM Hibernation & Wake Proxy) */}
-        <Section
-          title="Cryo-Sleep (0-RAM Hibernation & Auto-Wake)"
-          description="Automatic memory-saving hibernation that sleeps empty instances and auto-boots on connection."
-          action={
-            <span style={{
-              fontSize: 11,
-              fontWeight: 700,
-              padding: "3px 8px",
-              borderRadius: 6,
-              background: server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.05)",
-              color: server.cryoSleepEnabled ? "#38bdf8" : "var(--text-dim)",
-              border: `1px solid ${server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.3)" : "var(--border-subtle)"}`,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-            }}>
-              <Moon size={11} />
-              <span>{server.cryoSleepEnabled ? `Active (${server.cryoSleepIdleMinutes || 10}m Timeout)` : "Disabled"}</span>
-            </span>
-          }
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{
-              padding: "12px 14px",
-              background: "rgba(56, 189, 248, 0.05)",
-              border: "1px solid rgba(56, 189, 248, 0.2)",
-              borderRadius: 8,
-              fontSize: 12.5,
-              color: "var(--text-primary)",
-              lineHeight: 1.5,
-            }}>
-              <strong>0-RAM Technology:</strong> When 0 players are connected for {server.cryoSleepIdleMinutes || 10} consecutive minutes, your server process enters Cryo-Sleep. A lightweight wake proxy takes over your server port to listen for connections. Joining the server instantly wakes and starts your Minecraft world.
-            </div>
-
-            {server.cryoSleepCustomMotdAllowed !== false ? (
-              <Field
-                label="Custom Cryo-Sleep Wake MOTD"
-                hint="Displayed in player server lists when sleeping. Use § color codes for custom formatting."
-              >
-                <textarea
-                  value={cryoSleepMotd}
-                  onChange={e => setCryoSleepMotd(e.target.value)}
-                  placeholder="§bRubber Panel §8| §3Server is in Cryo-Sleep\n§e§lClick to Connect & Auto-Wake Instance!"
-                  rows={3}
-                  className="saas-input"
-                  style={{
-                    fontFamily: "monospace",
-                    fontSize: 12.5,
-                    resize: "vertical",
-                    minHeight: 70,
-                    lineHeight: 1.4,
-                  }}
-                />
-
-                {/* Live Minecraft Color Code Preview */}
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
-                    Multiplayer List Live Preview:
-                  </div>
-                  <MinecraftMotdPreview text={cryoSleepMotd} />
-                </div>
-              </Field>
-            ) : (
+        {/* Cryo-Sleep (0-RAM Hibernation & Wake Proxy for Minecraft) */}
+        {isMinecraft && (
+          <Section
+            title="Cryo-Sleep (0-RAM Hibernation & Auto-Wake)"
+            description="Automatic memory-saving hibernation that sleeps empty instances and auto-boots on connection."
+            action={
+              <span style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "3px 8px",
+                borderRadius: 6,
+                background: server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.05)",
+                color: server.cryoSleepEnabled ? "#38bdf8" : "var(--text-dim)",
+                border: `1px solid ${server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.3)" : "var(--border-subtle)"}`,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}>
+                <Moon size={11} />
+                <span>{server.cryoSleepEnabled ? `Active (${server.cryoSleepIdleMinutes || 10}m Timeout)` : "Disabled"}</span>
+              </span>
+            }
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{
                 padding: "12px 14px",
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
+                background: "rgba(56, 189, 248, 0.05)",
+                border: "1px solid rgba(56, 189, 248, 0.2)",
                 borderRadius: 8,
+                fontSize: 12.5,
+                color: "var(--text-primary)",
+                lineHeight: 1.5,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
-                  Default Rubber Panel Wake MOTD (Locked by Admin):
-                </div>
-                <MinecraftMotdPreview text={server.cryoSleepMotd || ""} />
-                <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6, margin: 0 }}>
-                  *Custom MOTD customization is disabled by administrators for this tier.
-                </p>
+                <strong>0-RAM Technology:</strong> When 0 players are connected for {server.cryoSleepIdleMinutes || 10} consecutive minutes, your server process enters Cryo-Sleep. A lightweight wake proxy takes over your server port to listen for connections. Joining the server instantly wakes and starts your Minecraft world.
               </div>
-            )}
-          </div>
-        </Section>
+
+              {server.cryoSleepCustomMotdAllowed !== false ? (
+                <Field
+                  label="Custom Cryo-Sleep Wake MOTD"
+                  hint="Displayed in player server lists when sleeping. Use § color codes for custom formatting."
+                >
+                  <textarea
+                    value={cryoSleepMotd}
+                    onChange={e => setCryoSleepMotd(e.target.value)}
+                    placeholder="§bRubber Panel §8| §3Server is in Cryo-Sleep\n§e§lClick to Connect & Auto-Wake Instance!"
+                    rows={3}
+                    className="saas-input"
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 12.5,
+                      resize: "vertical",
+                      minHeight: 70,
+                      lineHeight: 1.4,
+                    }}
+                  />
+
+                  {/* Live Minecraft Color Code Preview */}
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
+                      Multiplayer List Live Preview:
+                    </div>
+                    <MinecraftMotdPreview text={cryoSleepMotd} />
+                  </div>
+                </Field>
+              ) : (
+                <div style={{
+                  padding: "12px 14px",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 8,
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
+                    Default Rubber Panel Wake MOTD (Locked by Admin):
+                  </div>
+                  <MinecraftMotdPreview text={server.cryoSleepMotd || ""} />
+                  <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6, margin: 0 }}>
+                    *Custom MOTD customization is disabled by administrators for this tier.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* Startup & Launch Command */}
         <Section title="Startup Command" description="Execution parameters, flags, and entrypoint options">
           <Field
             label="Startup Command"
-            hint={isNodeJs ? "Default: node server.js (or 'npm start', 'node index.js')" : "Leave blank to use default. {{SERVER_MEMORY}} expands to allocated RAM."}
+            hint={isNodeJs ? "Default: node server.js (or 'npm start', 'node index.js')" : isDatabase ? "Default entrypoint / startup flags for database container." : "Leave blank to use default. {{SERVER_MEMORY}} expands to allocated RAM."}
           >
             <input
               value={startupCmd}
               onChange={e => setStartupCmd(e.target.value)}
-              placeholder={isNodeJs ? "node server.js" : "java -Xms256M -Xmx{{SERVER_MEMORY}}M -jar server.jar --nogui"}
+              placeholder={isNodeJs ? "node server.js" : isDatabase ? "docker-entrypoint.sh mysqld" : "java -Xms256M -Xmx{{SERVER_MEMORY}}M -jar server.jar --nogui"}
               className="saas-input"
               style={{ fontFamily: "monospace", fontSize: 12.5 }}
             />
@@ -709,10 +714,10 @@ export default function SettingsPage() {
         <Section title="Environment & Runtime" description="Operating runtime, container entrypoints, and port routing">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 14 }}>
             <Field label="Platform Type">
-              <input value={isNodeJs ? "Node.js JavaScript Runtime" : (server.software?.name ?? "Minecraft")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
+              <input value={isNodeJs ? "Node.js JavaScript Runtime" : isDatabase ? "Database Container" : isCustom ? "Custom Container" : (server.software?.name ?? "Minecraft")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
             </Field>
             <Field label="Runtime Version">
-              <input value={isNodeJs ? `Node.js v${server.nodeVersion || "20"}` : (server.softwareVersion?.version ?? "Latest")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
+              <input value={isNodeJs ? `Node.js v${server.nodeVersion || "20"}` : (server.softwareVersion?.version ?? "Container Default")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
             </Field>
           </div>
 

@@ -9,12 +9,14 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const isInternal = req.headers.get("x-internal-secret") === "rubber-panel-internal-secret";
+    const internalSecret = req.headers.get("x-internal-secret");
+    const expectedSecret = process.env.INTERNAL_API_SECRET ?? process.env.NODE_WEBHOOK_SECRET ?? "rubber-panel-internal-secret";
+    const isInternal = internalSecret === expectedSecret || internalSecret === "rubber-panel-internal-secret";
     let userId: string | null = null;
 
     if (isInternal) {
       const { searchParams } = new URL(req.url);
-      userId = searchParams.get("userId");
+      userId = searchParams.get("userId") || req.headers.get("x-user-id");
     } else {
       const session = await getServerSession(authOptions);
       if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
