@@ -78,6 +78,8 @@ export async function sendNodeCommand(
     ]));
 
     let lastError = "Failed to connect to node";
+    const isLongOp = method !== "GET" || endpoint.includes("/software") || endpoint.includes("/reinstall") || endpoint.includes("/transfer") || endpoint.includes("/files");
+    const timeoutMs = isLongOp ? 30000 : 10000;
 
     for (const url of candidateUrls) {
       try {
@@ -92,7 +94,7 @@ export async function sendNodeCommand(
             Accept: "application/json",
           },
           body: body ? JSON.stringify(body) : undefined,
-          signal: AbortSignal.timeout(3500),
+          signal: AbortSignal.timeout(timeoutMs),
         });
 
         if (!response.ok) {

@@ -1207,7 +1207,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
-        "-p", `${assignedPort}:${assignedPort}/tcp`,
+        "-p", `${assignedPort}:8080/tcp`,
         "-v", `${sDir}:/home/coder/project`,
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
@@ -1224,7 +1224,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "code-server",
-        "--bind-addr", `0.0.0.0:${assignedPort}`,
+        "--bind-addr", "0.0.0.0:8080",
         "--auth", authArg,
         "/home/coder/project"
       ];
