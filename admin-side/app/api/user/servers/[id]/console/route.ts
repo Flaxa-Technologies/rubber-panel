@@ -37,8 +37,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   const result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${id}/console?since=${since}`, "GET");
-  if (!result.success) return NextResponse.json({ error: result.error }, { status: 503 });
-  return NextResponse.json(result.data);
+  if (!result.success) {
+    return NextResponse.json({ lines: [], total: 0 });
+  }
+  return NextResponse.json(result.data ?? { lines: [], total: 0 });
 }
 
 // POST /api/user/servers/[id]/console — Send a console command

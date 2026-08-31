@@ -95,7 +95,7 @@ if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | sort -V | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 fi
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.34"
+  LATEST_TAG="v0.1.0-beta.35"
 fi
 echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
 
@@ -241,12 +241,14 @@ npx prisma db push --accept-data-loss
 if [ -f prisma/seed.ts ]; then
   SEED_ADMIN_EMAIL="${ADMIN_EMAIL}" SEED_ADMIN_PASSWORD="${ADMIN_PASSWORD}" SEED_ADMIN_USERNAME="${ADMIN_USERNAME}" npx tsx prisma/seed.ts || true
 fi
+rm -rf .next
 npm run build
 
 # Build User Side
 echo -e "${CYAN}Building User Panel...${NC}"
 cd "${INSTALL_DIR}/user-side"
 npm install --include=dev --prefer-offline --no-audit --no-fund
+rm -rf .next
 npm run build
 
 # Create PM2 Ecosystem File for clean multi-app execution

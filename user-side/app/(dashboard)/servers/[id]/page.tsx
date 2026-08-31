@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function ServerRootPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  redirect(`/servers/${id}/console`);
+import ConsolePage from "./console/page";
+
+export default function ServerRootPage() {
+  return <ConsolePage />;
 }

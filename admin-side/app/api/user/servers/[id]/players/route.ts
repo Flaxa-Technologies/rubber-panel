@@ -37,16 +37,26 @@ export async function GET(
       return NextResponse.json({ error: "Server or node not found" }, { status: 404 });
     }
 
+    // Non-Minecraft servers (Code Sandbox, Python, Node.js) don't have Minecraft player lists
+    if (server.isSandbox || server.serverType !== "MINECRAFT") {
+      return NextResponse.json({ players: [], total: 0 });
+    }
+
     const baseUrl = getNodeBaseUrl(server.node);
     const nodeRes = await fetch(`${baseUrl}/api/agent/servers/${id}/players`, {
       headers: {
         Authorization: `Bearer ${server.node.authToken}`,
       },
-    });
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => null);
 
-    const data = await nodeRes.json();
-    return NextResponse.json(data, { status: nodeRes.status });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch players" }, { status: 500 });
+    if (!nodeRes || !nodeRes.ok) {
+      return NextResponse.json({ players: [], total: 0 });
+    }
+
+    const data = await nodeRes.json().catch(() => ({ players: [], total: 0 }));
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json({ players: [], total: 0 });
   }
 }

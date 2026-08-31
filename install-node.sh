@@ -104,7 +104,7 @@ if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | sort -V | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 fi
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.34"
+  LATEST_TAG="v0.1.0-beta.35"
 fi
 
 NODE_ZIP_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/node-side.zip"
@@ -178,6 +178,7 @@ EOF
 # Build Node Side
 echo -e "${CYAN}[6/6] Building Node Daemon...${NC}"
 npm install --include=dev --prefer-offline --no-audit --no-fund
+rm -rf .next
 npm run build
 
 # Start via PM2 Ecosystem
