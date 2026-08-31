@@ -432,6 +432,73 @@ export async function reloadStatesFromDisk() {
 
 // ─── DOCKER LIFECYCLE ────────────────────────────────────────────────────
 
+/**
+ * Universal Container Port Auto-Compliance:
+ * Discovers the container's internal port and protocol from:
+ * 1. env.INTERNAL_PORT or env.PORT (explicit user/template preference)
+ * 2. `docker inspect --format '{{json .Config.ExposedPorts}}' <image>` (reads image metadata from Dockerfile)
+ * 3. Extensive Built-in Service Registry (databases, web servers, message brokers, tools, game servers)
+ * 4. Fallback to assigned host port or 8080
+ */
+export async function resolveContainerPortMapping(
+  dockerImage: string,
+  assignedPort: number,
+  userInternalPort?: string | number
+): Promise<{ internalPort: number; protocol: "tcp" | "udp" | "both" }> {
+  // 1. User-specified explicit internal port
+  if (userInternalPort) {
+    const p = parseInt(String(userInternalPort), 10);
+    if (!isNaN(p) && p > 0) return { internalPort: p, protocol: "both" };
+  }
+
+  // 2. Query Docker inspect for the image's EXPOSE directives
+  try {
+    const { stdout } = await execAsync(`docker inspect --format "{{json .Config.ExposedPorts}}" ${dockerImage}`).catch(() => ({ stdout: "" }));
+    if (stdout && stdout.trim() && stdout.trim() !== "null" && stdout.trim() !== "{}") {
+      const exposed = JSON.parse(stdout.trim());
+      const keys = Object.keys(exposed);
+      if (keys.length > 0) {
+        // e.g. "3306/tcp", "25565/tcp", "27015/udp"
+        const [portStr, protoStr] = keys[0].split("/");
+        const portNum = parseInt(portStr, 10);
+        if (!isNaN(portNum) && portNum > 0) {
+          const proto = (protoStr?.toLowerCase() === "udp") ? "udp" : (protoStr?.toLowerCase() === "tcp") ? "tcp" : "both";
+          return { internalPort: portNum, protocol: proto };
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Built-in Smart Registry of Known Images & Stacks
+  const img = (dockerImage || "").toLowerCase();
+  if (img.includes("mysql") || img.includes("mariadb")) return { internalPort: 3306, protocol: "tcp" };
+  if (img.includes("postgres")) return { internalPort: 5432, protocol: "tcp" };
+  if (img.includes("redis") || img.includes("keydb") || img.includes("dragonfly")) return { internalPort: 6379, protocol: "tcp" };
+  if (img.includes("mongo")) return { internalPort: 27017, protocol: "tcp" };
+  if (img.includes("rabbitmq")) return { internalPort: 5672, protocol: "tcp" };
+  if (img.includes("nginx") || img.includes("httpd") || img.includes("apache") || img.includes("caddy") || img.includes("lighttpd")) return { internalPort: 80, protocol: "tcp" };
+  if (img.includes("code-server")) return { internalPort: 8080, protocol: "tcp" };
+  if (img.includes("grafana")) return { internalPort: 3000, protocol: "tcp" };
+  if (img.includes("elastic") || img.includes("opensearch")) return { internalPort: 9200, protocol: "tcp" };
+  if (img.includes("minio")) return { internalPort: 9000, protocol: "tcp" };
+  if (img.includes("influxdb")) return { internalPort: 8086, protocol: "tcp" };
+  if (img.includes("prometheus")) return { internalPort: 9090, protocol: "tcp" };
+  if (img.includes("clickhouse")) return { internalPort: 8123, protocol: "tcp" };
+  if (img.includes("pocketbase") || img.includes("strapi")) return { internalPort: 8090, protocol: "tcp" };
+  if (img.includes("ghost")) return { internalPort: 2368, protocol: "tcp" };
+  if (img.includes("terraria") || img.includes("tshock")) return { internalPort: 7777, protocol: "both" };
+  if (img.includes("valheim")) return { internalPort: 2456, protocol: "udp" };
+  if (img.includes("palworld")) return { internalPort: 8211, protocol: "udp" };
+  if (img.includes("steam") || img.includes("cs2") || img.includes("tf2") || img.includes("source")) return { internalPort: 27015, protocol: "both" };
+  if (img.includes("minecraft") || img.includes("itzg")) return { internalPort: 25565, protocol: "tcp" };
+  if (img.includes("node") || img.includes("bun") || img.includes("deno")) return { internalPort: 3000, protocol: "tcp" };
+  if (img.includes("python") || img.includes("flask") || img.includes("django")) return { internalPort: 8000, protocol: "tcp" };
+  if (img.includes("php")) return { internalPort: 8080, protocol: "tcp" };
+
+  // 4. Default: comply with assigned host port or standard 8080
+  return { internalPort: assignedPort || 8080, protocol: "both" };
+}
+
 function detectRuntime(sType: string, dImage: string, env?: Record<string, any>) {
   const t = (sType || "").toUpperCase();
   const img = (dImage || "").toLowerCase();
@@ -1070,7 +1137,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       ];
     } else if (runtime.isDatabase) {
       const dockerImage = env.DOCKER_IMAGE || "mysql:8.0";
-      const internalPort = env.INTERNAL_PORT || (dockerImage.includes("postgres") ? "5432" : dockerImage.includes("redis") ? "6379" : dockerImage.includes("mongo") ? "27017" : "3306");
+      const { internalPort, protocol } = await resolveContainerPortMapping(
+        dockerImage,
+        assignedPort,
+        env.INTERNAL_PORT || env.PORT
+      );
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
 
@@ -1085,7 +1156,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[Panel] Launching Database ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[Panel] Launching Database ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
       if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
 
       dockerArgs = [
@@ -1096,6 +1167,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "-e", `PORT=${internalPort}`,
+        "-e", `MYSQL_TCP_PORT=${internalPort}`,
+        "-e", `PGPORT=${internalPort}`,
         ...envArgs,
         dockerImage,
       ];
@@ -1255,7 +1329,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
     } else if (runtime.isGame) {
       // SteamCMD & Multi-Game Dedicated Server Execution (Palworld, Rust, Valheim, CS2, Terraria, ARK, etc.)
       const dockerImage = env.DOCKER_IMAGE || "cm2network/steamcmd:latest";
-      const internalPort = env.INTERNAL_PORT || "27015";
+      const { internalPort, protocol } = await resolveContainerPortMapping(
+        dockerImage,
+        assignedPort,
+        env.INTERNAL_PORT || env.PORT || "27015"
+      );
       const volumePath = env.VOLUME_PATH || (dockerImage.includes("palworld") ? "/palworld" : dockerImage.includes("valheim") ? "/config" : dockerImage.includes("rust") ? "/steamcmd/rust" : "/data");
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
@@ -1264,18 +1342,25 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[Panel] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} TCP/UDP)...`);
+      appendLog(serverId, `[Panel] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
       if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+
+      const portMappingArgs = (protocol === "both")
+        ? ["-p", `${assignedPort}:${internalPort}/tcp`, "-p", `${assignedPort}:${internalPort}/udp`]
+        : (protocol === "udp")
+        ? ["-p", `${assignedPort}:${internalPort}/udp`]
+        : ["-p", `${assignedPort}:${internalPort}/tcp`];
 
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
-        "-p", `${assignedPort}:${internalPort}/tcp`,
-        "-p", `${assignedPort}:${internalPort}/udp`,
+        ...portMappingArgs,
         "-v", `${getServerDir(serverId)}:${volumePath}`,
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "-e", `PORT=${internalPort}`,
+        "-e", `SERVER_PORT=${internalPort}`,
         ...envArgs,
         dockerImage,
       ];
@@ -1284,27 +1369,45 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
       }
     } else {
-      // Generic Custom Container Image
+      // Generic / Any Docker Container Image (Universal Auto-Port Compliance)
       const dockerImage = env.DOCKER_IMAGE || "alpine:latest";
-      const internalPort = env.INTERNAL_PORT || "8080";
+      const { internalPort, protocol } = await resolveContainerPortMapping(
+        dockerImage,
+        assignedPort,
+        env.INTERNAL_PORT || env.PORT
+      );
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
 
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[Panel] Launching Custom Container ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[Panel] Auto-detected container port: ${internalPort} (${protocol.toUpperCase()})`);
+      appendLog(serverId, `[Panel] Launching Container ${dockerImage} on host port ${assignedPort} -> internal :${internalPort}...`);
       if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+
+      const portMappingArgs = (protocol === "both")
+        ? ["-p", `${assignedPort}:${internalPort}/tcp`, "-p", `${assignedPort}:${internalPort}/udp`]
+        : (protocol === "udp")
+        ? ["-p", `${assignedPort}:${internalPort}/udp`]
+        : ["-p", `${assignedPort}:${internalPort}/tcp`];
 
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
-        "-p", `${assignedPort}:${internalPort}`,
+        ...portMappingArgs,
         "-w", "/app",
         "-v", `${getServerDir(serverId)}:/app`,
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "-e", `PORT=${internalPort}`,
+        "-e", `SERVER_PORT=${internalPort}`,
+        "-e", `INTERNAL_PORT=${internalPort}`,
+        "-e", `APP_PORT=${internalPort}`,
+        "-e", `HTTP_PORT=${internalPort}`,
+        "-e", `HOST=0.0.0.0`,
+        "-e", `BIND_ADDRESS=0.0.0.0`,
         ...envArgs,
         dockerImage,
       ];
