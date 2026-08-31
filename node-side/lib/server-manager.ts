@@ -1339,7 +1339,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         assignedPort,
         customInternalPort || "27015"
       );
-      const volumePath = env.VOLUME_PATH || (dockerImage.includes("palworld") ? "/palworld" : dockerImage.includes("valheim") ? "/config" : dockerImage.includes("rust") ? "/steamcmd/rust" : "/data");
+      const volumePath = env.VOLUME_PATH || (dockerImage.includes("palworld") ? "/palworld" : dockerImage.includes("valheim") ? "/config" : dockerImage.includes("rust") ? "/steamcmd/rust" : dockerImage.includes("terraria") ? "/root/.local/share/Terraria/Worlds" : "/data");
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
       delete env.VOLUME_PATH;
