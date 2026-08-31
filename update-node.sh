@@ -18,6 +18,22 @@ echo "              Rubber Node Daemon — 1-Click Updater                 "
 echo "==================================================================="
 echo -e "${NC}"
 
+if [ "$EUID" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    if [ -f "$0" ] && [ "$0" != "bash" ] && [ "$0" != "-bash" ] && [ "$0" != "sh" ]; then
+      exec sudo bash "$0" "$@"
+    else
+      echo -e "${YELLOW}[Notice] Root privileges required to update files in /var/rubber-panel/node-daemon.${NC}"
+      echo -e "${GREEN}Please run with sudo:${NC}"
+      echo -e "  ${CYAN}curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/update-node.sh | sudo bash${NC}\n"
+      exit 1
+    fi
+  else
+    echo -e "${RED}[Error] Please run this script as root or with sudo.${NC}"
+    exit 1
+  fi
+fi
+
 INSTALL_DIR="/var/rubber-panel/node-daemon"
 if [ ! -d "${INSTALL_DIR}" ]; then
   if [ -d "/workspaces/rubber-panel/node-side" ]; then

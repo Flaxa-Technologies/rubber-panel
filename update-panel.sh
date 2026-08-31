@@ -18,6 +18,22 @@ echo "              Rubber Panel — Hotfix & Update Patcher               "
 echo "==================================================================="
 echo -e "${NC}"
 
+if [ "$EUID" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    if [ -f "$0" ] && [ "$0" != "bash" ] && [ "$0" != "-bash" ] && [ "$0" != "sh" ]; then
+      exec sudo bash "$0" "$@"
+    else
+      echo -e "${YELLOW}[Notice] Root privileges required to update files in /var/www/rubber-panel.${NC}"
+      echo -e "${GREEN}Please run with sudo:${NC}"
+      echo -e "  ${CYAN}curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/update-panel.sh | sudo bash${NC}\n"
+      exit 1
+    fi
+  else
+    echo -e "${RED}[Error] Please run this script as root or with sudo.${NC}"
+    exit 1
+  fi
+fi
+
 # Check if running on a standalone node compute machine
 if [ ! -d "/var/www/rubber-panel/admin-side" ] && [ ! -d "./admin-side" ] && [ ! -d "/workspaces/rubber-panel/admin-side" ]; then
   if [ -d "/var/rubber-panel/node-daemon" ] || [ -d "/workspaces/rubber-panel/node-side" ] || [ -d "./node-side" ]; then
