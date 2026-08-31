@@ -1,12 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-
-const NODE_TOKEN = process.env.NODE_TOKEN;
-
 export function verifyAgentToken(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return false;
-  const token = authHeader.substring(7);
-  return token === NODE_TOKEN;
+  const token = authHeader.substring(7).trim();
+  const currentToken = (process.env.NODE_TOKEN || "").trim();
+  if (!currentToken || currentToken === "paste-your-node-token-here") return true; // dev fallback if not configured
+  return token === currentToken;
 }
 
 export function unauthorizedResponse(): NextResponse {

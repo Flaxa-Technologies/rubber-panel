@@ -131,7 +131,33 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ success: true, action });
   }
 
-  const result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "POST", { action });
+  let result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "POST", { action });
+
+  // Self-healing auto-provision fallback: If the server is not on the node, provision it and start it
+  if (!result.success && action === "start" && (result.error?.includes("Server not found") || result.error?.includes("404") || result.error?.includes("not found"))) {
+    const fullServer = await db.server.findUnique({
+      where: { id: server.id },
+      include: { allocations: true },
+    });
+    if (fullServer) {
+      const primaryAlloc = fullServer.allocations.find(a => a.isPrimary) || fullServer.allocations[0];
+      const assignedPort = primaryAlloc?.port || 25565;
+      const parsedEnv = fullServer.environment ? JSON.parse(fullServer.environment) : {};
+
+      await sendNodeCommand(server.nodeId, `/api/agent/servers`, "POST", {
+        id: fullServer.id,
+        name: fullServer.name,
+        ram: fullServer.ram,
+        cpu: fullServer.cpu,
+        disk: fullServer.disk,
+        port: assignedPort,
+        startupCommand: fullServer.startupCommand,
+        environment: parsedEnv,
+      });
+
+      result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "POST", { action });
+    }
+  }
 
   if (!result.success) {
     return NextResponse.json({ error: result.error }, { status: 503 });

@@ -32,11 +32,37 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (server.suspended) return NextResponse.json({ error: "Server is suspended" }, { status: 403 });
 
   // Send command to node agent
-  const result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "POST", { action });
+  let result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "POST", { action });
+
+  // Self-healing auto-provision fallback
+  if (!result.success && action === "start" && (result.error?.includes("Server not found") || result.error?.includes("404") || result.error?.includes("not found"))) {
+    const fullServer = await db.server.findUnique({
+      where: { id: server.id },
+      include: { allocations: true },
+    });
+    if (fullServer) {
+      const primaryAlloc = fullServer.allocations.find(a => a.isPrimary) || fullServer.allocations[0];
+      const assignedPort = primaryAlloc?.port || 25565;
+      const parsedEnv = fullServer.environment ? JSON.parse(fullServer.environment) : {};
+
+      await sendNodeCommand(server.nodeId, `/api/agent/servers`, "POST", {
+        id: fullServer.id,
+        name: fullServer.name,
+        ram: fullServer.ram,
+        cpu: fullServer.cpu,
+        disk: fullServer.disk,
+        port: assignedPort,
+        startupCommand: fullServer.startupCommand,
+        environment: parsedEnv,
+      });
+
+      result = await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "POST", { action });
+    }
+  }
 
   await createAuditLog({
     actorId: actor.id, actorEmail: actor.email,
-    action: `SERVER_${action.toUpperCase()}` as any, // Typed as any to bypass strict enum check
+    action: `SERVER_${action.toUpperCase()}` as any,
     target: server.name, targetId: server.id,
     ipAddress: getIpFromRequest(request),
     metadata: { action, nodeResult: result.success },

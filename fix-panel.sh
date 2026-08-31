@@ -122,7 +122,7 @@ cd "${INSTALL_DIR}/admin-side"
 npx prisma generate
 npx prisma db push --skip-generate
 
-echo -e "${CYAN}[4/5] Inspecting Database for Configured Nodes...${NC}"
+echo -e "${CYAN}[4/5] Checking Nodes in Database...${NC}"
 FIRST_NODE_ID=$(node -e "
 try {
   const { PrismaClient } = require('@prisma/client');
@@ -139,7 +139,7 @@ if [ "${FIRST_NODE_ID}" != "NONE" ] && [ -n "${FIRST_NODE_ID}" ]; then
   NODE_ID_VAL=$(echo "${FIRST_NODE_ID}" | cut -d'|' -f1)
   NODE_TOK_VAL=$(echo "${FIRST_NODE_ID}" | cut -d'|' -f2)
   NODE_NAME_VAL=$(echo "${FIRST_NODE_ID}" | cut -d'|' -f3)
-  echo -e "${GREEN}✓ Node Found in DB: ${CYAN}${NODE_NAME_VAL}${NC} (ID: ${NODE_ID_VAL})"
+  echo -e "${GREEN}✓ Found Node: ${CYAN}${NODE_NAME_VAL}${NC} (ID: ${NODE_ID_VAL})"
 
   # If node daemon is installed locally on the same VPS, repair its .env automatically!
   NODE_DAEMON_DIR="/var/rubber-panel/node-daemon"
@@ -161,18 +161,15 @@ EOF
   fi
 fi
 
-echo -e "${CYAN}[5/5] Compiling Next.js Production Builds...${NC}"
-echo -e "${YELLOW}Building Admin Portal (this takes ~15-20 seconds)...${NC}"
+echo -e "${CYAN}[5/5] Rebuilding & Restarting PM2 Production Services...${NC}"
 cd "${INSTALL_DIR}/admin-side"
 rm -rf .next
 npm run build
 
-echo -e "${YELLOW}Building User Portal (this takes ~15-20 seconds)...${NC}"
 cd "${INSTALL_DIR}/user-side"
 rm -rf .next
 npm run build
 
-echo -e "${CYAN}Reloading PM2 Services with updated environment...${NC}"
 if command -v pm2 >/dev/null 2>&1; then
   sudo pm2 restart all --update-env 2>/dev/null || pm2 restart all --update-env 2>/dev/null || true
   sudo pm2 save 2>/dev/null || pm2 save 2>/dev/null || true
