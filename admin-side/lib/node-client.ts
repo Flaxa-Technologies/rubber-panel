@@ -109,6 +109,12 @@ export async function processNodeHeartbeat(
     cpuUsage: number;
     ramUsage: number;
     diskUsage: number;
+    hostTotalRam?: number;
+    hostUsedRam?: number;
+    hostTotalDisk?: number;
+    hostUsedDisk?: number;
+    serversUsedDisk?: number;
+    serversUsedRam?: number;
     networkRx: number;
     networkTx: number;
     agentVersion: string;
@@ -123,6 +129,12 @@ export async function processNodeHeartbeat(
       cpuUsage: stats.cpuUsage,
       ramUsage: stats.ramUsage,
       diskUsage: stats.diskUsage,
+      hostTotalRam: stats.hostTotalRam !== undefined ? stats.hostTotalRam : undefined,
+      hostUsedRam: stats.hostUsedRam !== undefined ? stats.hostUsedRam : undefined,
+      hostTotalDisk: stats.hostTotalDisk !== undefined ? stats.hostTotalDisk : undefined,
+      hostUsedDisk: stats.hostUsedDisk !== undefined ? stats.hostUsedDisk : undefined,
+      serversUsedDisk: stats.serversUsedDisk !== undefined ? stats.serversUsedDisk : undefined,
+      serversUsedRam: stats.serversUsedRam !== undefined ? stats.serversUsedRam : undefined,
       networkRx: stats.networkRx,
       networkTx: stats.networkTx,
       agentVersion: stats.agentVersion,

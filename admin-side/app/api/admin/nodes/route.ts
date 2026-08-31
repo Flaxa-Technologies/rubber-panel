@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
       agentVersion: true, lastHeartbeat: true,
       cpuUsage: true, ramUsage: true, diskUsage: true, networkRx: true, networkTx: true,
       maxCpu: true, maxRam: true, maxDisk: true,
+      hostTotalRam: true, hostUsedRam: true, hostTotalDisk: true, hostUsedDisk: true,
+      serversUsedDisk: true, serversUsedRam: true,
       portRangeStart: true, portRangeEnd: true,
       autoStartServersOnBoot: true,
       bootCryoSleepMode: true,
@@ -80,8 +82,19 @@ export async function GET(request: NextRequest) {
     const serversCryo = node.servers.filter(s => s.status === "CRYO_SLEEP" || s.status === "HIBERNATED").length;
     const serversStopped = node.servers.filter(s => s.status === "STOPPED" || s.status === "OFFLINE" || s.status === "SUSPENDED").length;
 
-    const ramUsedPercent = node.ramUsage ?? (node.maxRam ? Math.round((totalAllocatedRam / node.maxRam) * 100) : 0);
-    const diskUsedPercent = node.diskUsage ?? (node.maxDisk ? Math.round((totalAllocatedDisk / node.maxDisk) * 100) : 0);
+    // Automatic Allocatable Capacity when left blank / unmetered (Total RAM - 1024 MB for OS)
+    const isAutoRam = !node.maxRam || node.maxRam <= 0;
+    const effectiveMaxRam = !isAutoRam
+      ? (node.maxRam as number)
+      : Math.max(1024, (node.hostTotalRam || 8192) - 1024);
+
+    const isAutoDisk = !node.maxDisk || node.maxDisk <= 0;
+    const effectiveMaxDisk = !isAutoDisk
+      ? (node.maxDisk as number)
+      : Math.max(1024, (node.hostTotalDisk || 102400) - 5120);
+
+    const ramAllocatedPercent = Math.min(100, Math.round((totalAllocatedRam / (effectiveMaxRam || 1)) * 100));
+    const diskAllocatedPercent = Math.min(100, Math.round((totalAllocatedDisk / (effectiveMaxDisk || 1)) * 100));
 
     return {
       id: node.id,
@@ -103,6 +116,16 @@ export async function GET(request: NextRequest) {
       maxCpu: node.maxCpu,
       maxRam: node.maxRam,
       maxDisk: node.maxDisk,
+      effectiveMaxRam,
+      effectiveMaxDisk,
+      isAutoRam,
+      isAutoDisk,
+      hostTotalRam: node.hostTotalRam ?? null,
+      hostUsedRam: node.hostUsedRam ?? null,
+      hostTotalDisk: node.hostTotalDisk ?? null,
+      hostUsedDisk: node.hostUsedDisk ?? null,
+      serversUsedDisk: node.serversUsedDisk ?? null,
+      serversUsedRam: node.serversUsedRam ?? null,
       portRangeStart: node.portRangeStart,
       portRangeEnd: node.portRangeEnd,
       autoStartServersOnBoot: node.autoStartServersOnBoot,
@@ -116,10 +139,10 @@ export async function GET(request: NextRequest) {
       serversRunning,
       serversCryo,
       serversStopped,
-      ramUsedPercent,
-      diskUsedPercent,
-      isRamWarning: (node.ramUsage ?? 0) >= 80 || (node.maxRam ? (totalAllocatedRam / node.maxRam) >= 0.85 : false),
-      isRamCritical: (node.ramUsage ?? 0) >= 92 || (node.maxRam ? (totalAllocatedRam / node.maxRam) >= 0.98 : false),
+      ramUsedPercent: ramAllocatedPercent,
+      diskUsedPercent: diskAllocatedPercent,
+      isRamWarning: (node.ramUsage ?? 0) >= 80 || (totalAllocatedRam / effectiveMaxRam) >= 0.85,
+      isRamCritical: (node.ramUsage ?? 0) >= 92 || (totalAllocatedRam / effectiveMaxRam) >= 0.98,
       isCpuWarning: (node.cpuUsage ?? 0) >= 85,
       isDiskWarning: (node.diskUsage ?? 0) >= 85,
       _count: node._count,

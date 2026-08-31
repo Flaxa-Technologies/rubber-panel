@@ -91,6 +91,14 @@ model Node {
   networkRx       Float?
   networkTx       Float?
 
+  // Hardware Host & Storage Telemetry
+  hostTotalRam    Int?        // Total Physical Hardware RAM (MB)
+  hostUsedRam     Int?        // Total Host RAM Used across OS by all processes (MB)
+  hostTotalDisk   Int?        // Total Filesystem Disk Size (MB)
+  hostUsedDisk    Int?        // Total Host Disk Used across OS (MB)
+  serversUsedDisk Int?        // Disk space used by /var/rubber-panel/servers (MB)
+  serversUsedRam  Int?        // Actual RAM used by active containers (MB)
+
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 

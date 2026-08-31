@@ -1,6 +1,6 @@
 {
   "name": "node-side",
-  "version": "0.1.0-beta.32",
+  "version": "0.1.0-beta.33",
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001",
@@ -18,7 +18,7 @@
     "@types/react-dom": "^19",
     "adm-zip": "^0.6.0",
     "archiver": "^8.0.0",
-    "geoip-lite": "^2.0.3",
+    "geoip-lite": "^1.4.10",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.30.0",
     "next": "16.3.0",

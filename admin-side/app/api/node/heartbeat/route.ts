@@ -11,12 +11,33 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { cpuUsage = 0, ramUsage = 0, diskUsage = 0, networkRx = 0, networkTx = 0, agentVersion = "unknown", serverStatuses = [], radar } = body;
+  const {
+    cpuUsage = 0,
+    ramUsage = 0,
+    diskUsage = 0,
+    hostTotalRam,
+    hostUsedRam,
+    hostTotalDisk,
+    hostUsedDisk,
+    serversUsedDisk,
+    serversUsedRam,
+    networkRx = 0,
+    networkTx = 0,
+    agentVersion = "unknown",
+    serverStatuses = [],
+    radar,
+  } = body;
 
   await processNodeHeartbeat(node.nodeId, {
     cpuUsage,
     ramUsage,
     diskUsage,
+    hostTotalRam,
+    hostUsedRam,
+    hostTotalDisk,
+    hostUsedDisk,
+    serversUsedDisk,
+    serversUsedRam,
     networkRx,
     networkTx,
     agentVersion,

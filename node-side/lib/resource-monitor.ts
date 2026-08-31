@@ -1,13 +1,19 @@
+import fs from "fs";
+import path from "path";
 import os from "os";
 
 export interface NodeResources {
   cpuUsage: number;        // percentage 0-100
-  ramUsage: number;        // percentage 0-100
-  ramUsedMb: number;
-  ramTotalMb: number;
-  diskUsage: number;       // percentage 0-100
-  diskUsedGb: number;
-  diskTotalGb: number;
+  ramUsage: number;        // percentage 0-100 (Host System RAM Used %)
+  ramUsedMb: number;       // Host Total System RAM Used (MB)
+  ramTotalMb: number;      // Host Physical Hardware RAM (MB)
+  ramFreeMb: number;       // Host Free RAM (MB)
+  diskUsage: number;       // percentage 0-100 (Host Root Disk %)
+  diskUsedGb: number;      // Host Total Root Disk Used (GB)
+  diskTotalGb: number;     // Host Total Root Disk Size (GB)
+  diskTotalMb: number;     // Host Total Root Disk Size (MB)
+  diskUsedMb: number;      // Host Total Root Disk Used (MB)
+  serversDiskUsedMb: number; // Space used by game servers directory /var/rubber-panel/servers (MB)
   networkRx: number;       // bytes/sec
   networkTx: number;       // bytes/sec
   loadAvg: number[];
@@ -16,6 +22,9 @@ export interface NodeResources {
 
 let cachedCpuUsage = 0;
 let prevCpuInfo: os.CpuInfo[] | null = null;
+
+let cachedServerDiskUsedMb = 0;
+let lastDiskScan = 0;
 
 function computeCpuUsage() {
   const cpus = os.cpus();
@@ -42,9 +51,85 @@ function computeCpuUsage() {
   cachedCpuUsage = Math.max(0, Math.min(100, 100 - idle));
 }
 
-// Compute immediately and then every 2 seconds
+// Compute CPU immediately and then every 2 seconds
 computeCpuUsage();
 setInterval(computeCpuUsage, 2000);
+
+function getDirectorySizeBytesRecursive(dirPath: string, depth: number, maxDepth: number): number {
+  if (depth > maxDepth) return 0;
+  let bytes = 0;
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          bytes += getDirectorySizeBytesRecursive(full, depth + 1, maxDepth);
+        } else if (entry.isFile()) {
+          bytes += fs.statSync(full).size;
+        }
+      } catch {}
+    }
+  } catch {}
+  return bytes;
+}
+
+function scanServerDataSizeMb(): number {
+  const now = Date.now();
+  // Cache directory scan for 60 seconds to prevent disk I/O thrashing
+  if (now - lastDiskScan < 60000 && cachedServerDiskUsedMb > 0) {
+    return cachedServerDiskUsedMb;
+  }
+
+  const dataDir = process.env.DATA_DIR ?? process.env.SERVER_DATA_DIR ?? "/var/rubber-panel/servers";
+  if (!fs.existsSync(dataDir)) {
+    cachedServerDiskUsedMb = 0;
+    lastDiskScan = now;
+    return 0;
+  }
+
+  try {
+    const totalBytes = getDirectorySizeBytesRecursive(dataDir, 0, 6);
+    cachedServerDiskUsedMb = Math.round(totalBytes / (1024 * 1024));
+    lastDiskScan = now;
+  } catch {
+    cachedServerDiskUsedMb = 0;
+  }
+
+  return cachedServerDiskUsedMb;
+}
+
+function getHostDiskStats() {
+  try {
+    const checkPath = process.platform === "win32" ? process.cwd() : "/";
+    const stat = fs.statfsSync(checkPath);
+    const totalBytes = Number(stat.blocks) * Number(stat.bsize);
+    const freeBytes = Number(stat.bavail) * Number(stat.bsize);
+    const usedBytes = totalBytes - freeBytes;
+
+    const diskTotalGb = parseFloat((totalBytes / (1024 * 1024 * 1024)).toFixed(1));
+    const diskUsedGb = parseFloat((usedBytes / (1024 * 1024 * 1024)).toFixed(1));
+    const diskTotalMb = Math.round(totalBytes / (1024 * 1024));
+    const diskUsedMb = Math.round(usedBytes / (1024 * 1024));
+    const diskUsage = parseFloat(((usedBytes / (totalBytes || 1)) * 100).toFixed(1));
+
+    return {
+      diskTotalGb,
+      diskUsedGb,
+      diskTotalMb,
+      diskUsedMb,
+      diskUsage,
+    };
+  } catch {
+    return {
+      diskTotalGb: 0,
+      diskUsedGb: 0,
+      diskTotalMb: 0,
+      diskUsedMb: 0,
+      diskUsage: 0,
+    };
+  }
+}
 
 export function getNodeResources(): NodeResources {
   const totalMem = os.totalmem();
@@ -53,16 +138,24 @@ export function getNodeResources(): NodeResources {
 
   const ramUsedMb = Math.round(usedMem / 1024 / 1024);
   const ramTotalMb = Math.round(totalMem / 1024 / 1024);
-  const ramUsage = (usedMem / totalMem) * 100;
+  const ramFreeMb = Math.round(freeMem / 1024 / 1024);
+  const ramUsage = parseFloat(((usedMem / totalMem) * 100).toFixed(1));
+
+  const diskStats = getHostDiskStats();
+  const serversDiskUsedMb = scanServerDataSizeMb();
 
   return {
     cpuUsage: parseFloat(cachedCpuUsage.toFixed(1)),
-    ramUsage: parseFloat(ramUsage.toFixed(1)),
+    ramUsage,
     ramUsedMb,
     ramTotalMb,
-    diskUsage: 0,
-    diskUsedGb: 0,
-    diskTotalGb: 0,
+    ramFreeMb,
+    diskUsage: diskStats.diskUsage,
+    diskUsedGb: diskStats.diskUsedGb,
+    diskTotalGb: diskStats.diskTotalGb,
+    diskTotalMb: diskStats.diskTotalMb,
+    diskUsedMb: diskStats.diskUsedMb,
+    serversDiskUsedMb,
     networkRx: 0,
     networkTx: 0,
     loadAvg: os.loadavg(),
@@ -93,6 +186,11 @@ export async function sendHeartbeat(): Promise<void> {
         cpuUsage: resources.cpuUsage,
         ramUsage: resources.ramUsage,
         diskUsage: resources.diskUsage,
+        hostTotalRam: resources.ramTotalMb,
+        hostUsedRam: resources.ramUsedMb,
+        hostTotalDisk: resources.diskTotalMb,
+        hostUsedDisk: resources.diskUsedMb,
+        serversUsedDisk: resources.serversDiskUsedMb,
         networkRx: resources.networkRx,
         networkTx: resources.networkTx,
         agentVersion,

@@ -32,6 +32,16 @@ interface NodeItem {
   maxCpu?: number | null;
   maxRam?: number | null;
   maxDisk?: number | null;
+  effectiveMaxRam?: number;
+  effectiveMaxDisk?: number;
+  isAutoRam?: boolean;
+  isAutoDisk?: boolean;
+  hostTotalRam?: number | null;
+  hostUsedRam?: number | null;
+  hostTotalDisk?: number | null;
+  hostUsedDisk?: number | null;
+  serversUsedDisk?: number | null;
+  serversUsedRam?: number | null;
   portRangeStart?: number | null;
   portRangeEnd?: number | null;
   autoStartServersOnBoot?: boolean;
@@ -547,7 +557,7 @@ export default function NodesPage() {
   const totalRunningServers = nodes.reduce((sum, n) => sum + (n.serversRunning || 0), 0);
   const totalCryoServers = nodes.reduce((sum, n) => sum + (n.serversCryo || 0), 0);
   const totalAllocatedRamGb = (nodes.reduce((sum, n) => sum + (n.totalAllocatedRam || 0), 0) / 1024).toFixed(1);
-  const totalCapacityRamGb = (nodes.reduce((sum, n) => sum + (n.maxRam || 0), 0) / 1024).toFixed(1);
+  const totalCapacityRamGb = (nodes.reduce((sum, n) => sum + (n.effectiveMaxRam || n.maxRam || 0), 0) / 1024).toFixed(1);
   const nodesWithWarnings = nodes.filter(n => n.isRamCritical || n.isRamWarning || n.isCpuWarning || n.isDiskWarning).length;
 
   return (
@@ -740,24 +750,32 @@ export default function NodesPage() {
                       <div className="flex items-center justify-between text-xs mb-1.5">
                         <span className="font-semibold flex items-center gap-1.5" style={{ color: "var(--color-rp-text)" }}>
                           <Cpu className="w-3.5 h-3.5 text-lime-400" />
-                          <span>RAM Allocation &amp; Usage</span>
+                          <span>RAM Allocation &amp; Capacity</span>
+                          {node.isAutoRam && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-lime-500/10 text-lime-400 border border-lime-500/20">
+                              Auto (HW - 1GB)
+                            </span>
+                          )}
                         </span>
                         <span className="font-mono text-xs font-semibold" style={{ color: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "var(--color-rp-text)" }}>
-                          {(node.totalAllocatedRam / 1024).toFixed(1)} GB {node.maxRam ? `/ ${(node.maxRam / 1024).toFixed(1)} GB (${Math.round((node.totalAllocatedRam / node.maxRam) * 100)}%)` : "Allocated"}
+                          {(node.totalAllocatedRam / 1024).toFixed(1)} GB / {((node.effectiveMaxRam || node.maxRam || 8192) / 1024).toFixed(1)} GB ({node.ramUsedPercent}%)
                         </span>
                       </div>
                       <div className="w-full h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.min(100, Math.max(4, node.maxRam ? (node.totalAllocatedRam / node.maxRam) * 100 : (node.ramUsage || 10)))}%`,
+                            width: `${Math.min(100, Math.max(4, node.ramUsedPercent))}%`,
                             backgroundColor: node.isRamCritical ? "#ef4444" : node.isRamWarning ? "#f59e0b" : "#a3e635",
                           }}
                         />
                       </div>
-                      <div className="flex justify-between text-[10px] mt-1" style={{ color: "var(--color-rp-text-muted)" }}>
-                        <span>OS Host RAM Used: {node.ramUsage}%</span>
-                        <span>Allocated across servers: {(node.totalAllocatedRam / 1024).toFixed(1)} GB</span>
+                      <div className="flex justify-between items-center text-[10px] mt-1.5" style={{ color: "var(--color-rp-text-muted)" }}>
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+                          <span>Host Machine: <strong>{node.hostUsedRam != null && node.hostTotalRam != null ? `${(node.hostUsedRam / 1024).toFixed(1)} / ${(node.hostTotalRam / 1024).toFixed(1)} GB` : `${node.ramUsage}%`}</strong> ({node.ramUsage}% Global Load)</span>
+                        </span>
+                        <span>Server Allocations: <strong>{(node.totalAllocatedRam / 1024).toFixed(1)} GB</strong></span>
                       </div>
                     </div>
 
@@ -766,24 +784,32 @@ export default function NodesPage() {
                       {/* CPU */}
                       <div className="p-2.5 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-medium" style={{ color: "var(--color-rp-text-muted)" }}>CPU Load</span>
+                          <span className="font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Host CPU Load</span>
                           <span className="font-mono font-bold" style={{ color: node.cpuUsage > 85 ? "#ef4444" : "var(--color-rp-text)" }}>{node.cpuUsage}%</span>
                         </div>
                         <div className="w-full h-1.5 rounded-full overflow-hidden bg-white/5">
                           <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(2, node.cpuUsage))}%`, backgroundColor: node.cpuUsage > 85 ? "#ef4444" : "#38bdf8" }} />
+                        </div>
+                        <div className="text-[10px] mt-1.5 flex justify-between" style={{ color: "var(--color-rp-text-muted)" }}>
+                          <span>Entire Host Activity</span>
+                          <span className="font-mono">{node.cpuUsage > 50 ? "Heavy" : "Normal"}</span>
                         </div>
                       </div>
 
                       {/* Disk */}
                       <div className="p-2.5 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Storage</span>
+                          <span className="font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Host &amp; Server Disk</span>
                           <span className="font-mono font-bold" style={{ color: node.diskUsage > 85 ? "#ef4444" : "var(--color-rp-text)" }}>
-                            {node.maxDisk ? `${(node.totalAllocatedDisk / 1024).toFixed(0)} / ${(node.maxDisk / 1024).toFixed(0)} GB` : `${node.diskUsage}%`}
+                            {node.hostUsedDisk != null && node.hostTotalDisk != null ? `${(node.hostUsedDisk / 1024).toFixed(0)} / ${(node.hostTotalDisk / 1024).toFixed(0)} GB` : `${node.diskUsage}%`}
                           </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full overflow-hidden bg-white/5">
-                          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(2, node.maxDisk ? (node.totalAllocatedDisk / node.maxDisk) * 100 : node.diskUsage))}%`, backgroundColor: node.diskUsage > 85 ? "#ef4444" : "#a855f7" }} />
+                          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(2, node.diskUsage))}%`, backgroundColor: node.diskUsage > 85 ? "#ef4444" : "#a855f7" }} />
+                        </div>
+                        <div className="flex justify-between text-[10px] mt-1.5" style={{ color: "var(--color-rp-text-muted)" }}>
+                          <span>Host: {node.diskUsage}%</span>
+                          <span>Game Data: {node.serversUsedDisk ? `${(node.serversUsedDisk / 1024).toFixed(1)} GB` : `${(node.totalAllocatedDisk / 1024).toFixed(1)} GB`}</span>
                         </div>
                       </div>
                     </div>
