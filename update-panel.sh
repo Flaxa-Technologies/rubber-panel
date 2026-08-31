@@ -71,6 +71,15 @@ if [ -z "${LATEST_TAG}" ]; then
 fi
 echo -e "${GREEN}✓ Applying Release: ${LATEST_TAG}${NC}"
 
+ADMIN_ENV_BAK=""
+USER_ENV_BAK=""
+if [ -f "${INSTALL_DIR}/admin-side/.env" ]; then
+  ADMIN_ENV_BAK=$(cat "${INSTALL_DIR}/admin-side/.env")
+fi
+if [ -f "${INSTALL_DIR}/user-side/.env" ]; then
+  USER_ENV_BAK=$(cat "${INSTALL_DIR}/user-side/.env")
+fi
+
 TEMP_DIR=$(mktemp -d)
 cd "${TEMP_DIR}"
 
@@ -95,12 +104,21 @@ if [ -f user-side.zip ] && [ -s user-side.zip ]; then
   rm -f user-side.zip
 fi
 
+# Restore production .env files so credentials, tokens, and database paths are 100% preserved
+if [ -n "${ADMIN_ENV_BAK}" ]; then
+  echo "${ADMIN_ENV_BAK}" > "${INSTALL_DIR}/admin-side/.env"
+fi
+if [ -n "${USER_ENV_BAK}" ]; then
+  echo "${USER_ENV_BAK}" > "${INSTALL_DIR}/user-side/.env"
+fi
+
 rm -rf "${TEMP_DIR}"
 
 echo -e "${CYAN}[3/5] Compiling Admin Panel...${NC}"
 cd "${INSTALL_DIR}/admin-side"
 npm install --include=dev --prefer-offline --no-audit --no-fund
-npx prisma db push --accept-data-loss
+npx prisma generate
+npx prisma db push --skip-generate
 rm -rf .next
 npm run build
 

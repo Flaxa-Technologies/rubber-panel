@@ -120,7 +120,9 @@ async function uploadAssetWithRetry(uploadUrlTemplate, filePath, fileName, retri
 
 const IGNORED = new Set([
   "node_modules", ".next", ".git", "dist", ".dist", ".data", "data",
-  ".turbo", ".cache", "dev.db", "dev.db-journal", ".env.local"
+  ".turbo", ".cache", "dev.db", "dev.db-journal", "dev.db-wal", "dev.db-shm",
+  ".env", ".env.local", ".env.development", ".env.production", ".env.test",
+  "github.env"
 ]);
 
 async function main() {

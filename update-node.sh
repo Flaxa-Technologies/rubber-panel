@@ -60,6 +60,11 @@ if [ -z "${LATEST_TAG}" ]; then
 fi
 echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
 
+NODE_ENV_BAK=""
+if [ -f "${INSTALL_DIR}/.env" ]; then
+  NODE_ENV_BAK=$(cat "${INSTALL_DIR}/.env")
+fi
+
 TEMP_DIR=$(mktemp -d)
 cd "${TEMP_DIR}"
 NODE_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/node-side.zip"
@@ -75,6 +80,11 @@ else
   cp -r repo-clone/node-side/* "${INSTALL_DIR}/" 2>/dev/null || true
 fi
 
+# Restore node .env so node token, node ID, and admin URL are 100% preserved
+if [ -n "${NODE_ENV_BAK}" ]; then
+  echo "${NODE_ENV_BAK}" > "${INSTALL_DIR}/.env"
+fi
+
 rm -rf "${TEMP_DIR}"
 
 if command -v pm2 >/dev/null 2>&1; then
@@ -84,6 +94,7 @@ fi
 echo -e "${CYAN}[3/4] Compiling and building Node Daemon...${NC}"
 cd "${INSTALL_DIR}"
 npm install --include=dev --prefer-offline --no-audit --no-fund
+rm -rf .next
 npm run build
 
 echo -e "${CYAN}[4/4] Reloading Rubber Node process...${NC}"
