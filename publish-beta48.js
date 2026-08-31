@@ -58,37 +58,73 @@ function ghRequest(options, postData) {
   });
 }
 
-function uploadAsset(uploadUrlTemplate, filePath, fileName) {
+function uploadAssetSingle(uploadUrlTemplate, filePath, fileName) {
   return new Promise((resolve, reject) => {
     const uploadUrl = uploadUrlTemplate.replace(/\{.*\}/, "") + `?name=${encodeURIComponent(fileName)}`;
     const urlObj = new URL(uploadUrl);
-    const fileData = fs.readFileSync(filePath);
+    const stat = fs.statSync(filePath);
+    const fileStream = fs.createReadStream(filePath);
 
     const options = {
       hostname: urlObj.hostname,
       path: urlObj.pathname + urlObj.search,
       method: "POST",
+      timeout: 120000,
       headers: {
         "User-Agent": "RubberPanel-ReleaseBot",
         Authorization: `Bearer ${TOKEN}`,
         "Content-Type": "application/zip",
-        "Content-Length": fileData.length,
+        "Content-Length": stat.size,
       },
     };
 
     const req = https.request(options, (res) => {
       let data = "";
       res.on("data", (c) => (data += c));
-      res.on("end", () => resolve({ status: res.statusCode, data }));
+      res.on("end", () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ status: res.statusCode, data });
+        } else {
+          reject(new Error(`Upload failed with status ${res.statusCode}: ${data}`));
+        }
+      });
     });
-    req.on("error", reject);
-    req.write(fileData);
-    req.end();
+
+    req.on("timeout", () => {
+      req.destroy(new Error("Request timed out"));
+    });
+
+    req.on("error", (err) => {
+      reject(err);
+    });
+
+    fileStream.pipe(req);
   });
 }
 
+async function uploadAssetWithRetry(uploadUrlTemplate, filePath, fileName, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`Uploading ${fileName} (Attempt ${attempt}/${retries})...`);
+      const res = await uploadAssetSingle(uploadUrlTemplate, filePath, fileName);
+      console.log(`✓ Uploaded ${fileName} successfully!`);
+      return res;
+    } catch (err) {
+      console.error(`Attempt ${attempt} for ${fileName} failed: ${err.message}`);
+      if (attempt === retries) throw err;
+      console.log(`Waiting 3s before retrying...`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+}
+
+const IGNORED = new Set([
+  "node_modules", ".next", ".git", "dist", ".dist", ".data", "data",
+  ".turbo", ".cache", "dev.db", "dev.db-journal", ".env.local"
+]);
+
 async function main() {
-  console.log("=== Creating zip archives for release ===");
+  console.log("=== Packaging clean zip archives for release ===");
 
   const adminZipPath = path.join(__dirname, "admin-side.zip");
   const userZipPath = path.join(__dirname, "user-side.zip");
@@ -102,7 +138,7 @@ async function main() {
     function addFiles(currentPath, zipPath) {
       const entries = fs.readdirSync(currentPath, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.name === "node_modules" || entry.name === ".next" || entry.name === ".git" || entry.name === "dist") {
+        if (IGNORED.has(entry.name)) {
           continue;
         }
         const full = path.join(currentPath, entry.name);
@@ -144,58 +180,80 @@ async function main() {
     return;
   }
 
-  console.log(`\n=== Creating GitHub Release ${TAG} ===`);
-  const createRes = await ghRequest(
-    {
-      hostname: "api.github.com",
-      path: `/repos/${REPO}/releases`,
-      method: "POST",
-      headers: {
-        "User-Agent": "RubberPanel-ReleaseBot",
-        Authorization: `Bearer ${TOKEN}`,
-        "Content-Type": "application/json",
-        Accept: "application/vnd.github.v3+json",
-      },
+  console.log(`\n=== Checking GitHub Release ${TAG} ===`);
+  let release = null;
+  const getRes = await ghRequest({
+    hostname: "api.github.com",
+    path: `/repos/${REPO}/releases/tags/${TAG}`,
+    method: "GET",
+    headers: {
+      "User-Agent": "RubberPanel-ReleaseBot",
+      Authorization: `Bearer ${TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
     },
-    JSON.stringify({
-      tag_name: TAG,
-      name: NAME,
-      body: BODY,
-      draft: false,
-      prerelease: true,
-    })
-  );
+  });
 
-  let release = createRes.data;
-  if (createRes.status !== 201) {
-    console.log(`Release creation returned status ${createRes.status}, checking existing release...`);
-    const getRes = await ghRequest({
-      hostname: "api.github.com",
-      path: `/repos/${REPO}/releases/tags/${TAG}`,
-      method: "GET",
-      headers: {
-        "User-Agent": "RubberPanel-ReleaseBot",
-        Authorization: `Bearer ${TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
+  if (getRes.status === 200 && getRes.data?.upload_url) {
     release = getRes.data;
+    console.log(`Release ${TAG} found (ID: ${release.id}).`);
+  } else {
+    console.log(`Creating Release ${TAG}...`);
+    const createRes = await ghRequest(
+      {
+        hostname: "api.github.com",
+        path: `/repos/${REPO}/releases`,
+        method: "POST",
+        headers: {
+          "User-Agent": "RubberPanel-ReleaseBot",
+          Authorization: `Bearer ${TOKEN}`,
+          "Content-Type": "application/json",
+          Accept: "application/vnd.github.v3+json",
+        },
+      },
+      JSON.stringify({
+        tag_name: TAG,
+        name: NAME,
+        body: BODY,
+        draft: false,
+        prerelease: true,
+      })
+    );
+    release = createRes.data;
   }
 
   if (!release || !release.upload_url) {
-    console.error("Failed to get release upload_url:", release);
+    console.error("Failed to obtain release upload_url:", release);
     return;
   }
 
-  console.log(`Uploading assets to ${TAG}...`);
-  console.log("Uploading admin-side.zip...");
-  await uploadAsset(release.upload_url, adminZipPath, "admin-side.zip");
-  console.log("Uploading user-side.zip...");
-  await uploadAsset(release.upload_url, userZipPath, "user-side.zip");
-  console.log("Uploading node-side.zip...");
-  await uploadAsset(release.upload_url, nodeZipPath, "node-side.zip");
+  // Check existing assets and clean up
+  const existingAssets = release.assets || [];
+  console.log(`Found ${existingAssets.length} existing assets on release.`);
 
-  console.log(`\n✅ Successfully published ${TAG} and uploaded all assets!`);
+  for (const item of [
+    { name: "admin-side.zip", path: adminZipPath },
+    { name: "user-side.zip", path: userZipPath },
+    { name: "node-side.zip", path: nodeZipPath },
+  ]) {
+    const existing = existingAssets.find((a) => a.name === item.name);
+    if (existing) {
+      console.log(`Replacing existing asset ${item.name} (ID: ${existing.id})...`);
+      await ghRequest({
+        hostname: "api.github.com",
+        path: `/repos/${REPO}/releases/assets/${existing.id}`,
+        method: "DELETE",
+        headers: {
+          "User-Agent": "RubberPanel-ReleaseBot",
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
+    }
+
+    await uploadAssetWithRetry(release.upload_url, item.path, item.name);
+  }
+
+  console.log(`\n✅ Successfully published ${TAG} and uploaded all clean assets!`);
 }
 
 main().catch(console.error);
