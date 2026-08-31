@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { UserServer } from "@/lib/types";
 import PowerControls from "./PowerControls";
-import { ArrowLeft, Copy, Check, Globe, Shield, Moon } from "lucide-react";
+import { ArrowLeft, Copy, Check, Globe, Shield, Moon, Code2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { getServerAddress } from "@/lib/server-utils";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -68,6 +68,33 @@ export default function ServerHeader({ server, onActionComplete, onOptimisticSta
             <span>{fullAddress}</span>
             {copied ? <Check size={11} style={{ color: "#38bdf8" }} /> : <Copy size={11} style={{ color: "var(--text-muted)" }} />}
           </button>
+
+          {(server.isSandbox || server.serverType === "CODESANDBOX") && fullAddress && fullAddress !== "—" && (
+            <a
+              href={`http://${fullAddress}/?folder=/home/coder/project`}
+              target="_blank"
+              rel="noreferrer"
+              title="Open Cloud VS Code IDE in new tab"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 11.5,
+                fontWeight: 700,
+                padding: "3px 10px",
+                borderRadius: 8,
+                background: "rgba(163, 230, 53, 0.15)",
+                color: "var(--accent-lime)",
+                border: "1px solid rgba(163, 230, 53, 0.35)",
+                textDecoration: "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Code2 size={12} />
+              <span>Launch VS Code IDE</span>
+              <ExternalLink size={11} />
+            </a>
+          )}
           
           {server.serverType === "NODEJS" || server.software?.type === "NODEJS" ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

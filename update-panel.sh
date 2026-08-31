@@ -85,11 +85,13 @@ echo -e "${CYAN}[3/5] Compiling Admin Panel...${NC}"
 cd "${INSTALL_DIR}/admin-side"
 npm install --include=dev --prefer-offline --no-audit --no-fund
 npx prisma db push --accept-data-loss
+rm -rf .next
 npm run build
 
 echo -e "${CYAN}[4/5] Compiling User Panel...${NC}"
 cd "${INSTALL_DIR}/user-side"
 npm install --include=dev --prefer-offline --no-audit --no-fund
+rm -rf .next
 npm run build
 
 echo -e "${CYAN}[5/5] Reloading PM2 processes...${NC}"

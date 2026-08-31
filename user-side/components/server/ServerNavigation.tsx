@@ -36,14 +36,6 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
     return true;
   });
 
-  // Prepend Cloud IDE tab ONLY if strictly a Code Sandbox
-  if (isSandbox && server?.serverType === "CODESANDBOX") {
-    tabs = [
-      { name: "Cloud IDE", path: "ide", icon: Code2 },
-      ...tabs,
-    ];
-  }
-
   // Show Transfer tab if enabled by administration
   if (server?.allowNodeTransfer) {
     // Insert Transfer tab right before Settings
