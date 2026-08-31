@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { cpuUsage = 0, ramUsage = 0, diskUsage = 0, networkRx = 0, networkTx = 0, agentVersion = "unknown", serverStatuses = [] } = body;
+  const { cpuUsage = 0, ramUsage = 0, diskUsage = 0, networkRx = 0, networkTx = 0, agentVersion = "unknown", serverStatuses = [], radar } = body;
 
   await processNodeHeartbeat(node.nodeId, {
     cpuUsage,
@@ -22,6 +22,46 @@ export async function POST(request: NextRequest) {
     agentVersion,
     serverStatuses,
   });
+
+  // Persist Radar sample if sent
+  if (radar) {
+    db.radarSample.create({
+      data: {
+        nodeId: node.nodeId,
+        connsPerSec: radar.connsPerSec || 0,
+        bytesPerSecIn: radar.bytesPerSecIn || 0,
+        bytesPerSecOut: radar.bytesPerSecOut || 0,
+        activeBans: radar.activeBans || 0,
+      },
+    }).catch(() => {});
+
+    // Prune samples older than 24h (probabilistic 5% chance on heartbeat)
+    if (Math.random() < 0.05) {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      db.radarSample.deleteMany({
+        where: { timestamp: { lt: oneDayAgo } },
+      }).catch(() => {});
+    }
+  }
+
+  // Fetch Radar configuration (trusted IPs & thresholds)
+  const trustedIpsList = await db.trustedIp.findMany({ select: { ip: true } });
+  const radarThresholdsList = await db.radarThreshold.findMany();
+  const fleetShieldMode = (await getSetting("radar.fleetShieldMode")) === "true";
+
+  const thresholdsMap: Record<string, any> = {};
+  for (const t of radarThresholdsList) {
+    if (t.serverId) {
+      thresholdsMap[t.serverId] = {
+        serverId: t.serverId,
+        maxConnPerIpPerWindow: t.maxConnPerIpPerWindow,
+        windowMs: t.windowMs,
+        banDurationMs: t.banDurationMs,
+        autoMitigate: t.autoMitigate,
+        underAttackMode: t.underAttackMode,
+      };
+    }
+  }
 
   const dbNode = await db.node.findUnique({
     where: { id: node.nodeId },
@@ -86,6 +126,11 @@ export async function POST(request: NextRequest) {
     timestamp: new Date().toISOString(),
     pendingUpdate,
     config: {
+      radar: {
+        trustedIps: trustedIpsList.map((t) => t.ip),
+        thresholds: thresholdsMap,
+        shieldMode: fleetShieldMode,
+      },
       cryosleep: {
         defaultEnabled: defaultCryoEnabled,
         defaultIdleMinutes,

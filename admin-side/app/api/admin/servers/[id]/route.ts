@@ -352,13 +352,33 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   // 1. Delete files on the node-side
   await sendNodeCommand(server.nodeId, `/api/agent/servers/${server.id}`, "DELETE");
 
+  // 1.5. Clean up any Cloudflare SRV DNS records associated with server's subdomains
+  try {
+    const serverSubdomains = await db.subdomain.findMany({
+      where: { serverId: id },
+      include: { domain: true },
+    });
+    for (const sub of serverSubdomains) {
+      if (sub.srvRecordId && sub.domain?.apiToken && sub.domain?.zoneId) {
+        try {
+          const { deleteDnsRecord } = await import("@/lib/dns/cloudflare");
+          await deleteDnsRecord(sub.domain.apiToken, sub.domain.zoneId, sub.srvRecordId);
+        } catch (e) {
+          console.error(`[DNS Cleanup] Failed to delete SRV record for ${sub.fqdn}:`, e);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[DNS Cleanup] Error querying subdomains for deletion:", err);
+  }
+
   // 2. Free any allocations assigned to this server
   await db.allocation.updateMany({
     where: { serverId: id },
     data: { assigned: false }, // serverId is set to null via SetNull cascade automatically, but we explicitly reset assigned
   });
 
-  // 3. Delete the server from the database
+  // 3. Delete the server from the database (Cascade deletes Subdomain DB records)
   await db.server.delete({ where: { id } });
 
   await createAuditLog({

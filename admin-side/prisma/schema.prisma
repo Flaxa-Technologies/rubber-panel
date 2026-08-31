@@ -34,6 +34,8 @@ model User {
   apiKeys       APIKey[]
   resourceQuota UserResourceQuota?
   gdriveToken   UserGoogleDriveToken?
+  customDomainLimit Int?      @default(-1) // -1 = Inherit Global Default, 0 = Disabled, >0 = Custom Limit
+  subdomains    Subdomain[]
 
   @@map("users")
 }
@@ -201,6 +203,9 @@ model Server {
   customImageId   String?
   environment     String    @default("{}")
 
+  // Custom Subdomains (Individual SRV Records)
+  customDomainLimit        Int?      @default(-1) // -1 = Inherit Global Default, 0 = Disabled, >0 = Custom Limit
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -218,6 +223,7 @@ model Server {
   schedules       Schedule[]
   webhooks        ServerWebhook[]
   transfers       ServerTransfer[]
+  subdomains      Subdomain[]
 
   @@map("servers")
 }
@@ -601,4 +607,127 @@ model PumpkinBuild {
 
   @@map("pumpkin_builds")
 }
+
+// ─── DOMAINS (CLOUDFLARE DNS SRV MANAGEMENT) ──────────────────────────────
+// provider: CLOUDFLARE | MANUAL
+// status: ACTIVE | PENDING | ERROR | DISABLED
+
+model Domain {
+  id             String      @id @default(uuid())
+  name           String      @unique // e.g. "example.com"
+  provider       String      @default("CLOUDFLARE")
+  apiToken       String      // Cloudflare API Token
+  zoneId         String      // Cloudflare Zone ID
+  status         String      @default("ACTIVE")
+  isVerified     Boolean     @default(false)
+  lastVerifiedAt DateTime?
+  lastSyncError  String?
+  description    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  subdomains     Subdomain[]
+
+  @@map("domains")
+}
+
+// ─── SUBDOMAINS (MINECRAFT INDIVIDUAL SRV RECORDS) ────────────────────────
+// status: ACTIVE | PENDING | ERROR | ORPHANED
+
+model Subdomain {
+  id             String    @id @default(uuid())
+  domainId       String
+  serverId       String
+  userId         String
+  subdomain      String    // e.g. "play", "survival"
+  fqdn           String    @unique // e.g. "play.example.com"
+  srvRecordId    String?   // Cloudflare SRV Record ID
+  targetRecordId String?   // Cloudflare Target A Record ID
+  targetHost     String    // e.g. "node-1.example.com"
+  port           Int       // Minecraft Primary Port e.g. 25565
+  status         String    @default("ACTIVE")
+  lastError      String?
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  domain         Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  server         Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, subdomain])
+  @@map("subdomains")
+}
+
+// ─── RADAR: NETWORK TRAFFIC & ABUSE MITIGATION ────────────────────────────
+
+model RadarThreshold {
+  id                    String   @id @default(uuid())
+  serverId              String?  @unique
+  nodeId                String?
+  maxConnPerIpPerWindow Int      @default(20)
+  windowMs              Int      @default(10000)
+  banDurationMs         Int      @default(900000) // 15 minutes
+  autoMitigate          Boolean  @default(true)
+  underAttackMode       Boolean  @default(false)
+  underAttackExpiresAt  DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("radar_thresholds")
+}
+
+model RadarBan {
+  id         String    @id @default(uuid())
+  nodeId     String
+  serverId   String?
+  ip         String
+  port       Int?
+  reason     String
+  country    String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  releasedAt DateTime?
+  manual     Boolean   @default(false)
+
+  @@index([nodeId])
+  @@index([ip])
+  @@map("radar_bans")
+}
+
+model RadarSample {
+  id            String   @id @default(uuid())
+  nodeId        String
+  timestamp     DateTime @default(now())
+  connsPerSec   Int
+  bytesPerSecIn Int
+  bytesPerSecOut Int
+  activeBans    Int      @default(0)
+
+  @@index([nodeId, timestamp])
+  @@map("radar_samples")
+}
+
+model TrustedIp {
+  id        String   @id @default(uuid())
+  ip        String   @unique
+  label     String?
+  createdAt DateTime @default(now())
+
+  @@map("trusted_ips")
+}
+
+model RadarWebhook {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  secret    String?
+  events    String   @default("[\"radar.ban\",\"radar.shield_mode\"]")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("radar_webhooks")
+}
+
+
 

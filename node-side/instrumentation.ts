@@ -7,8 +7,10 @@ export async function register() {
     const { startHeartbeat } = await import("./lib/heartbeat-worker");
     const { reloadStatesFromDisk } = await import("./lib/server-manager");
     const { initCryoSleepEngine } = await import("./lib/cryo-sleep-engine");
+    const { startRadarLoop } = await import("./lib/radar-engine");
     await reloadStatesFromDisk();
     initCryoSleepEngine();
+    startRadarLoop();
     startHeartbeat();
   }
 }

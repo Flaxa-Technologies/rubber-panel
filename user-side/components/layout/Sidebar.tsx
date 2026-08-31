@@ -50,6 +50,7 @@ function TwitterIcon({ size = 14 }: { size?: number }) {
 
 const mainNav = [
   { href: "/dashboard", label: "Instances", icon: Server },
+  { href: "/subdomains", label: "Custom Domains", icon: Globe },
   { href: "/resources", label: "Resource Pool", icon: Sparkles },
   { href: "/status", label: "Status Page", icon: Activity },
   { href: "/account", label: "Account", icon: User },

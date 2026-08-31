@@ -150,6 +150,34 @@ Rubber Panel operates across three interconnected micro-services:
   - Remotely updates Node Daemons (`node-side`) across your entire compute fleet.
 - **Preserved State**: All `.env` secrets, database tables, user accounts, and game data remain 100% untouched.
 
+### 10. 🌐 Dynamic Minecraft Custom Subdomain Management (Individual SRV Engine)
+- **Zero-Wildcard Pure SRV Architecture**:
+  - Leverages individual DNS SRV records (`_minecraft._tcp.<subdomain>.<rootdomain>`) routed directly to the server's specific allocated port and compute node target A record.
+  - Players connect using clean addresses (e.g. `play.example.com`, `survival.example.com`) without appending awkward port numbers.
+- **Cloudflare DNS v4 Integration**:
+  - Secure token-based API authentication with automatic Cloudflare Zone discovery and health checking.
+  - Automatic node target A record provisioning (`node-<nodeSlug>.<domain>` with `proxied: false`).
+- **Quota & Permission Governance**:
+  - Global default limits (`Default Domains Allowed Per Server`, default 1; 0 disables self-service) with per-server and per-user admin overrides.
+  - Strict global duplicate prevention, reserved prefix blacklisting (`admin`, `api`, `panel`, `node`, `mail`, etc.), and format sanitization.
+- **Transactional Lifecycle & DNS Cascade**:
+  - Deleting or releasing a subdomain immediately deletes the SRV record from Cloudflare.
+  - Deleting a server automatically purges all attached custom SRV records across all connected root domains.
+
+### 11. 📡 Traffic Radar & Application-Layer Abuse Mitigation Engine
+- **In-Process Network Telemetry & Anomaly Detection**:
+  - Continuous lightweight connection tracking via `ss -H -o state established` and `/proc/net/dev`.
+  - In-memory sliding-window connection frequency counter (`connWindows = new Map<string, IpWindow>()`) identifying rate spikes, reconnect floods, and slowloris connection holds.
+- **Local Linux Firewall Orchestration (`iptables`)**:
+  - Dedicated `RUBBER_RADAR` chain auto-bootstrapped on daemon start.
+  - Dynamic `DROP` rule injection with automatic TTL unban scheduling (default 15 minutes).
+- **Geo-Intelligence & Offline Country Lookup**:
+  - MaxMind GeoLite2 offline dataset via `geoip-lite` for zero-latency, zero-cost country identification and top-offender attribution.
+- **Fleet Defense & Emergency Controls**:
+  - **Fleet-Wide Shield Mode**: 1-click administrative trigger that temporarily doubles rate-limiting sensitivity fleet-wide during an active incident.
+  - **Scoped "Under Attack Mode"**: Self-service toggle in the User Panel applying aggressive connection throttling to an individual server's port for 1 hour with auto-revert.
+  - **Trusted IPs Whitelist**: Permanent exclusion for administrative subnets, trusted reverse proxies, and RFC1918 private IP ranges.
+
 ---
 
 ## 📋 Technology Stack

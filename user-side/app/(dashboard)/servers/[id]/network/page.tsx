@@ -2,15 +2,25 @@
 
 import { useServer } from "@/components/server/ServerContext";
 import { formatAllocation } from "@/lib/server-utils";
-import { Network, Copy, Check, Plus, Trash2, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import { Network, Copy, Check, Plus, Trash2, Loader2, AlertTriangle, Sparkles, Globe, ExternalLink, ArrowRight, Radio, ShieldAlert } from "lucide-react";
 import { useState, useEffect } from "react";
 import EmptyState from "@/components/ui/EmptyState";
+import Link from "next/link";
 
 interface QuotaData {
   remainingAllocations: number;
   maxAllocations: number;
   usedAllocations: number;
   isSuspended: boolean;
+}
+
+interface ServerSubdomain {
+  id: string;
+  subdomain: string;
+  fqdn: string;
+  targetHost: string;
+  port: number;
+  status: string;
 }
 
 export default function NetworkPage() {
@@ -22,6 +32,11 @@ export default function NetworkPage() {
   const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const [subdomains, setSubdomains] = useState<ServerSubdomain[]>([]);
+  const [subdomainLimit, setSubdomainLimit] = useState(1);
+  const [canCreateSubdomain, setCanCreateSubdomain] = useState(false);
+  const [loadingSubdomains, setLoadingSubdomains] = useState(true);
 
   async function loadQuota() {
     try {
@@ -37,9 +52,27 @@ export default function NetworkPage() {
     }
   }
 
+  async function loadSubdomains() {
+    try {
+      setLoadingSubdomains(true);
+      const res = await fetch(`/api/user/servers/${server.id}/subdomains`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubdomains(data.subdomains || []);
+        setSubdomainLimit(data.limit ?? 1);
+        setCanCreateSubdomain(data.canCreate ?? false);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSubdomains(false);
+    }
+  }
+
   useEffect(() => {
     loadQuota();
-  }, []);
+    loadSubdomains();
+  }, [server.id]);
 
   async function copyAddress(address: string) {
     await navigator.clipboard.writeText(address);
@@ -284,8 +317,288 @@ export default function NetworkPage() {
               </div>
             </div>
           )}
+
+          {/* Custom Subdomains (Individual SRV Records) */}
+          <div className="saas-card" style={{ padding: 0, overflow: "hidden", borderRadius: 16, width: "100%" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Globe size={16} className="text-sky-400" />
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                  Custom Minecraft Subdomains ({subdomains.length} / {subdomainLimit})
+                </span>
+              </div>
+              <Link
+                href="/subdomains"
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: "#38bdf8",
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+                className="hover:underline"
+              >
+                <span>Manage All Subdomains</span>
+                <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            {loadingSubdomains ? (
+              <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
+                <Loader2 size={18} className="animate-spin" style={{ margin: "0 auto 6px" }} />
+                <span>Checking SRV DNS bindings...</span>
+              </div>
+            ) : subdomains.length === 0 ? (
+              <div style={{ padding: "24px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-pure)" }}>
+                    No custom subdomain bound to this server
+                  </div>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                    Connect a clean address like <strong>play.yourdomain.com</strong> without specifying port numbers.
+                  </p>
+                </div>
+                <Link
+                  href="/subdomains"
+                  className="saas-btn saas-btn-primary"
+                  style={{ fontSize: 12, fontWeight: 700, padding: "7px 14px", borderRadius: 8, textDecoration: "none" }}
+                >
+                  + Add Custom Subdomain
+                </Link>
+              </div>
+            ) : (
+              <div>
+                {subdomains.map((sub, idx) => {
+                  const isCopied = copied === sub.fqdn;
+                  return (
+                    <div
+                      key={sub.id || idx}
+                      style={{
+                        padding: "14px 20px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        borderBottom: idx < subdomains.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                      }}
+                      className="hover:bg-white/[0.02]"
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: "#38bdf8" }}>
+                          {sub.fqdn}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "rgba(16,185,129,0.12)", color: "#34d399" }}>
+                          SRV ACTIVE
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <button
+                          onClick={() => copyAddress(sub.fqdn)}
+                          className="btn-secondary-dark"
+                          style={{ padding: "6px 10px", fontSize: 12, borderRadius: 8, display: "flex", alignItems: "center", gap: 4 }}
+                        >
+                          {isCopied ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{isCopied ? "Copied" : "Copy Subdomain"}</span>
+                        </button>
+                        <Link
+                          href="/subdomains"
+                          className="btn-secondary-dark"
+                          style={{ padding: "6px 10px", fontSize: 12, borderRadius: 8, textDecoration: "none", color: "var(--text-muted)" }}
+                        >
+                          Manage
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Radar Network Telemetry & Under Attack Mode */}
+          <RadarSecurityWidget serverId={server.id} />
         </>
       )}
     </div>
   );
 }
+
+function RadarSecurityWidget({ serverId }: { serverId: string }) {
+  const [radarData, setRadarData] = useState<{
+    connsPerSec: number;
+    statusBadge: "ALL_CLEAR" | "ELEVATED" | "UNDER_ATTACK";
+    underAttackMode: boolean;
+    underAttackExpiresAt: string | null;
+    timeline: Array<{ timestamp: string; connsPerSec: number }>;
+  } | null>(null);
+  const [toggling, setToggling] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function fetchRadar() {
+    try {
+      const res = await fetch(`/api/user/servers/${serverId}/radar`);
+      if (res.ok) {
+        const d = await res.json();
+        setRadarData(d);
+      }
+    } catch {}
+  }
+
+  useEffect(() => {
+    fetchRadar();
+    const intv = setInterval(fetchRadar, 3000);
+    return () => clearInterval(intv);
+  }, [serverId]);
+
+  async function handleToggleUnderAttack() {
+    if (!radarData) return;
+    setToggling(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/user/servers/${serverId}/radar/under-attack`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: !radarData.underAttackMode,
+          durationMinutes: 60,
+        }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setMsg(d.message || "Updated successfully");
+        await fetchRadar();
+      } else {
+        setMsg(d.error || "Failed to toggle");
+      }
+    } catch {
+      setMsg("Network error");
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  const timeline = radarData?.timeline || [];
+  const maxC = Math.max(5, ...timeline.map((t) => t.connsPerSec));
+  const svgPoints = timeline.map((s, idx) => {
+    const x = timeline.length <= 1 ? 0 : (idx / (timeline.length - 1)) * 400;
+    const y = 60 - (s.connsPerSec / maxC) * 45 - 5;
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div className="saas-card" style={{ padding: 0, overflow: "hidden", borderRadius: 16, width: "100%" }}>
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Radio size={16} className="text-lime-400" />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+            Traffic Radar &amp; DDoS Shield
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              padding: "3px 8px",
+              borderRadius: 999,
+              background:
+                radarData?.statusBadge === "UNDER_ATTACK"
+                  ? "rgba(239,68,68,0.15)"
+                  : radarData?.statusBadge === "ELEVATED"
+                  ? "rgba(245,158,11,0.15)"
+                  : "rgba(16,185,129,0.15)",
+              color:
+                radarData?.statusBadge === "UNDER_ATTACK"
+                  ? "#f87171"
+                  : radarData?.statusBadge === "ELEVATED"
+                  ? "#fbbf24"
+                  : "#34d399",
+            }}
+          >
+            {radarData?.statusBadge === "UNDER_ATTACK"
+              ? "● UNDER ATTACK FILTERING"
+              : radarData?.statusBadge === "ELEVATED"
+              ? "● ELEVATED TRAFFIC"
+              : "● ALL CLEAR"}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding: "18px 20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
+            Real-Time Connection Activity
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text-pure)", marginTop: 2, fontFamily: "monospace" }}>
+            {radarData?.connsPerSec || 0} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dim)" }}>conns / sec</span>
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.4 }}>
+            In-kernel telemetry monitoring connection requests and socket handshakes on your allocated game port.
+          </p>
+        </div>
+
+        {/* Mini sparkline */}
+        <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: 10, padding: 8, border: "1px solid var(--border-subtle)", height: 75, position: "relative" }}>
+          {timeline.length > 1 ? (
+            <svg viewBox="0 0 400 60" style={{ width: "100%", height: "100%", overflow: "visible" }}>
+              <polyline
+                fill="none"
+                stroke={radarData?.statusBadge === "UNDER_ATTACK" ? "#f87171" : "#a3e635"}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                points={svgPoints}
+              />
+            </svg>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 11, color: "var(--text-dim)" }}>
+              Awaiting connection telemetry...
+            </div>
+          )}
+        </div>
+
+        {/* Under attack toggle */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start", justifyContent: "center" }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-primary)" }}>
+            Emergency Under Attack Mode
+          </div>
+          <button
+            onClick={handleToggleUnderAttack}
+            disabled={toggling}
+            className={radarData?.underAttackMode ? "btn-solid-white" : "saas-btn saas-btn-primary"}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "7px 14px",
+              borderRadius: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: radarData?.underAttackMode ? "rgba(239,68,68,0.9)" : undefined,
+              color: radarData?.underAttackMode ? "#fff" : undefined,
+            }}
+          >
+            {toggling ? <Loader2 size={13} className="animate-spin" /> : <ShieldAlert size={13} />}
+            <span>{radarData?.underAttackMode ? "Disable Under Attack Mode" : "Enable Under Attack Mode"}</span>
+          </button>
+          <span style={{ fontSize: 10.5, color: "var(--text-dim)" }}>
+            {radarData?.underAttackMode && radarData?.underAttackExpiresAt
+              ? `Auto-reverts at ${new Date(radarData.underAttackExpiresAt).toLocaleTimeString()}`
+              : "Applies aggressive rate limits to your port for 1 hr."}
+          </span>
+        </div>
+      </div>
+
+      {msg && (
+        <div style={{ padding: "8px 20px", fontSize: 11, background: "rgba(56,189,248,0.08)", color: "#38bdf8", borderTop: "1px solid var(--border-subtle)" }}>
+          {msg}
+        </div>
+      )}
+    </div>
+  );
+}
+

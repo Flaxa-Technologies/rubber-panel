@@ -59,6 +59,11 @@ const DEFAULTS: Record<string, string> = {
   "cryosleep.autoConfigureNewNodes": "true",
   "cryosleep.allowUserCustomMotd": "true",
 
+  // Custom Subdomains (Individual SRV Records)
+  "domains.defaultPerServer": "1",
+  "domains.allowSubdomains": "true",
+  "domains.reservedPrefixes": "[\"admin\",\"panel\",\"node\",\"api\",\"mail\",\"smtp\",\"ftp\",\"ssh\",\"ns1\",\"ns2\",\"www\",\"dev\",\"status\"]",
+
   // Status Page Management
   "status_page.enabled": "true",
   "status_page.title": "Rubber Panel System Status",

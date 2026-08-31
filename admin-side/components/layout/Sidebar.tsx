@@ -26,6 +26,8 @@ import {
   Download,
   Flame,
   Code2,
+  Globe,
+  Radio,
 } from "lucide-react";
 
 
@@ -40,6 +42,8 @@ const navItems = [
   { href: "/cryo-sleep", label: "Cryo-Sleep", icon: Zap },
   { href: "/nodes", label: "Nodes", icon: MonitorSpeaker },
   { href: "/allocations", label: "Port Management", icon: Network },
+  { href: "/subdomains", label: "Subdomain Mgmt", icon: Globe },
+  { href: "/radar", label: "Traffic Radar", icon: Radio },
   { href: "/images", label: "Container Images", icon: Box },
   { href: "/software", label: "Software", icon: Package },
   { href: "/software/pumpkin", label: "Pumpkin (Rust MC)", icon: Flame },

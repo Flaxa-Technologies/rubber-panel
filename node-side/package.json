@@ -18,6 +18,7 @@
     "@types/react-dom": "^19",
     "adm-zip": "^0.6.0",
     "archiver": "^8.0.0",
+    "geoip-lite": "^2.0.3",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.30.0",
     "next": "16.3.0",
@@ -28,6 +29,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/geoip-lite": "^1.4.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.0"
   }

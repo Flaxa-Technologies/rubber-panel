@@ -57,6 +57,8 @@ async function sendHeartbeat() {
     } catch {}
 
     const activeId = discoveredNodeId || process.env.NODE_ID || "";
+    const { getRadarStats, updateTrustedIps, updateServerThresholds, setFleetShieldMode } = await import("./radar-engine");
+    const radarStats = getRadarStats();
 
     const payload = {
       nodeId: activeId,
@@ -64,9 +66,16 @@ async function sendHeartbeat() {
       cpuUsage: resources.cpuUsage,
       ramUsage: resources.ramUsage,
       diskUsage: 0,
-      networkRx: 0,
-      networkTx: 0,
+      networkRx: radarStats.current.bytesPerSecIn || 0,
+      networkTx: radarStats.current.bytesPerSecOut || 0,
       serverStatuses: servers.map(s => ({ id: s.id, status: s.status })),
+      radar: {
+        connsPerSec: radarStats.current.connsPerSec,
+        bytesPerSecIn: radarStats.current.bytesPerSecIn,
+        bytesPerSecOut: radarStats.current.bytesPerSecOut,
+        activeBans: radarStats.activeBansCount,
+        topOffenders: radarStats.topOffenders.slice(0, 10),
+      },
     };
 
     const res = await fetch(`${ADMIN_API_URL}/api/node/heartbeat`, {
@@ -95,6 +104,18 @@ async function sendHeartbeat() {
         if (data?.pendingUpdate?.version && data?.pendingUpdate?.assetUrl) {
           if (clean(currentVer) !== clean(data.pendingUpdate.version)) {
             runNodeUpdate(data.pendingUpdate.version, data.pendingUpdate.assetUrl).catch(() => {});
+          }
+        }
+
+        if (data?.config?.radar) {
+          if (Array.isArray(data.config.radar.trustedIps)) {
+            updateTrustedIps(data.config.radar.trustedIps);
+          }
+          if (data.config.radar.thresholds) {
+            updateServerThresholds(data.config.radar.thresholds);
+          }
+          if (typeof data.config.radar.shieldMode === "boolean") {
+            setFleetShieldMode(data.config.radar.shieldMode);
           }
         }
 
