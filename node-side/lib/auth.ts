@@ -1,3 +1,5 @@
+import { NextRequest, NextResponse } from "next/server";
+
 export function verifyAgentToken(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return false;
