@@ -995,7 +995,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const dockerImage = env.DOCKER_IMAGE || "codercom/code-server:latest";
       delete env.DOCKER_IMAGE;
 
-      const internalPort = 8080;
+      const internalPort = assignedPort;
       const sandboxPassword = env.SANDBOX_PASSWORD || "";
       const authArg = sandboxPassword ? "password" : "none";
       if (sandboxPassword) {
@@ -1014,7 +1014,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
-        "-p", `${assignedPort}:${internalPort}/tcp`,
+        "-p", `${assignedPort}:${assignedPort}/tcp`,
         "-v", `${sDir}:/home/coder/project`,
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
@@ -1022,7 +1022,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "code-server",
-        "--bind-addr", "0.0.0.0:8080",
+        "--bind-addr", `0.0.0.0:${assignedPort}`,
         "--auth", authArg,
         "/home/coder/project"
       ];
