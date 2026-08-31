@@ -79,21 +79,38 @@ function uploadAsset(uploadUrlTemplate, assetPath) {
 
 async function run() {
   const tagName = 'v0.1.0-beta.43';
-  console.log('Creating release', tagName, '...');
-  const relRes = await gh('/repos/Flaxa-Technologies/rubber-panel/releases', 'POST', JSON.stringify({
-    tag_name: tagName,
-    target_commitish: 'main',
-    name: 'Rubber Panel v0.1.0-beta.43',
-    body: '## Rubber Panel v0.1.0-beta.43\n\n### Universal Container Port Auto-Compliance\n- **Automatic ExposedPorts Inspection**: Reads docker inspect metadata for any container image to automatically find its native internal port and protocol.\n- **Universal Port Forwarding**: Binds panel-allocated host port directly to the container\'s exposed port without hardcoded hacks.\n- **Port Environment Injection**: Injects `PORT`, `SERVER_PORT`, `INTERNAL_PORT`, `APP_PORT`, `HTTP_PORT`, and `HOST=0.0.0.0` into all application containers.\n- **Multi-Protocol Support**: Supports TCP, UDP, and dual-stack game servers dynamically.',
-    draft: false,
-    prerelease: true
-  }));
+  console.log('Fetching or creating release', tagName, '...');
+  let relRes = await gh('/repos/Flaxa-Technologies/rubber-panel/releases/tags/' + tagName);
+  let release;
 
-  if (relRes.status !== 201) {
-    console.error('Failed to create release:', relRes.status, relRes.body);
-    return;
+  if (relRes.status === 200) {
+    release = relRes.body;
+    console.log('Found existing release ID:', release.id);
+
+    // Delete any old assets on this release
+    if (release.assets && release.assets.length > 0) {
+      for (const asset of release.assets) {
+        console.log('Deleting existing asset:', asset.name, '(ID:', asset.id, ')');
+        await gh('/repos/Flaxa-Technologies/rubber-panel/releases/assets/' + asset.id, 'DELETE');
+      }
+    }
+  } else {
+    relRes = await gh('/repos/Flaxa-Technologies/rubber-panel/releases', 'POST', JSON.stringify({
+      tag_name: tagName,
+      target_commitish: 'main',
+      name: 'Rubber Panel v0.1.0-beta.43',
+      body: '## Rubber Panel v0.1.0-beta.43\n\n### Universal Container Port Auto-Compliance & Dynamic Overrides\n- **Automatic ExposedPorts Inspection**: Reads docker inspect metadata for any container image to automatically find its native internal port and protocol.\n- **Built-in Registry Fallback**: Intelligent port mapping for MySQL (3306), Postgres (5432), Redis (6379), MongoDB (27017), RabbitMQ (5672), Web/Nginx (80), Code Server (8080), Grafana (3000), MinIO (9000), Terraria (7777), Valheim (2456), etc.\n- **Manual Internal Port Override**: Users and Admins can view or customize the internal container port directly in Server Settings without editing panel code.\n- **Port Environment Injection**: Injects `PORT`, `SERVER_PORT`, `INTERNAL_PORT`, `APP_PORT`, `HTTP_PORT`, and `HOST=0.0.0.0` into all application containers.\n- **Multi-Protocol Support**: Full support for TCP, UDP, and dual-stack game servers dynamically.',
+      draft: false,
+      prerelease: true
+    }));
+
+    if (relRes.status !== 201) {
+      console.error('Failed to create release:', relRes.status, relRes.body);
+      return;
+    }
+    release = relRes.body;
+    console.log('Created release ID:', release.id);
   }
-  console.log('Created release ID:', relRes.body.id);
 
   const distDir = path.join(__dirname, '.dist');
   if (!fs.existsSync(distDir)) fs.mkdirSync(distDir, { recursive: true });
@@ -103,8 +120,17 @@ async function run() {
     console.log('Zipping', side, '...');
     createZip(path.join(__dirname, side), zipPath);
     console.log('Uploading', side + '.zip to GitHub release...');
-    const status = await uploadAsset(relRes.body.upload_url, zipPath);
+    const status = await uploadAsset(release.upload_url, zipPath);
     console.log('Uploaded', side, 'status:', status);
+  }
+
+  for (const script of ['install-panel.sh', 'install-node.sh', 'update-panel.sh', 'update-node.sh']) {
+    const scriptPath = path.join(__dirname, script);
+    if (fs.existsSync(scriptPath)) {
+      console.log('Uploading', script, 'to GitHub release...');
+      const status = await uploadAsset(release.upload_url, scriptPath);
+      console.log('Uploaded', script, 'status:', status);
+    }
   }
 
   console.log('All beta.43 assets uploaded successfully!');
