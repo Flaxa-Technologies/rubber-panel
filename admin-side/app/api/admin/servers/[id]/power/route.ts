@@ -41,8 +41,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       include: { allocations: true },
     });
     if (fullServer) {
-      const primaryAlloc = fullServer.allocations.find(a => a.isPrimary) || fullServer.allocations[0];
-      const assignedPort = primaryAlloc?.port || 25565;
+      const assignedPort = fullServer.allocations[0]?.port || 25565;
       const parsedEnv = fullServer.environment ? JSON.parse(fullServer.environment) : {};
 
       await sendNodeCommand(server.nodeId, `/api/agent/servers`, "POST", {
