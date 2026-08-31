@@ -1090,14 +1090,15 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
-        "--security-opt=no-new-privileges:true",
+        // Block dangerous host-escape vectors only:
+        // - SYS_BOOT: prevents reboot/shutdown of the host
+        // - SYS_RAWIO: prevents raw disk/port I/O
+        // - SYS_MODULE: prevents kernel module loading
+        // Intentionally NOT dropped: SYS_ADMIN, SYS_PTRACE (needed for sudo/apt/gdb)
         "--cap-drop=SYS_BOOT",
         "--cap-drop=SYS_RAWIO",
-        "--cap-drop=SYS_ADMIN",
         "--cap-drop=SYS_MODULE",
-        "--cap-drop=SYS_PTRACE",
-        "--pids-limit=256",
-        "--user", "1000:1000",
+        "--pids-limit=512",
         ...envArgs,
         dockerImage,
         "code-server",
