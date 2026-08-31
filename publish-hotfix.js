@@ -16,31 +16,47 @@ if (!TOKEN) {
 }
 
 const REPO = "Flaxa-Technologies/rubber-panel";
-const TAG = "v0.1.0-beta.39.1";
-const NAME = "Rubber Panel v0.1.0-beta.39.1 — Hotfix: Server 503 After State Migration & IDE Page Guard";
-const BODY = `## Hotfix: v0.1.0-beta.39.1
+const TAG = "v0.1.0-beta.39.2";
+const NAME = "Rubber Panel v0.1.0-beta.39.2 — Fix: Cloud IDE Start Button & Balanced Docker Security";
+const BODY = `## v0.1.0-beta.39.2 — Cloud IDE Start Button Fix & Balanced Docker Security
 
-### 🔧 Critical Fix: 503 Service Unavailable on Server Start After v0.1.0-beta.39 Upgrade
-- **Root Cause**: The state migration in v0.1.0-beta.39 (which moved \`.rp-state.json\` from inside server directories to \`.data/server-states/\`) was correctly migrating files to the new location, but **was not loading those migrated servers into the in-memory \`serverStates\` map** during startup. This caused the node daemon to return 503 "Server not found on this node" for all existing servers immediately after upgrading from beta.38.
-- **Fix**: The migration loop now fully loads migrated servers into memory (including status, Cryo-Sleep registration, and log attachment), exactly the same as loading from the new state directory. Servers that were already loaded from the new directory are skipped to prevent double-loading.
-
-### 🖥️ Fix: IDE Page Showing 404/Broken State for Non-Sandbox Servers
-- Non-Code Sandbox servers navigating to \`/servers/[id]/ide\` now see a clear, helpful notice explaining the Cloud IDE is only available for Code Sandbox instances, with a direct link to the Console page instead of a broken or empty state.
+> Requires **v0.1.0-beta.39.1** or later already installed. If upgrading from beta.38 or earlier, install beta.39.1 first.
 
 ---
 
-### 🚀 Quick 1-Command Update on Your Linux VPS:
+### 🔧 Fix: Cloud IDE "Start" Button Returns 404
+
+- **Root Cause**: The "Start Cloud VS Code IDE" button was calling \`/api/user/servers/[id]/power\` — a route that does not exist. The correct endpoint is \`/api/user/servers/[id]\` with \`{ action: "start" }\`.
+- **Fix**: Updated the IDE page to hit the correct API route. Also replaced the fire-and-forget 2s timeout with an active **auto-polling mechanism** — the spinner stays visible until the server status changes to \`RUNNING\` (up to 30s), then clears automatically.
+
+---
+
+### 🔐 Fix: \`sudo\` / \`apt install\` Blocked in Code Sandbox Terminal
+
+- **Root Cause**: The previous beta.39 hardening applied \`--security-opt=no-new-privileges:true\`, \`--cap-drop=SYS_ADMIN\`, \`--cap-drop=SYS_PTRACE\`, and \`--user 1000:1000\` to code-server containers. These flags, especially \`no-new-privileges\` and the forced user context, completely prevented \`sudo\`, \`apt\`, \`pip\`, and most package managers from working.
+- **Fix**: Removed over-restrictive flags. New Docker security profile:
+  - ✅ \`--cap-drop=SYS_BOOT\` — prevents rebooting/shutting down the host
+  - ✅ \`--cap-drop=SYS_RAWIO\` — prevents raw disk/port I/O
+  - ✅ \`--cap-drop=SYS_MODULE\` — prevents loading kernel modules
+  - ✅ \`--pids-limit=512\` — fork bomb protection
+  - ❌ Removed: \`no-new-privileges\`, \`SYS_ADMIN\` drop, \`SYS_PTRACE\` drop, \`--user 1000:1000\`
+- Users can now freely run \`sudo apt install\`, \`pip install\`, \`npm install -g\`, etc. in the Cloud IDE terminal.
+
+---
+
+### 🚀 Update Commands (Linux VPS):
 
 \`\`\`bash
-# 1. Update Node Daemon (REQUIRED - fixes the 503 bug)
-curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash
-
-# 2. Update Panel (fixes IDE page)
+# Update Panel (IDE button fix)
 curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-panel.sh | sudo bash
+
+# Update Node Daemon (Docker security fix — required for new Code Sandbox containers)
+curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash
 \`\`\`
 
-> **Note**: After updating, the node daemon will automatically migrate your existing server states to the new secure location on first startup.
+> **Note**: Existing running Code Sandbox containers are **not affected** by the security change. Only newly started containers will use the updated Docker flags. Restart your sandbox to apply the new security profile.
 `;
+
 
 function createZip(sourceDir, zipPath) {
   console.log(`[ZIP] Creating ${path.basename(zipPath)}...`);
