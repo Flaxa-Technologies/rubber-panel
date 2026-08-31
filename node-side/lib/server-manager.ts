@@ -79,7 +79,23 @@ function resolveSecurePath(serverId: string, reqPath: string): string {
   return normalizedPath;
 }
 
-const HIDDEN_PANEL_FILES = new Set([".rp-state.json", ".rp-lock"]);
+function isSystemProtectedPath(filePath: string): boolean {
+  const base = path.basename(filePath).toLowerCase();
+  return (
+    base.startsWith(".rp-") ||
+    base === ".rp-state.json" ||
+    base === ".rp-lock" ||
+    base.startsWith(".cryo") ||
+    base === ".git" ||
+    base === "dev.db" ||
+    base === ".env"
+  );
+}
+
+export function getServerStateFile(serverId: string): string {
+  const dir = path.join(process.cwd(), ".data", "server-states");
+  return path.join(dir, `${serverId}.json`);
+}
 
 /** Automatically copy downloaded jar (e.g. paper-1.21.6-48.jar) to server.jar */
 async function syncServerJar(serverId: string) {
@@ -126,7 +142,7 @@ export async function listFiles(serverId: string, dirPath: string) {
     const entries = await fs.readdir(target, { withFileTypes: true });
     const result = [];
     for (const entry of entries) {
-      if (HIDDEN_PANEL_FILES.has(entry.name)) continue;
+      if (isSystemProtectedPath(entry.name)) continue;
       const stats = await fs.stat(path.join(target, entry.name));
       result.push({
         name: entry.name,
@@ -147,17 +163,20 @@ export async function listFiles(serverId: string, dirPath: string) {
 }
 
 export async function readFileContent(serverId: string, filePath: string) {
+  if (isSystemProtectedPath(filePath)) throw new Error("Access to protected system file is forbidden");
   const target = resolveSecurePath(serverId, filePath);
   return fs.readFile(target, "utf-8");
 }
 
 export async function writeFileContent(serverId: string, filePath: string, content: string) {
+  if (isSystemProtectedPath(filePath)) throw new Error("Editing protected system file is forbidden");
   const target = resolveSecurePath(serverId, filePath);
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, content, "utf-8");
 }
 
 export async function uploadFile(serverId: string, filePath: string, base64Content: string) {
+  if (isSystemProtectedPath(filePath)) throw new Error("Uploading protected system file is forbidden");
   const target = resolveSecurePath(serverId, filePath);
   await fs.mkdir(path.dirname(target), { recursive: true });
   const buffer = Buffer.from(base64Content, "base64");
@@ -165,6 +184,7 @@ export async function uploadFile(serverId: string, filePath: string, base64Conte
 }
 
 export async function unzipFile(serverId: string, filePath: string, destDir?: string) {
+  if (isSystemProtectedPath(filePath)) throw new Error("Extracting protected system archive is forbidden");
   const zipPath = resolveSecurePath(serverId, filePath);
   const targetDir = destDir ? resolveSecurePath(serverId, destDir) : path.dirname(zipPath);
   await fs.mkdir(targetDir, { recursive: true });
@@ -179,6 +199,7 @@ export async function unzipFile(serverId: string, filePath: string, destDir?: st
 }
 
 export async function deleteFileOrDir(serverId: string, filePath: string) {
+  if (isSystemProtectedPath(filePath)) throw new Error("Deleting protected system file is forbidden");
   const target = resolveSecurePath(serverId, filePath);
   const stats = await fs.stat(target);
   if (stats.isDirectory()) {
@@ -257,20 +278,28 @@ function attachLogs(serverId: string) {
 // ─── PERSIST STATE TO DISK ────────────────────────────────────────────────
 
 async function saveState(serverId: string, info: ServerInfo) {
-  const stateFile = path.join(getServerDir(serverId), ".rp-state.json");
+  const stateFile = getServerStateFile(serverId);
   await fs.mkdir(path.dirname(stateFile), { recursive: true });
   await fs.writeFile(stateFile, JSON.stringify(info, null, 2), "utf-8");
+
+  // Cleanup legacy .rp-state.json inside user server directory if exists
+  try {
+    const legacyFile = path.join(getServerDir(serverId), ".rp-state.json");
+    await fs.unlink(legacyFile);
+  } catch {}
 }
 
 export async function reloadStatesFromDisk() {
-  const serversDir = path.join(process.cwd(), ".data", "servers");
+  const stateDir = path.join(process.cwd(), ".data", "server-states");
+  await fs.mkdir(stateDir, { recursive: true });
+
+  // 1. Load from isolated state directory
   try {
-    const dirs = await fs.readdir(serversDir, { withFileTypes: true });
-    for (const d of dirs) {
-      if (!d.isDirectory()) continue;
-      const stateFile = path.join(serversDir, d.name, ".rp-state.json");
+    const files = await fs.readdir(stateDir);
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
       try {
-        const raw = await fs.readFile(stateFile, "utf-8");
+        const raw = await fs.readFile(path.join(stateDir, f), "utf-8");
         const info: ServerInfo = JSON.parse(raw);
         const running = await containerRunning(getContainerName(info.id));
         const { isWakeProxyRunning } = await import("./cryo-sleep-proxy");
@@ -296,21 +325,29 @@ export async function reloadStatesFromDisk() {
           motd: env.CRYO_SLEEP_MOTD || info.cryoSleepMotd,
         });
 
-        // 💤 On node startup/restart: If Cryo-Sleep is enabled and container is not actively running or sleeping,
-        // immediately auto-arm the lightweight wake proxy on the assigned port (0% RAM mode)
         if (isCryoEnabled && !running && !isSleeping) {
-          hibernateServer(info.id, "Node boot auto-arm").catch((err) => {
-            console.warn(`[Cryo-Sleep] Boot auto-arm notice for ${info.id}:`, err.message);
-          });
+          hibernateServer(info.id).catch(() => {});
         }
-      } catch {
-        // No state file
-      }
+      } catch {}
     }
-    console.log(`[ServerManager] Reloaded ${serverStates.size} server states from disk`);
-  } catch {
-    // No dir
-  }
+  } catch {}
+
+  // 2. Migration: scan legacy server directories and migrate any legacy .rp-state.json
+  const serversDir = path.join(process.cwd(), ".data", "servers");
+  try {
+    const dirs = await fs.readdir(serversDir, { withFileTypes: true });
+    for (const d of dirs) {
+      if (!d.isDirectory()) continue;
+      const legacyStateFile = path.join(serversDir, d.name, ".rp-state.json");
+      try {
+        const raw = await fs.readFile(legacyStateFile, "utf-8");
+        const info: ServerInfo = JSON.parse(raw);
+        await saveState(info.id, info);
+        await fs.unlink(legacyStateFile).catch(() => {});
+      } catch {}
+    }
+  } catch {}
+  console.log(`[ServerManager] Reloaded ${serverStates.size} server states from disk`);
 }
 
 // ─── DOCKER LIFECYCLE ────────────────────────────────────────────────────
@@ -1019,6 +1056,14 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "--security-opt=no-new-privileges:true",
+        "--cap-drop=SYS_BOOT",
+        "--cap-drop=SYS_RAWIO",
+        "--cap-drop=SYS_ADMIN",
+        "--cap-drop=SYS_MODULE",
+        "--cap-drop=SYS_PTRACE",
+        "--pids-limit=256",
+        "--user", "1000:1000",
         ...envArgs,
         dockerImage,
         "code-server",

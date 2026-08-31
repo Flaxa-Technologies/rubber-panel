@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, X
 } from "lucide-react";
 import MinecraftRgbModal from "./MinecraftRgbModal";
+import { useServer } from "./ServerContext";
 import { copyToClipboard } from "@/lib/clipboard";
 
 interface AdvancedFileEditorProps {
@@ -25,6 +26,9 @@ export default function AdvancedFileEditor({
   onSave,
   onClose,
 }: AdvancedFileEditorProps) {
+  const { server } = useServer();
+  const isMinecraft = !server?.isSandbox && server?.serverType !== "CODESANDBOX" && server?.serverType !== "NODEJS" && server?.software?.type !== "NODEJS" && server?.software?.type !== "PYTHON";
+
   const [content, setContent] = useState(initialContent);
   const [savedContent, setSavedContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
@@ -361,32 +365,34 @@ export default function AdvancedFileEditor({
 
         {/* Right: Actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {/* Minecraft RGB Gradient Button */}
-          <button
-            type="button"
-            onClick={() => setShowRgbModal(true)}
-            style={{
-              padding: "5px 12px",
-              borderRadius: 8,
-              background: "linear-gradient(135deg, rgba(163,230,53,0.15) 0%, rgba(56,189,248,0.15) 50%, rgba(236,72,153,0.15) 100%)",
-              border: "1px solid rgba(163,230,53,0.4)",
-              color: "#ffffff",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              boxShadow: "0 0 12px rgba(163,230,53,0.15)",
-            }}
-            className="hover:border-lime-400 hover:shadow-lime-500/20"
-            title="Open Minecraft RGB Gradient Generator"
-          >
-            <Sparkles size={13} style={{ color: "#a3e635" }} />
-            <span style={{ background: "linear-gradient(90deg, #a3e635, #38bdf8, #f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              RGB Gradient
-            </span>
-          </button>
+          {/* Minecraft RGB Gradient Button (Minecraft servers only) */}
+          {isMinecraft && (
+            <button
+              type="button"
+              onClick={() => setShowRgbModal(true)}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 8,
+                background: "linear-gradient(135deg, rgba(163,230,53,0.15) 0%, rgba(56,189,248,0.15) 50%, rgba(236,72,153,0.15) 100%)",
+                border: "1px solid rgba(163,230,53,0.4)",
+                color: "#ffffff",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 0 12px rgba(163,230,53,0.15)",
+              }}
+              className="hover:border-lime-400 hover:shadow-lime-500/20"
+              title="Open Minecraft RGB Gradient Generator"
+            >
+              <Sparkles size={13} style={{ color: "#a3e635" }} />
+              <span style={{ background: "linear-gradient(90deg, #a3e635, #38bdf8, #f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                RGB Gradient
+              </span>
+            </button>
+          )}
 
           {/* Find & Replace Trigger */}
           <button
