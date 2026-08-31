@@ -62,6 +62,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       const nodeRes = await sendNodeCommand(server.node.id, `/api/agent/servers/${server.id}`, "GET");
       if (nodeRes.success && nodeRes.data) {
         liveStats = nodeRes.data;
+        if (liveStats.status && liveStats.status !== server.status) {
+          db.server.update({ where: { id: server.id }, data: { status: liveStats.status } }).catch(() => {});
+        }
       }
     } catch {}
   }
@@ -123,6 +126,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!nodeRes.success) {
       return NextResponse.json({ error: nodeRes.error }, { status: 503 });
     }
+    const targetStatus = action === "wake" ? "RUNNING" : "SLEEPING";
+    await db.server.update({ where: { id: server.id }, data: { status: targetStatus } }).catch(() => {});
     return NextResponse.json({ success: true, action });
   }
 
@@ -131,6 +136,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!result.success) {
     return NextResponse.json({ error: result.error }, { status: 503 });
   }
+
+  const targetStatus = (action === "start" || action === "restart") ? "RUNNING" : "STOPPED";
+  await db.server.update({ where: { id: server.id }, data: { status: targetStatus } }).catch(() => {});
 
   return NextResponse.json({ success: true, action });
 }

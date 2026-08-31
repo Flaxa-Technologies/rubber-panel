@@ -45,9 +45,12 @@ async function sendHeartbeat() {
     const resources = getNodeResources();
     const servers = await getAllServers();
     
-    // Periodically verify actual container statuses if they are marked RUNNING
+    // Verify actual container status for all servers
     for (const s of servers) {
-      if (s.status === "RUNNING") await getServerStatus(s.id);
+      const refreshed = await getServerStatus(s.id);
+      if (refreshed) {
+        s.status = refreshed.status;
+      }
     }
 
     let currentVer = "0.1.0-beta.16";

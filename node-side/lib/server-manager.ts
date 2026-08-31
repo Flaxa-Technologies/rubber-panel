@@ -289,6 +289,52 @@ async function saveState(serverId: string, info: ServerInfo) {
   } catch {}
 }
 
+export async function getOrLoadServerState(serverId: string): Promise<ServerInfo | undefined> {
+  let info = serverStates.get(serverId);
+  if (info) return info;
+
+  // 1. Check isolated state file (.data/server-states/${serverId}.json)
+  const stateFile = getServerStateFile(serverId);
+  try {
+    const raw = await fs.readFile(stateFile, "utf-8");
+    info = JSON.parse(raw) as ServerInfo;
+    serverStates.set(serverId, info);
+    return info;
+  } catch {}
+
+  // 2. Check legacy state file inside server dir (.data/servers/${serverId}/.rp-state.json) and migrate
+  const legacyFile = path.join(getServerDir(serverId), ".rp-state.json");
+  try {
+    const raw = await fs.readFile(legacyFile, "utf-8");
+    info = JSON.parse(raw) as ServerInfo;
+    serverStates.set(serverId, info);
+    await saveState(serverId, info);
+    return info;
+  } catch {}
+
+  // 3. Fallback: If server dir exists or Docker container exists, reconstruct state
+  const dir = getServerDir(serverId);
+  const dirExists = await fs.stat(dir).then(() => true).catch(() => false);
+  const containerName = getContainerName(serverId);
+  const isRunning = await containerRunning(containerName);
+
+  if (dirExists || isRunning) {
+    info = {
+      id: serverId,
+      name: "Server Instance",
+      status: isRunning ? "RUNNING" : "STOPPED",
+      ram: 1024,
+      cpu: 100,
+    };
+    serverStates.set(serverId, info);
+    await saveState(serverId, info).catch(() => {});
+    return info;
+  }
+
+  return undefined;
+}
+
+
 export async function reloadStatesFromDisk() {
   const stateDir = path.join(process.cwd(), ".data", "server-states");
   await fs.mkdir(stateDir, { recursive: true });
@@ -745,15 +791,9 @@ Welcome to your cloud-hosted **VS Code development environment** powered by Rubb
 }
 
 export async function updateServerInfo(serverId: string, patch: Partial<ServerInfo>): Promise<{ success: boolean; error?: string }> {
-  let info = serverStates.get(serverId);
+  let info = await getOrLoadServerState(serverId);
   if (!info) {
-    const stateFile = path.join(getServerDir(serverId), ".rp-state.json");
-    try {
-      const raw = await fs.readFile(stateFile, "utf-8");
-      info = JSON.parse(raw) as ServerInfo;
-    } catch {
-      return { success: false, error: "Server not found on this node" };
-    }
+    return { success: false, error: "Server not found on this node" };
   }
 
   if (patch.name !== undefined) info.name = patch.name;
@@ -774,17 +814,10 @@ export async function updateServerInfo(serverId: string, patch: Partial<ServerIn
 
 export async function startServer(serverId: string): Promise<{ success: boolean; error?: string }> {
   console.log(`[ServerManager] START server ${serverId}`);
-  let info = serverStates.get(serverId);
+  let info = await getOrLoadServerState(serverId);
 
   if (!info) {
-    const stateFile = path.join(getServerDir(serverId), ".rp-state.json");
-    try {
-      const raw = await fs.readFile(stateFile, "utf-8");
-      info = JSON.parse(raw) as ServerInfo;
-      serverStates.set(serverId, info);
-    } catch {
-      return { success: false, error: "Server not found on this node" };
-    }
+    return { success: false, error: "Server not found on this node" };
   }
 
   // ─── 1. CHECK SECURITY QUARANTINE STATUS ──────────────────────────────────
@@ -869,7 +902,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       appendLog(serverId, "[Panel] Container already active, attaching to output...");
       attachLogs(serverId);
       info.status = "RUNNING";
+      info.isCryoSleeping = false;
       serverStates.set(serverId, info);
+      await saveState(serverId, info);
       return { success: true };
     }
 
@@ -1301,7 +1336,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
 export async function stopServer(serverId: string, force = false): Promise<{ success: boolean; error?: string }> {
   console.log(`[ServerManager] STOP server ${serverId} (force=${force})`);
-  const info = serverStates.get(serverId);
+  const info = await getOrLoadServerState(serverId);
   if (!info) return { success: false, error: "Server not found" };
 
   const running = await containerRunning(getContainerName(serverId));
@@ -1330,6 +1365,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
     console.error(`[ServerManager] Failed to stop server ${serverId}:`, err);
     info.status = "CRASHED";
     serverStates.set(serverId, info);
+    await saveState(serverId, info);
     return { success: false, error: err.message };
   }
 }
@@ -1357,6 +1393,9 @@ export async function deleteServer(serverId: string): Promise<{ success: boolean
 
   serverStates.delete(serverId);
   consoleLogs.delete(serverId);
+  try {
+    await fs.unlink(getServerStateFile(serverId));
+  } catch {}
   return { success: true };
 }
 
@@ -1498,31 +1537,13 @@ export async function fetchLiveDockerStats(containerName: string, fallbackRamLim
 
 export async function getServerStatus(serverId: string): Promise<ServerInfo | undefined> {
   const dir = getServerDir(serverId);
-  const exists = await fs.stat(dir).then(() => true).catch(() => false);
-  if (!exists && !serverStates.has(serverId)) {
+  let state = await getOrLoadServerState(serverId);
+  if (!state) {
     return undefined;
   }
 
   const { isWakeProxyRunning } = await import("./cryo-sleep-proxy");
   const isSleeping = isWakeProxyRunning(serverId);
-
-  let state = serverStates.get(serverId);
-  if (!state) {
-    const stateFile = path.join(dir, ".rp-state.json");
-    try {
-      const raw = await fs.readFile(stateFile, "utf-8");
-      state = JSON.parse(raw) as ServerInfo;
-      serverStates.set(serverId, state);
-    } catch {
-      state = {
-        id: serverId,
-        name: "Server Instance",
-        status: (isSleeping ? "SLEEPING" : "OFFLINE") as ServerStatus,
-        ram: 1024,
-        cpu: 100,
-      };
-    }
-  }
 
   // Ensure port is defined from server.properties or environment if missing
   if (!state.port) {
@@ -1533,19 +1554,29 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
     } catch {}
   }
 
-  if (isSleeping) {
+  const containerName = getContainerName(serverId);
+  const isRunning = await containerRunning(containerName);
+
+  if (isRunning) {
+    state.status = "RUNNING";
+    state.isCryoSleeping = false;
+    serverStates.set(serverId, state);
+  } else if (isSleeping) {
     state.status = "SLEEPING";
     state.isCryoSleeping = true;
+    serverStates.set(serverId, state);
+  } else if (state.status === "RUNNING") {
+    state.status = "STOPPED";
+    serverStates.set(serverId, state);
   }
 
-  const containerName = getContainerName(serverId);
   let cpuUsage = 0;
   let ramUsageMb = 0;
   let ramPercent = 0;
   let netRx = "0 B";
   let netTx = "0 B";
 
-  if (state.status === "RUNNING") {
+  if (isRunning) {
     const live = await fetchLiveDockerStats(containerName, state.ram || 1024);
     cpuUsage = live.cpuUsage;
     ramUsageMb = live.ramUsageMb;
@@ -1567,7 +1598,7 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
       diskUsedBytes: diskBytes,
       diskUsedMb,
       isCryoSleeping: isSleeping,
-      status: isSleeping ? "SLEEPING" : state.status,
+      status: state.status,
     };
   } catch {
     return {
@@ -1578,7 +1609,7 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
       netRx,
       netTx,
       isCryoSleeping: isSleeping,
-      status: isSleeping ? "SLEEPING" : state.status,
+      status: state.status,
     };
   }
 }
@@ -1611,10 +1642,18 @@ export async function getServerLiveStats(serverId: string) {
 }
 
 export async function getAllServers(): Promise<ServerInfo[]> {
+  if (serverStates.size === 0) {
+    await reloadStatesFromDisk().catch(() => {});
+  }
   const list = Array.from(serverStates.values());
   return Promise.all(
     list.map(async (s) => {
       try {
+        const isRunning = await containerRunning(getContainerName(s.id));
+        if (isRunning) {
+          s.status = "RUNNING";
+          s.isCryoSleeping = false;
+        }
         const diskBytes = await calculateServerDiskBytes(s.id);
         return {
           ...s,

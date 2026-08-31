@@ -46,5 +46,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: result.error ?? "Node unreachable" }, { status: 503 });
   }
 
+  const targetStatus = (action === "start" || action === "restart") ? "RUNNING" : "STOPPED";
+  await db.server.update({ where: { id: server.id }, data: { status: targetStatus } }).catch(() => {});
+
   return NextResponse.json({ success: true, action });
 }
