@@ -342,8 +342,42 @@ export async function reloadStatesFromDisk() {
       try {
         const raw = await fs.readFile(legacyStateFile, "utf-8");
         const info: ServerInfo = JSON.parse(raw);
+        // Skip if already loaded from new state dir
+        if (serverStates.has(info.id)) {
+          await fs.unlink(legacyStateFile).catch(() => {});
+          continue;
+        }
+        // Migrate: save to new location and remove legacy file
         await saveState(info.id, info);
-        await fs.unlink(legacyStateFile).catch(() => {});
+        // Also load the migrated server into memory immediately
+        const running = await containerRunning(getContainerName(info.id));
+        const { isWakeProxyRunning } = await import("./cryo-sleep-proxy");
+        const isSleeping = isWakeProxyRunning(info.id);
+        const env = info.environment || {};
+        const isCryoEnabled = env.CRYO_SLEEP_ENABLED === "true" || info.cryoSleepEnabled === true;
+
+        info.status = running ? "RUNNING" : isSleeping ? "SLEEPING" : "STOPPED";
+        info.isCryoSleeping = isSleeping;
+        serverStates.set(info.id, info);
+        if (running) attachLogs(info.id);
+        syncServerJar(info.id).catch(() => {});
+
+        const { registerCryoServer, hibernateServer } = await import("./cryo-sleep-engine");
+        registerCryoServer({
+          serverId: info.id,
+          serverName: info.name,
+          port: info.port ?? 25565,
+          serverType: env.SERVER_TYPE === "NODEJS" ? "NODEJS" : "MINECRAFT",
+          enabled: isCryoEnabled,
+          idleMinutes: parseInt(env.CRYO_SLEEP_IDLE_MINUTES || String(info.cryoSleepIdleMinutes || 10)),
+          motd: env.CRYO_SLEEP_MOTD || info.cryoSleepMotd,
+        });
+
+        if (isCryoEnabled && !running && !isSleeping) {
+          hibernateServer(info.id).catch(() => {});
+        }
+
+        console.log(`[ServerManager] Migrated legacy state for server ${info.id} (${info.name})`);
       } catch {}
     }
   } catch {}
