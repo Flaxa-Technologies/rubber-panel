@@ -127,11 +127,15 @@ if [ -f user-side.zip ] && [ -s user-side.zip ]; then
   rm -f user-side.zip
 fi
 
-# Detect Public IP
-SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "localhost")
-SERVER_IP=$(echo "${SERVER_IP}" | tr -d ' \n\r')
-if [ -z "${SERVER_IP}" ]; then
-  SERVER_IP="localhost"
+# Detect Public IP if not provided
+if [ -n "${INPUT_DOMAIN}" ]; then
+  SERVER_IP="${INPUT_DOMAIN}"
+else
+  SERVER_IP=$(curl -s -4 --max-time 3 ifconfig.me 2>/dev/null || curl -s -4 --max-time 3 icanhazip.com 2>/dev/null || echo "localhost")
+  SERVER_IP=$(echo "${SERVER_IP}" | tr -d ' \n\r')
+  if [ -z "${SERVER_IP}" ]; then
+    SERVER_IP="localhost"
+  fi
 fi
 
 # Interactive Setup Form
