@@ -1272,7 +1272,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       if (!env.INIT_MEMORY) env.INIT_MEMORY = `${initRam}M`;
       if (!env.JVM_XX_OPTS) env.JVM_XX_OPTS = `-Xms${initRam}M`;
 
-      const dockerImage = env.DOCKER_IMAGE || "itzg/minecraft-server";
+      const javaVer = env.JAVA_VERSION || "21";
+      let dockerImage = env.DOCKER_IMAGE;
+      if (!dockerImage || dockerImage === "itzg/minecraft-server" || dockerImage === "itzg/minecraft-server:latest") {
+        dockerImage = `itzg/minecraft-server:java${javaVer}`;
+      }
       delete env.DOCKER_IMAGE;
 
       if (!env.TYPE) env.TYPE = "PAPER";
@@ -1287,12 +1291,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
       appendLog(serverId, `[ Rubber ] Launching ${dockerImage} on host port ${assignedPort}...`);
       appendLog(serverId, `[ Rubber ] Software: ${env.TYPE} ${env.VERSION}`);
-      if (env.JAVA_VERSION) {
-        appendLog(serverId, `[ Rubber ] Java Runtime: Java ${env.JAVA_VERSION}`);
-      }
+      appendLog(serverId, `[ Rubber ] Java Runtime: Java ${javaVer}`);
 
       dockerArgs = [
-        "run", "-d",
+        "run", "-d", "-i",
         "--name", containerName,
         "-p", `${assignedPort}:25565`,
         "--dns", "8.8.8.8",
