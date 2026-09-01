@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { 
-  Palette, Save, RefreshCw, Check, Sparkles, MessageCircle, 
+import {
+  Palette, Save, RefreshCw, Check, Sparkles, MessageCircle,
   Globe, ShieldAlert, Plus, Trash2, Video, Camera, Share2,
   Sliders, Eye, Layout, ExternalLink, Megaphone, CheckCircle2, Code2,
   Upload, Image as ImageIcon, RotateCcw, FileCheck
@@ -13,7 +13,7 @@ import { ADVANCED_CSS_THEMES } from "@/lib/css-themes";
 function YoutubeIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
     </svg>
   );
 }
@@ -21,9 +21,9 @@ function YoutubeIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
 function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
     </svg>
   );
 }
@@ -31,7 +31,7 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
 function TwitterIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
     </svg>
   );
 }
@@ -83,7 +83,7 @@ export default function CustomizationPage() {
     "social.youtube": "",
     "social.instagram": "",
     "social.twitter": "",
-    "social.website": "https://prasadnaik.in",
+    "social.website": "https://hostadmin.net",
     "social.supportUrl": "https://discord.gg/rubberpanel",
     "social.customLinks": "[]",
 
@@ -225,7 +225,7 @@ export default function CustomizationPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={loadSettings}
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm border hover:bg-white/5 transition-colors"
@@ -234,13 +234,13 @@ export default function CustomizationPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
           </button>
 
-          <button 
+          <button
             onClick={handleSave}
             disabled={saving}
             className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all active:scale-95 shadow-md"
-            style={{ 
-              backgroundColor: saved ? "var(--color-rp-green)" : "var(--color-rp-accent)", 
-              color: "#000" 
+            style={{
+              backgroundColor: saved ? "var(--color-rp-green)" : "var(--color-rp-accent)",
+              color: "#000"
             }}
           >
             {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
@@ -337,7 +337,7 @@ export default function CustomizationPage() {
 
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-1">
                   {/* Logo Preview Box */}
-                  <div 
+                  <div
                     className="w-16 h-16 rounded-xl border flex items-center justify-center p-2 relative bg-black/40 overflow-hidden shrink-0"
                     style={{ borderColor: "var(--color-rp-border)" }}
                   >
@@ -585,7 +585,7 @@ export default function CustomizationPage() {
                 ) : (
                   <div className="space-y-2">
                     {customLinks.map((link) => (
-                      <div 
+                      <div
                         key={link.id}
                         className="flex items-center gap-2 p-2.5 rounded-xl border"
                         style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}
@@ -749,31 +749,31 @@ export default function CustomizationPage() {
                     {ADVANCED_CSS_THEMES.map((theme) => {
                       const isCurrent = settings["branding.customCss"] === theme.css;
                       const gradients: Record<string, string> = {
-                        "aurora-void":      "linear-gradient(135deg, #06040f 0%, #1a0533 40%, #0c1f4a 60%, #7c3aed22 100%)",
-                        "cyber-tokyo":      "linear-gradient(135deg, #03010a 0%, #ff008015 35%, #00f0ff15 65%, #120030 100%)",
-                        "royal-onyx":       "linear-gradient(135deg, #050301 0%, #fbbf2418 45%, #d9770612 70%, #0b0702 100%)",
-                        "quantum-emerald":  "linear-gradient(135deg, #000802 0%, #00ff8818 40%, #10b98115 65%, #030f05 100%)",
+                        "aurora-void": "linear-gradient(135deg, #06040f 0%, #1a0533 40%, #0c1f4a 60%, #7c3aed22 100%)",
+                        "cyber-tokyo": "linear-gradient(135deg, #03010a 0%, #ff008015 35%, #00f0ff15 65%, #120030 100%)",
+                        "royal-onyx": "linear-gradient(135deg, #050301 0%, #fbbf2418 45%, #d9770612 70%, #0b0702 100%)",
+                        "quantum-emerald": "linear-gradient(135deg, #000802 0%, #00ff8818 40%, #10b98115 65%, #030f05 100%)",
                       };
                       const animDots: Record<string, string[]> = {
-                        "aurora-void":     ["#7c3aed","#06b6d4","#ec4899"],
-                        "cyber-tokyo":     ["#ff0080","#00f0ff","#ff4040"],
-                        "royal-onyx":      ["#fbbf24","#d97706","#f59e0b"],
-                        "quantum-emerald": ["#00ff88","#10b981","#34d399"],
+                        "aurora-void": ["#7c3aed", "#06b6d4", "#ec4899"],
+                        "cyber-tokyo": ["#ff0080", "#00f0ff", "#ff4040"],
+                        "royal-onyx": ["#fbbf24", "#d97706", "#f59e0b"],
+                        "quantum-emerald": ["#00ff88", "#10b981", "#34d399"],
                       };
-                      const dots = animDots[theme.id] || ["#ffffff","#aaaaaa","#666666"];
+                      const dots = animDots[theme.id] || ["#ffffff", "#aaaaaa", "#666666"];
                       return (
                         <button
                           key={theme.id}
                           type="button"
                           onClick={() => updateKey("branding.customCss", theme.css)}
                           className="p-0 rounded-2xl border text-left transition-all relative overflow-hidden group hover:scale-[1.02] active:scale-[0.98]"
-                          style={{ 
+                          style={{
                             borderColor: isCurrent ? theme.previewColor : "rgba(255,255,255,0.1)",
                             boxShadow: isCurrent ? `0 0 24px ${theme.previewColor}44, 0 0 50px ${theme.previewColor}18` : "0 4px 20px rgba(0,0,0,0.5)"
                           }}
                         >
                           {/* Animated preview area */}
-                          <div 
+                          <div
                             className="relative h-24 w-full overflow-hidden"
                             style={{ background: gradients[theme.id] || gradients["aurora-void"] }}
                           >
@@ -811,10 +811,10 @@ export default function CustomizationPage() {
                                 <span className="w-2 h-2 rounded-full shrink-0 animate-pulse" style={{ backgroundColor: theme.previewColor, boxShadow: `0 0 6px ${theme.previewColor}` }} />
                                 {theme.name}
                               </span>
-                              <span 
+                              <span
                                 className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md font-mono border shrink-0"
-                                style={{ 
-                                  backgroundColor: `${theme.previewColor}18`, 
+                                style={{
+                                  backgroundColor: `${theme.previewColor}18`,
                                   borderColor: `${theme.previewColor}44`,
                                   color: theme.previewColor
                                 }}
@@ -948,18 +948,18 @@ export default function CustomizationPage() {
           </div>
 
           {/* Mini Mockup Container */}
-          <div 
+          <div
             className="rounded-xl border overflow-hidden text-xs shadow-2xl transition-all"
-            style={{ 
-              backgroundColor: selectedPreset.previewBg, 
+            style={{
+              backgroundColor: selectedPreset.previewBg,
               borderColor: selectedPreset.border,
-              color: "#f4f4f5" 
+              color: "#f4f4f5"
             }}
           >
             {/* Topbar in Mockup */}
-            <div 
+            <div
               className="px-3 py-2.5 border-b flex items-center justify-between"
-              style={{ 
+              style={{
                 borderColor: selectedPreset.border,
                 backgroundColor: settings["branding.navbarStyle"] === "blur" ? "rgba(255,255,255,0.03)" : "transparent"
               }}
@@ -972,7 +972,7 @@ export default function CustomizationPage() {
               </div>
 
               {settings["features.showDiscordButton"] === "true" && (
-                <div 
+                <div
                   className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold"
                   style={{ backgroundColor: "#5865F2", color: "#ffffff" }}
                 >
@@ -993,7 +993,7 @@ export default function CustomizationPage() {
                   <p className="text-[10px] text-zinc-300">
                     Contact our administration team for account or payment resolution.
                   </p>
-                  <div 
+                  <div
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold"
                     style={{ backgroundColor: "#5865F2", color: "#ffffff" }}
                   >
@@ -1003,7 +1003,7 @@ export default function CustomizationPage() {
               )}
 
               {/* Instance Card Mock */}
-              <div 
+              <div
                 className="p-2.5 rounded-lg border space-y-1.5"
                 style={{ borderColor: selectedPreset.border, backgroundColor: "rgba(255,255,255,0.02)" }}
               >
@@ -1014,7 +1014,7 @@ export default function CustomizationPage() {
                 <div className="text-[10px] font-mono text-zinc-400">
                   play.server.com:25566
                 </div>
-                <div 
+                <div
                   className="w-full py-1 rounded text-center text-[10px] font-bold"
                   style={{ backgroundColor: settings["branding.accentColor"] || "#ffffff", color: "#000000" }}
                 >

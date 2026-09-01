@@ -2,11 +2,11 @@ import db from "./lib/db";
 
 async function main() {
   const user = await db.user.findFirst({
-    where: { email: "me@prasadnaik.in" }
+    where: { email: "me@hostadmin.net" }
   });
 
   if (!user) {
-    console.error("User me@prasadnaik.in not found!");
+    console.error("User me@hostadmin.net not found!");
     return;
   }
 
@@ -46,7 +46,7 @@ async function main() {
     },
   });
 
-  console.log("Successfully granted quota to me@prasadnaik.in:", {
+  console.log("Successfully granted quota to me@hostadmin.net:", {
     email: user.email,
     ramGb: quota.maxRam / 1024,
     diskGb: quota.maxDisk / 1024,

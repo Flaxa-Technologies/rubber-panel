@@ -1299,7 +1299,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "-e", "CREATE_CONSOLE_IN_PIPE=true",
         "-e", "ENABLE_AUTOPAUSE=FALSE",
+        "-e", "ENABLE_RCON=true",
+        "-e", "RCON_PORT=25575",
+        "-e", `RCON_PASSWORD=rp-${serverId.slice(0, 8)}`,
         ...envArgs,
         dockerImage,
       ];
@@ -1498,10 +1502,11 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
   }
 
   const rconPass = `rp-${serverId.slice(0, 8)}`;
+  const escapedCmd = command.replace(/"/g, '\\"');
   
-  // 1. Primary method: rcon-cli execution
+  // Strategy 1: Primary rcon-cli execution
   try {
-    const cmd = `docker exec ${containerName} rcon-cli --password "${rconPass}" "${command.replace(/"/g, '\\"')}"`;
+    const cmd = `docker exec ${containerName} rcon-cli --password "${rconPass}" "${escapedCmd}"`;
     const { stdout, stderr } = await execAsync(cmd);
     const output = (stdout || stderr).trim();
     if (output) {
@@ -1511,21 +1516,40 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
     }
     return { success: true };
   } catch {
-    // 2. Fallback method: mc-send-to-console / stdin pipe
+    // Strategy 2: Console pipe (/tmp/minecraft-console-in) created by CREATE_CONSOLE_IN_PIPE
     try {
-      const escapedCmd = command.replace(/"/g, '\\"');
-      const fallbackCmd = `docker exec ${containerName} mc-send-to-console "${escapedCmd}" 2>/dev/null || docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-input"`;
-      const { stdout, stderr } = await execAsync(fallbackCmd);
-      const out = (stdout || stderr).trim();
-      if (out) {
-        for (const line of out.split("\n")) {
-          if (line.trim()) appendLog(serverId, line.trim());
+      const pipeCmd = `docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-console-in"`;
+      await execAsync(pipeCmd);
+      return { success: true };
+    } catch {
+      // Strategy 3: rcon-cli without explicit password (reading from environment)
+      try {
+        const cmd = `docker exec ${containerName} rcon-cli "${escapedCmd}"`;
+        const { stdout, stderr } = await execAsync(cmd);
+        const output = (stdout || stderr).trim();
+        if (output) {
+          for (const line of output.split("\n")) {
+            if (line.trim()) appendLog(serverId, line.trim());
+          }
+        }
+        return { success: true };
+      } catch {
+        // Strategy 4: mc-send-to-console wrapper
+        try {
+          const fallbackCmd = `docker exec ${containerName} mc-send-to-console "${escapedCmd}"`;
+          const { stdout, stderr } = await execAsync(fallbackCmd);
+          const out = (stdout || stderr).trim();
+          if (out) {
+            for (const line of out.split("\n")) {
+              if (line.trim()) appendLog(serverId, line.trim());
+            }
+          }
+          return { success: true };
+        } catch (err: any) {
+          appendLog(serverId, `[Error executing command]: ${err.message}`);
+          return { success: false, error: err.message };
         }
       }
-      return { success: true };
-    } catch (err: any) {
-      appendLog(serverId, `[Error executing command]: ${err.message}`);
-      return { success: false, error: err.message };
     }
   }
 }

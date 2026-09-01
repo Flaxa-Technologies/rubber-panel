@@ -40,7 +40,7 @@ const DEFAULTS: Record<string, string> = {
   "social.youtube": "",
   "social.instagram": "",
   "social.twitter": "",
-  "social.website": "https://prasadnaik.in",
+  "social.website": "https://hostadmin.net",
   "social.supportUrl": "https://discord.gg/rubberpanel",
   "social.customLinks": "[]",
 

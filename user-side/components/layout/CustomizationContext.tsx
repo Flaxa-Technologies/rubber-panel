@@ -45,7 +45,7 @@ const defaultCustomization: CustomizationData = {
   youtube: "",
   instagram: "",
   twitter: "",
-  website: "https://prasadnaik.in",
+  website: "https://hostadmin.net",
   supportUrl: "https://discord.gg/rubberpanel",
   customLinks: [],
   showDiscordButton: true,
@@ -151,7 +151,7 @@ export function CustomizationProvider({ children }: { children: ReactNode }) {
         let links: CustomLink[] = [];
         try {
           links = JSON.parse(raw["social.customLinks"] || "[]");
-        } catch {}
+        } catch { }
 
         setData({
           siteName: raw["branding.siteName"] || defaultCustomization.siteName,
@@ -176,7 +176,7 @@ export function CustomizationProvider({ children }: { children: ReactNode }) {
           announcementMessage: raw["features.announcementMessage"] || "",
         });
       }
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
