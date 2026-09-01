@@ -106,8 +106,6 @@ export default function MinecraftRgbModal({ open, onClose, onInsert }: Minecraft
   const [strikethrough, setStrikethrough] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  if (!open) return null;
-
   const addColor = () => {
     if (colors.length < 6) {
       setColors([...colors, "#38bdf8"]);
@@ -236,6 +234,8 @@ export default function MinecraftRgbModal({ open, onClose, onInsert }: Minecraft
   const gradientCss = useMemo(() => {
     return `linear-gradient(90deg, ${colors.join(", ")})`;
   }, [colors]);
+
+  if (!open) return null;
 
   return (
     <div
