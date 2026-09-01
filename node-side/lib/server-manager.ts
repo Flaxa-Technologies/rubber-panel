@@ -50,11 +50,13 @@ export interface CreateServerParams {
 }
 
 // In-memory state — populated from disk on startup
-const serverStates = new Map<string, ServerInfo>();
+const serverStates: Map<string, ServerInfo> =
+  (globalThis as any).__rp_server_states || ((globalThis as any).__rp_server_states = new Map());
 
 // ─── CONSOLE LOG RING BUFFER ───────────────────────────────────────────────
 const MAX_LOG_LINES = 1000;
-const consoleLogs = new Map<string, string[]>();
+const consoleLogs: Map<string, string[]> =
+  (globalThis as any).__rp_console_logs || ((globalThis as any).__rp_console_logs = new Map());
 
 export function appendLog(serverId: string, line: string) {
   const logs = consoleLogs.get(serverId) ?? [];
@@ -244,7 +246,8 @@ async function containerRunning(name: string): Promise<boolean> {
   }
 }
 
-const activeLogStreams = new Map<string, any>();
+const activeLogStreams: Map<string, any> =
+  (globalThis as any).__rp_active_log_streams || ((globalThis as any).__rp_active_log_streams = new Map());
 
 function attachLogs(serverId: string) {
   const containerName = getContainerName(serverId);

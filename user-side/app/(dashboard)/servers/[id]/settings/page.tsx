@@ -174,18 +174,17 @@ export default function SettingsPage() {
   const [reinstallConfirm, setReinstallConfirm] = useState("");
   const [reinstalling, setReinstalling] = useState(false);
   const [reinstallError, setReinstallError] = useState("");
+  const [savingJavaId, setSavingJavaId] = useState<string | null>(null);
 
-  // Sync state if server context updates
+  // Sync state if server context updates (only if not actively selecting/saving)
   useEffect(() => {
     setName(server.name);
     setStartupCmd(server.startupCommand ?? (isNodeJs ? "node server.js" : ""));
-    if (server.javaVersion) setSelectedJavaVersion(server.javaVersion);
-    if (server.javaVersionId) setSelectedJavaVersionId(server.javaVersionId);
     if (server.nodeVersion) setSelectedNodeVersion(server.nodeVersion);
     setSecurityProtection(server.securityProtection !== false);
     setCryoSleepMotd(server.cryoSleepMotd ?? "");
     setInternalPort(server.internalPort ? String(server.internalPort) : "");
-  }, [server, isNodeJs]);
+  }, [server.name, server.startupCommand, server.nodeVersion, server.securityProtection, server.cryoSleepMotd, server.internalPort, isNodeJs]);
 
   // Load available Java versions for Minecraft server
   const loadJavaVersions = useCallback(async () => {
@@ -196,10 +195,10 @@ export default function SettingsPage() {
       if (res.ok) {
         const data = await res.json();
         setJavaVersions(data.javaVersions || []);
-        if (data.currentJavaVersion) {
+        if (data.currentJavaVersion && !selectedJavaVersion) {
           setSelectedJavaVersion(data.currentJavaVersion);
         }
-        if (data.currentJavaVersionId) {
+        if (data.currentJavaVersionId && !selectedJavaVersionId) {
           setSelectedJavaVersionId(data.currentJavaVersionId);
         }
       }
@@ -208,13 +207,43 @@ export default function SettingsPage() {
     } finally {
       setLoadingJava(false);
     }
-  }, [server.id, isMinecraft]);
+  }, [server.id, isMinecraft, selectedJavaVersion, selectedJavaVersionId]);
 
   useEffect(() => {
     if (isMinecraft) {
       loadJavaVersions();
     }
   }, [loadJavaVersions, isMinecraft]);
+
+  // Instant auto-save when clicking a Java version
+  async function handleSelectJavaVersion(jv: JavaVersionItem) {
+    setSelectedJavaVersion(jv.version);
+    setSelectedJavaVersionId(jv.id);
+    setSavingJavaId(jv.id);
+    setSaveError("");
+    try {
+      const res = await fetch(`/api/user/servers/${server.id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          javaVersion: jv.version,
+          javaVersionId: jv.id,
+        }),
+      });
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+        await refreshServer?.();
+      } else {
+        const data = await res.json();
+        setSaveError(data.error || "Failed to save Java version");
+      }
+    } catch {
+      setSaveError("Failed to save Java version");
+    } finally {
+      setSavingJavaId(null);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -455,13 +484,11 @@ export default function SettingsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
                 {javaVersions.map((jv) => {
                   const isSelected = selectedJavaVersion === jv.version;
+                  const isSavingThis = savingJavaId === jv.id;
                   return (
                     <div
                       key={jv.id}
-                      onClick={() => {
-                        setSelectedJavaVersion(jv.version);
-                        setSelectedJavaVersionId(jv.id);
-                      }}
+                      onClick={() => handleSelectJavaVersion(jv)}
                       style={{
                         padding: "14px 16px",
                         borderRadius: 10,
@@ -518,7 +545,9 @@ export default function SettingsPage() {
                           </div>
                         </div>
 
-                        {isSelected ? (
+                        {isSavingThis ? (
+                          <Loader2 size={16} className="spin" style={{ color: "#38bdf8", flexShrink: 0, marginTop: 2 }} />
+                        ) : isSelected ? (
                           <CheckCircle2 size={16} style={{ color: "#38bdf8", flexShrink: 0, marginTop: 2 }} />
                         ) : (
                           <div style={{ width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--border-subtle)", flexShrink: 0, marginTop: 2 }} />
