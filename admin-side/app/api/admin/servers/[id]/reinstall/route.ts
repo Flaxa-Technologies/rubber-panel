@@ -52,9 +52,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     VERSION: softwareVersion,
     MEMORY: `${server.ram}M`,
     JVM_XX_OPTS: `-Xms${xms}M`,
-    ENABLE_RCON: "true",
-    RCON_PASSWORD: `rp-${server.id.slice(0, 8)}`,
-    RCON_PORT: "25575",
+    ENABLE_RCON: "false",
+    ENABLE_AUTOPAUSE: "FALSE",
     ONLINE_MODE: "false",
     USE_AIKAR_FLAGS: "true",
   };
@@ -78,7 +77,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   await sendNodeCommand(server.node.id, `/api/agent/servers/${server.id}`, "POST", { action: "start" });
 
   // 5. Update status in DB
-  await db.server.update({ where: { id }, data: { status: "STARTING" } });
+  await db.server.update({
+    where: { id },
+    data: { status: "STARTING", environment: JSON.stringify(environment) },
+  });
 
   await createAuditLog({
     actorId: actor.id, actorEmail: actor.email,

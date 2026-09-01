@@ -57,9 +57,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     VERSION: softwareVersion,
     MEMORY: `${server.ram}M`,
     JVM_XX_OPTS: `-Xms${xms}M`,
-    ENABLE_RCON: "true",
-    RCON_PASSWORD: `rp-${server.id.slice(0, 8)}`,
-    RCON_PORT: "25575",
+    ENABLE_RCON: "false",
+    ENABLE_AUTOPAUSE: "FALSE",
     ONLINE_MODE: "false",
     USE_AIKAR_FLAGS: "true",
   };
@@ -78,6 +77,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Reinstall failed on node: " + nodeResult.error }, { status: 503 });
   }
 
-  await db.server.update({ where: { id }, data: { status: "OFFLINE" } });
+  await db.server.update({
+    where: { id },
+    data: { status: "OFFLINE", environment: JSON.stringify(environment) },
+  });
   return NextResponse.json({ success: true });
 }

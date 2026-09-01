@@ -1275,6 +1275,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const dockerImage = env.DOCKER_IMAGE || "itzg/minecraft-server";
       delete env.DOCKER_IMAGE;
 
+      if (!env.TYPE) env.TYPE = "PAPER";
+      if (!env.VERSION) env.VERSION = "LATEST";
+      if (!env.EULA) env.EULA = "TRUE";
+
       if (env.TYPE && env.TYPE !== "CUSTOM") {
         delete env.CUSTOM_SERVER;
       }
@@ -1282,7 +1286,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
 
       appendLog(serverId, `[ Rubber ] Launching ${dockerImage} on host port ${assignedPort}...`);
-      appendLog(serverId, `[ Rubber ] Software: ${env.TYPE || "PAPER"} ${env.VERSION || "LATEST"}`);
+      appendLog(serverId, `[ Rubber ] Software: ${env.TYPE} ${env.VERSION}`);
       if (env.JAVA_VERSION) {
         appendLog(serverId, `[ Rubber ] Java Runtime: Java ${env.JAVA_VERSION}`);
       }

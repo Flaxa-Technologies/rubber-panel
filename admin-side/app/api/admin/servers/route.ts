@@ -420,14 +420,19 @@ export async function POST(request: NextRequest) {
     MEMORY: `${ramMb}M`,
     JVM_XX_OPTS: `-Xms${xms}M`,
     SERVER_PORT: `${assignedPort}`,
-    ENABLE_RCON: isNodeJs || isCustomImage || isPumpkin ? "false" : "true",
-    RCON_PASSWORD: `rp-${server.id.slice(0, 8)}`,
-    RCON_PORT: "25575",
+    ENABLE_RCON: "false",
+    ENABLE_AUTOPAUSE: "FALSE",
     ONLINE_MODE: "false",
     USE_AIKAR_FLAGS: isNodeJs || isCustomImage || isPumpkin ? "false" : "true",
     ...customParsedEnv,
     ...(rest.startupCommand && (softwareType === "CUSTOM" || isCustomImage) ? { CUSTOM_SERVER: rest.startupCommand } : {}),
   };
+
+  // Persist environment configuration to Server record in database
+  await db.server.update({
+    where: { id: server.id },
+    data: { environment: JSON.stringify(environment) },
+  }).catch(() => {});
 
   // Tell the node agent to create the server files & directories (WITHOUT auto-starting it)
   try {
