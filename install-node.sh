@@ -104,7 +104,7 @@ if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG=$(git ls-remote --tags "https://github.com/${REPO}.git" 2>/dev/null | grep -v '\^{}' | sort -V | tail -n 1 | sed 's/.*\///' | tr -d ' \n\r')
 fi
 if [ -z "${LATEST_TAG}" ]; then
-  LATEST_TAG="v0.1.0-beta.55"
+  LATEST_TAG="v0.1.0-beta.56"
 fi
 echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
 

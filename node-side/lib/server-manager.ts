@@ -1503,27 +1503,27 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
 
   // Sanitize: strip any leading slash — Minecraft server console does NOT use /command syntax
   const cleanCmd = command.startsWith("/") ? command.slice(1) : command;
-  const escapedCmd = cleanCmd.replace(/'/g, "'\\''")
+  const escapedCmd = cleanCmd.replace(/'/g, "'\\''");
 
-  // Strategy 1: Named pipe (CREATE_CONSOLE_IN_PIPE=true writes to /tmp/minecraft-console-in)
+  // Strategy 1: mc-send-to-console wrapper (official itzg helper)
   try {
-    const pipeCmd = `docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-console-in"`;
-    await execAsync(pipeCmd);
+    const mcCmd = `docker exec ${containerName} mc-send-to-console '${escapedCmd}'`;
+    await execAsync(mcCmd);
     return { success: true };
   } catch {
-    // Strategy 2: mc-send-to-console wrapper (some itzg images provide this)
+    // Strategy 2: Named pipe — ONLY write if it is confirmed to be a FIFO (-p)
     try {
-      const mcCmd = `docker exec ${containerName} mc-send-to-console '${escapedCmd}'`;
-      await execAsync(mcCmd);
+      const pipeCmd = `docker exec ${containerName} sh -c "if [ -p /tmp/minecraft-console-in ]; then echo '${escapedCmd}' > /tmp/minecraft-console-in; else exit 1; fi"`;
+      await execAsync(pipeCmd);
       return { success: true };
     } catch {
-      // Strategy 3: attach via docker exec with stdin — direct STDIN write
+      // Strategy 3: rcon-cli (if user explicitly enabled RCON)
       try {
-        const attachCmd = `docker exec -i ${containerName} sh -c "printf '%s\\n' '${escapedCmd}'"`;
-        await execAsync(attachCmd);
+        const rconCmd = `docker exec ${containerName} rcon-cli '${escapedCmd}'`;
+        await execAsync(rconCmd);
         return { success: true };
       } catch (err: any) {
-        appendLog(serverId, `[ Rubber ] Command dispatch failed: ${err.message}`);
+        appendLog(serverId, `[ Rubber ] Server is still starting or console pipe is not ready yet.`);
         return { success: false, error: err.message };
       }
     }
