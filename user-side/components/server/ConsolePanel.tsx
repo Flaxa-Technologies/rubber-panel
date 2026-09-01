@@ -162,7 +162,6 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
     if (!cmd) return;
 
     setSending(true);
-    setLines(prev => [...prev, { text: `> ${cmd}`, type: "input" }]);
     setHistory(prev => [cmd, ...prev.slice(0, 49)]);
     setHistoryIndex(-1);
     setCommand("");

@@ -839,8 +839,6 @@ Welcome to your cloud-hosted **VS Code development environment** powered by Rubb
     ].join("\n");
 
     await fs.writeFile(path.join(dir, "server.properties"), serverPropertiesContent, "utf-8");
-  } else {
-    // Generic Custom Container Image
     const readmePath = path.join(dir, "README.md");
     const readmeContent = [
       `# ${params.name}`,
@@ -867,7 +865,7 @@ Welcome to your cloud-hosted **VS Code development environment** powered by Rubb
   serverStates.set(params.id, info);
   await saveState(params.id, info);
 
-  appendLog(params.id, `[Panel] Server "${params.name}" (${runtime.label}) provisioned on port ${assignedPort}. Press Start to initialize.`);
+  appendLog(params.id, `[ Rubber ] Server "${params.name}" (${runtime.label}) provisioned on port ${assignedPort}. Press Start to initialize.`);
   return { success: true };
 }
 
@@ -890,7 +888,7 @@ export async function updateServerInfo(serverId: string, patch: Partial<ServerIn
 
   serverStates.set(serverId, info);
   await saveState(serverId, info);
-  appendLog(serverId, `[Panel] Instance configuration updated.`);
+  appendLog(serverId, `[ Rubber ] Instance configuration updated.`);
   return { success: true };
 }
 
@@ -969,7 +967,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
   info.status = "STARTING";
   info.isCryoSleeping = false;
   serverStates.set(serverId, info);
-  appendLog(serverId, `[Panel] Starting ${runtime.label} server container...`);
+  appendLog(serverId, `[ Rubber ] Starting ${runtime.label} server container...`);
 
   try {
     const dir = getServerDir(serverId);
@@ -982,7 +980,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
     // Clean up any stale or exited container before starting fresh
     const isRunning = await containerRunning(containerName);
     if (isRunning) {
-      appendLog(serverId, "[Panel] Container already active, attaching to output...");
+      appendLog(serverId, "[ Rubber ] Container already active, attaching to output...");
       attachLogs(serverId);
       info.status = "RUNNING";
       info.isCryoSleeping = false;
@@ -993,7 +991,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
     const exists = await containerExists(containerName);
     if (exists) {
-      appendLog(serverId, "[Panel] Removing previous container state for clean start...");
+      appendLog(serverId, "[ Rubber ] Removing previous container state for clean start...");
       try {
         await execAsync(`docker rm -f ${containerName}`);
       } catch {}
@@ -1022,9 +1020,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || "node server.js";
 
-      appendLog(serverId, `[Panel] Launching Node.js ${dockerImage} on host port ${assignedPort}...`);
-      appendLog(serverId, `[Panel] Security Shield: ${securityEnabled ? "ACTIVE (Threat Scanner & 5-Min Quarantine)" : "DISABLED"}`);
-      appendLog(serverId, `[Panel] Startup Script:  ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching Node.js ${dockerImage} on host port ${assignedPort}...`);
+      appendLog(serverId, `[ Rubber ] Security Shield: ${securityEnabled ? "ACTIVE (Threat Scanner & 5-Min Quarantine)" : "DISABLED"}`);
+      appendLog(serverId, `[ Rubber ] Startup Script:  ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1040,7 +1038,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `if [ -f package.json ] && [ ! -d node_modules ]; then echo '[Panel] Running npm install...'; npm install --production --no-audit; fi; echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`
+        `if [ -f package.json ] && [ ! -d node_modules ]; then echo '[ Rubber ] Running npm install...'; npm install --production --no-audit; fi; echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isPhp) {
       const dockerImage = env.DOCKER_IMAGE || "php:8.3-cli-alpine";
@@ -1051,8 +1049,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || `php -S 0.0.0.0:${internalPort} index.php`;
 
-      appendLog(serverId, `[Panel] Launching PHP ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching PHP ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1067,19 +1065,20 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`
+        `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isPython) {
-      const dockerImage = env.DOCKER_IMAGE || "python:3.12-alpine";
+      const pyVer = env.PYTHON_VERSION || "3.11";
+      const dockerImage = env.DOCKER_IMAGE || `python:${pyVer}-alpine`;
       const internalPort = env.INTERNAL_PORT || "8000";
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
 
       const envArgs = buildEnvArgs(env);
-      const startCmd = info.startupCommand?.trim() || "python -u main.py";
+      const startCmd = info.startupCommand?.trim() || `python main.py`;
 
-      appendLog(serverId, `[Panel] Launching Python ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching Python ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1091,14 +1090,13 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         `--cpus=${cpuLimit}`,
         "--restart=no",
         "-e", `PORT=${internalPort}`,
-        "-e", "PYTHONUNBUFFERED=1",
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `if [ -f requirements.txt ] && [ -s requirements.txt ]; then echo '[Panel] Installing pip packages...'; pip install --no-cache-dir -r requirements.txt; fi; echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`
+        `if [ -f requirements.txt ] && [ -s requirements.txt ]; then echo '[ Rubber ] Installing pip packages...'; pip install --no-cache-dir -r requirements.txt; fi; echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isRust) {
-      const dockerImage = env.DOCKER_IMAGE || "rust:1.80-alpine";
+      const dockerImage = env.DOCKER_IMAGE || "rust:alpine";
       const internalPort = env.INTERNAL_PORT || "8080";
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
@@ -1106,8 +1104,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || "cargo run --release";
 
-      appendLog(serverId, `[Panel] Launching Rust ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching Rust ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1122,10 +1120,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`
+        `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isGo) {
-      const dockerImage = env.DOCKER_IMAGE || "golang:1.23-alpine";
+      const dockerImage = env.DOCKER_IMAGE || "golang:alpine";
       const internalPort = env.INTERNAL_PORT || "8080";
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
@@ -1133,8 +1131,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || "go run main.go";
 
-      appendLog(serverId, `[Panel] Launching Golang ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching Golang ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1149,169 +1147,131 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`
+        `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isDatabase) {
-      const dockerImage = env.DOCKER_IMAGE || "mysql:8.0";
+      // Database Container Engine (MySQL, PostgreSQL, Redis, MongoDB, MariaDB)
+      const dockerImage = env.DOCKER_IMAGE || "mariadb:latest";
       const { internalPort, protocol } = await resolveContainerPortMapping(
         dockerImage,
         assignedPort,
         customInternalPort
       );
+      const volumePath = env.VOLUME_PATH || (dockerImage.includes("redis") ? "/data" : dockerImage.includes("mongo") ? "/data/db" : "/var/lib/mysql");
       delete env.DOCKER_IMAGE;
       delete env.INTERNAL_PORT;
-
-      const dataDir = (dockerImage.includes("mysql") || dockerImage.includes("mariadb"))
-        ? "/var/lib/mysql"
-        : dockerImage.includes("postgres")
-        ? "/var/lib/postgresql/data"
-        : dockerImage.includes("mongo")
-        ? "/data/db"
-        : "/data";
+      delete env.VOLUME_PATH;
 
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[Panel] Launching Database ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
-      if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching Database ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
+      if (startCmd) appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
-        "-p", `${assignedPort}:${internalPort}`,
-        "-v", `${getServerDir(serverId)}:${dataDir}`,
+        "-p", `${assignedPort}:${internalPort}/${protocol === "both" ? "tcp" : protocol}`,
+        "-v", `${getServerDir(serverId)}:${volumePath}`,
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
-        "-e", `PORT=${internalPort}`,
-        "-e", `MYSQL_TCP_PORT=${internalPort}`,
-        "-e", `PGPORT=${internalPort}`,
         ...envArgs,
         dockerImage,
       ];
 
       if (startCmd) {
-        dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
+        dockerArgs.push("sh", "-c", `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`);
       }
     } else if (runtime.isCodeSandbox) {
-      // Cloud Code Sandbox (VS Code Web Server) Execution
-      const sDir = getServerDir(serverId);
+      // VS Code Server Container Execution
       const dockerImage = env.DOCKER_IMAGE || "codercom/code-server:latest";
+      const authPassword = env.PASSWORD || env.CODE_SERVER_PASSWORD || `rp-${serverId.slice(0, 8)}`;
+      const authArg = authPassword ? "password" : "none";
+
       delete env.DOCKER_IMAGE;
-
-      const internalPort = assignedPort;
-      const sandboxPassword = env.SANDBOX_PASSWORD || "";
-      const authArg = sandboxPassword ? "password" : "none";
-      if (sandboxPassword) {
-        env.PASSWORD = sandboxPassword;
-      }
-
-      // Ensure directory permissions for code-server user
-      try {
-        await fs.chmod(sDir, 0o777);
-      } catch {}
+      delete env.PASSWORD;
+      delete env.CODE_SERVER_PASSWORD;
 
       const envArgs = buildEnvArgs(env);
-      appendLog(serverId, `[Panel] Launching Cloud Code Sandbox (VS Code IDE) on host port :${assignedPort}...`);
-      appendLog(serverId, `[Panel] Image: ${dockerImage} | Auth: ${authArg}`);
+
+      appendLog(serverId, `[ Rubber ] Launching Cloud Code Sandbox (VS Code IDE) on host port :${assignedPort}...`);
+      appendLog(serverId, `[ Rubber ] Image: ${dockerImage} | Auth: ${authArg}`);
 
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
         "-p", `${assignedPort}:8080/tcp`,
-        "-v", `${sDir}:/home/coder/project`,
+        "-v", `${getServerDir(serverId)}:/home/coder/project`,
+        "-w", "/home/coder/project",
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
-        // Block dangerous host-escape vectors only:
-        // - SYS_BOOT: prevents reboot/shutdown of the host
-        // - SYS_RAWIO: prevents raw disk/port I/O
-        // - SYS_MODULE: prevents kernel module loading
-        // Intentionally NOT dropped: SYS_ADMIN, SYS_PTRACE (needed for sudo/apt/gdb)
-        "--cap-drop=SYS_BOOT",
-        "--cap-drop=SYS_RAWIO",
-        "--cap-drop=SYS_MODULE",
-        "--pids-limit=512",
+        "-e", `PASSWORD=${authPassword}`,
         ...envArgs,
         dockerImage,
         "code-server",
         "--bind-addr", "0.0.0.0:8080",
         "--auth", authArg,
-        "/home/coder/project"
+        "/home/coder/project",
       ];
     } else if (runtime.isPumpkin) {
-      // Pumpkin (Rust Minecraft Server - Native Java + Bedrock) Execution
-      const sDir = getServerDir(serverId);
-      const javaPort = parseInt(env.JAVA_PORT || `${assignedPort}`) || assignedPort;
-      const bedrockPort = parseInt(env.BEDROCK_PORT || `${assignedPort + 1}`) || (assignedPort + 1);
+      // Native High-Performance Pumpkin Rust Minecraft Server
+      const javaPort = assignedPort;
+      const bedrockPort = env.BEDROCK_PORT ? parseInt(env.BEDROCK_PORT, 10) : (assignedPort + 1000);
+      const serverDir = getServerDir(serverId);
 
+      const { ensurePumpkinConfiguration, installPumpkinBinaryOnNode } = await import("./pumpkin-agent");
+      await ensurePumpkinConfiguration(serverDir, javaPort, bedrockPort);
+      const dlRes = await installPumpkinBinaryOnNode({
+        versionId: env.VERSION || "pumpkin-nightly-latest",
+        commitSha: "nightly",
+      });
+      const binaryPath = dlRes.path || "/usr/local/bin/pumpkin";
+
+      // Clean Pumpkin environment variables
+      delete env.SERVER_TYPE;
+      delete env.TYPE;
+      delete env.BEDROCK_PORT;
+      delete env.VERSION;
+
+      const envArgs = buildEnvArgs(env);
       const dockerImage = env.DOCKER_IMAGE || "debian:bookworm-slim";
       delete env.DOCKER_IMAGE;
 
-      // 1. Ensure configuration.toml is generated with allocated Java and Bedrock ports
-      const { ensurePumpkinConfiguration } = await import("./pumpkin-agent");
-      await ensurePumpkinConfiguration(sDir, javaPort, bedrockPort);
-
-      // 2. Ensure pumpkin binary exists in server directory
-      const localBin = path.join(sDir, "pumpkin");
-      let binExists = false;
-      try {
-        const stat = await fs.stat(localBin);
-        binExists = stat.size > 100000;
-      } catch {}
-
-      if (!binExists) {
-        // Attempt to copy from node cache (.data/software/pumpkin/<commit>/pumpkin)
-        const commit = (env.VERSION || "").replace("pumpkin-nightly-", "").replace("pumpkin-", "") || "nightly";
-        const cachedBin = path.join(process.cwd(), ".data", "software", "pumpkin", commit, "pumpkin");
-        try {
-          await fs.copyFile(cachedBin, localBin);
-          await fs.chmod(localBin, 0o755);
-          binExists = true;
-        } catch {
-          // If not in cache, trigger auto-install on node
-          const { installPumpkinBinaryOnNode } = await import("./pumpkin-agent");
-          const dlRes = await installPumpkinBinaryOnNode({
-            versionId: env.VERSION || "pumpkin-nightly-latest",
-            commitSha: commit,
-            x64Url: "https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-X64-Linux",
-            arm64Url: "https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-ARM64-Linux",
-          });
-          if (dlRes.success && dlRes.path) {
-            await fs.copyFile(dlRes.path, localBin);
-            await fs.chmod(localBin, 0o755);
-            binExists = true;
-          }
-        }
-      }
-
-      const envArgs = buildEnvArgs(env);
-      appendLog(serverId, `[Panel] Launching Pumpkin (Rust MC) on Java port :${javaPort} and Bedrock port :${bedrockPort}...`);
-      appendLog(serverId, `[Panel] Version: ${env.VERSION || "Nightly"}`);
+      appendLog(serverId, `[ Rubber ] Launching Pumpkin (Rust MC) on Java port :${javaPort} and Bedrock port :${bedrockPort}...`);
+      appendLog(serverId, `[ Rubber ] Version: ${env.VERSION || "Nightly"}`);
 
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
         "-p", `${javaPort}:${javaPort}/tcp`,
-        "-p", `${javaPort}:${javaPort}/udp`,
         "-p", `${bedrockPort}:${bedrockPort}/udp`,
-        "-p", `${bedrockPort}:${bedrockPort}/tcp`,
-        "-w", "/data",
-        "-v", `${sDir}:/data`,
+        "-v", `${serverDir}:/app`,
+        "-v", `${binaryPath}:/usr/local/bin/pumpkin:ro`,
+        "-w", "/app",
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "-e", `RUST_LOG=${env.RUST_LOG || "info"}`,
+        "-e", `PUMPKIN_PORT=${javaPort}`,
+        "-e", `PORT=${javaPort}`,
         ...envArgs,
         dockerImage,
-        "sh", "-c",
-        "chmod +x ./pumpkin 2>/dev/null; exec ./pumpkin"
+        "/usr/local/bin/pumpkin",
       ];
     } else if (runtime.isMinecraft) {
-      // Minecraft Server Execution
-      if (!env.EULA) env.EULA = "TRUE";
-      const heapRam = Math.max(256, Math.floor(info.ram * 0.85));
-      const initRam = Math.max(128, Math.floor(info.ram * 0.20));
-      env.MEMORY = `${heapRam}M`;
+      // Standard Minecraft Server (itzg/minecraft-server)
+      const initRam = Math.max(256, Math.floor(info.ram * 0.25));
+      const maxRam = info.ram;
+
+      // Always pass non-freezing autopause parameters
+      env.ENABLE_AUTOPAUSE = "FALSE";
+      env.AUTOPAUSE_TIMEOUT_EST = "0";
+      env.AUTOPAUSE_TIMEOUT_INIT = "0";
+
+      if (!env.MEMORY) env.MEMORY = `${maxRam}M`;
+      if (!env.INIT_MEMORY) env.INIT_MEMORY = `${initRam}M`;
       if (!env.JVM_XX_OPTS) env.JVM_XX_OPTS = `-Xms${initRam}M`;
 
       const dockerImage = env.DOCKER_IMAGE || "itzg/minecraft-server";
@@ -1323,10 +1283,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
       const envArgs = buildEnvArgs(env);
 
-      appendLog(serverId, `[Panel] Launching ${dockerImage} on host port ${assignedPort}...`);
-      appendLog(serverId, `[Panel] Software: ${env.TYPE || "PAPER"} ${env.VERSION || "LATEST"}`);
+      appendLog(serverId, `[ Rubber ] Launching ${dockerImage} on host port ${assignedPort}...`);
+      appendLog(serverId, `[ Rubber ] Software: ${env.TYPE || "PAPER"} ${env.VERSION || "LATEST"}`);
       if (env.JAVA_VERSION) {
-        appendLog(serverId, `[Panel] Java Runtime: Java ${env.JAVA_VERSION}`);
+        appendLog(serverId, `[ Rubber ] Java Runtime: Java ${env.JAVA_VERSION}`);
       }
 
       dockerArgs = [
@@ -1339,6 +1299,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
+        "-e", "ENABLE_AUTOPAUSE=FALSE",
         ...envArgs,
         dockerImage,
       ];
@@ -1358,8 +1319,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[Panel] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
-      if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
+      if (startCmd) appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       const portMappingArgs = (protocol === "both")
         ? ["-p", `${assignedPort}:${internalPort}/tcp`, "-p", `${assignedPort}:${internalPort}/udp`]
@@ -1382,7 +1343,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       ];
 
       if (startCmd) {
-        dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
+        dockerArgs.push("sh", "-c", `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`);
       }
     } else {
       // Generic / Any Docker Container Image (Universal Auto-Port Compliance)
@@ -1398,9 +1359,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[Panel] Auto-detected container port: ${internalPort} (${protocol.toUpperCase()})`);
-      appendLog(serverId, `[Panel] Launching Container ${dockerImage} on host port ${assignedPort} -> internal :${internalPort}...`);
-      if (startCmd) appendLog(serverId, `[Panel] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[ Rubber ] Auto-detected container port: ${internalPort} (${protocol.toUpperCase()})`);
+      appendLog(serverId, `[ Rubber ] Launching Container ${dockerImage} on host port ${assignedPort} -> internal :${internalPort}...`);
+      if (startCmd) appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
 
       const portMappingArgs = (protocol === "both")
         ? ["-p", `${assignedPort}:${internalPort}/tcp`, "-p", `${assignedPort}:${internalPort}/udp`]
@@ -1429,15 +1390,15 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       ];
 
       if (startCmd) {
-        dockerArgs.push("sh", "-c", `echo '[Panel] Executing: ${startCmd}'; exec ${startCmd}`);
+        dockerArgs.push("sh", "-c", `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`);
       } else if (dockerImage.includes("alpine") || dockerImage.includes("ubuntu") || dockerImage.includes("debian") || dockerImage.includes("busybox")) {
-        dockerArgs.push("sh", "-c", "echo '[Panel] Interactive container active and running in background.'; tail -f /dev/null");
+        dockerArgs.push("sh", "-c", "echo '[ Rubber ] Interactive container active and running in background.'; tail -f /dev/null");
       }
     }
 
     console.log(`[ServerManager] docker ${dockerArgs.join(" ")}`);
     const { stdout } = await execAsync(`docker ${dockerArgs.map(a => JSON.stringify(a)).join(" ")}`);
-    appendLog(serverId, `[Panel] Container initialized: ${stdout.trim().slice(0, 12)}`);
+    appendLog(serverId, `[ Rubber ] Container initialized: ${stdout.trim().slice(0, 12)}`);
 
     // Attach log stream
     attachLogs(serverId);
@@ -1476,7 +1437,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
 
   info.status = "STOPPING";
   serverStates.set(serverId, info);
-  appendLog(serverId, `[Panel] ${force ? "Force-killing" : "Stopping"} server...`);
+  appendLog(serverId, `[ Rubber ] ${force ? "Force-killing" : "Stopping"} server...`);
 
   try {
     const containerName = getContainerName(serverId);
@@ -1485,7 +1446,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
     info.status = "STOPPED";
     serverStates.set(serverId, info);
     await saveState(serverId, info);
-    appendLog(serverId, "[Panel] Server stopped.");
+    appendLog(serverId, "[ Rubber ] Server stopped.");
     syncServerJar(serverId).catch(() => {});
     return { success: true };
   } catch (err: any) {
@@ -1498,7 +1459,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
 }
 
 export async function restartServer(serverId: string): Promise<{ success: boolean; error?: string }> {
-  appendLog(serverId, "[Panel] Restarting...");
+  appendLog(serverId, "[ Rubber ] Restarting...");
   const stop = await stopServer(serverId);
   if (!stop.success) return stop;
   await new Promise(r => setTimeout(r, 1500));
@@ -1532,23 +1493,35 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
 
   const running = await containerRunning(containerName);
   if (!running) {
-    appendLog(serverId, "[Panel] Cannot execute command: Server instance is offline.");
+    appendLog(serverId, "[ Rubber ] Cannot execute command: Server instance is offline.");
     return { success: true };
   }
 
+  const rconPass = `rp-${serverId.slice(0, 8)}`;
+  
+  // 1. Primary method: rcon-cli execution
   try {
-    const rconPass = `rp-${serverId.slice(0, 8)}`;
-    const cmd = `docker exec ${containerName} rcon-cli --password "${rconPass}" "${command}"`;
+    const cmd = `docker exec ${containerName} rcon-cli --password "${rconPass}" "${command.replace(/"/g, '\\"')}"`;
     const { stdout, stderr } = await execAsync(cmd);
     const output = (stdout || stderr).trim();
     if (output) {
-      appendLog(serverId, output);
+      for (const line of output.split("\n")) {
+        if (line.trim()) appendLog(serverId, line.trim());
+      }
     }
     return { success: true };
   } catch {
+    // 2. Fallback method: mc-send-to-console / stdin pipe
     try {
       const escapedCmd = command.replace(/"/g, '\\"');
-      await execAsync(`docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-input"`);
+      const fallbackCmd = `docker exec ${containerName} mc-send-to-console "${escapedCmd}" 2>/dev/null || docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-input"`;
+      const { stdout, stderr } = await execAsync(fallbackCmd);
+      const out = (stdout || stderr).trim();
+      if (out) {
+        for (const line of out.split("\n")) {
+          if (line.trim()) appendLog(serverId, line.trim());
+        }
+      }
       return { success: true };
     } catch (err: any) {
       appendLog(serverId, `[Error executing command]: ${err.message}`);
