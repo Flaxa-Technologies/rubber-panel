@@ -29,6 +29,7 @@ export interface ServerInfo {
   uptime?: number;
   environment?: Record<string, string>;
   startupCommand?: string;
+  javaVersion?: string;
   cryoSleepEnabled?: boolean;
   cryoSleepIdleMinutes?: number;
   cryoSleepMotd?: string;
@@ -243,9 +244,20 @@ async function containerRunning(name: string): Promise<boolean> {
   }
 }
 
+const activeLogStreams = new Map<string, any>();
+
 function attachLogs(serverId: string) {
   const containerName = getContainerName(serverId);
+
+  // Kill previous log stream process for this server if still running
+  const oldChild = activeLogStreams.get(serverId);
+  if (oldChild) {
+    try { oldChild.kill(); } catch {}
+    activeLogStreams.delete(serverId);
+  }
+
   const child = spawn("docker", ["logs", "-f", "--tail", "100", containerName], { stdio: ["ignore", "pipe", "pipe"] });
+  activeLogStreams.set(serverId, child);
 
   function onLine(data: Buffer) {
     const lines = data.toString().split("\n");
@@ -281,7 +293,10 @@ function attachLogs(serverId: string) {
   child.stderr.on("data", onLine);
 
   child.on("close", () => {
-    appendLog(serverId, "[Console] Log stream ended.");
+    if (activeLogStreams.get(serverId) === child) {
+      activeLogStreams.delete(serverId);
+      appendLog(serverId, "[Console] Log stream ended.");
+    }
     syncServerJar(serverId).catch(() => {});
   });
 
@@ -1272,9 +1287,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       if (!env.INIT_MEMORY) env.INIT_MEMORY = `${initRam}M`;
       if (!env.JVM_XX_OPTS) env.JVM_XX_OPTS = `-Xms${initRam}M`;
 
-      const javaVer = env.JAVA_VERSION || "21";
+      const javaVer = env.JAVA_VERSION || info.javaVersion || "21";
       let dockerImage = env.DOCKER_IMAGE;
-      if (!dockerImage || dockerImage === "itzg/minecraft-server" || dockerImage === "itzg/minecraft-server:latest") {
+      if (!dockerImage || dockerImage === "itzg/minecraft-server" || dockerImage === "itzg/minecraft-server:latest" || (dockerImage.includes("java25") && javaVer !== "25")) {
+        dockerImage = `itzg/minecraft-server:java${javaVer}`;
+      } else if (!dockerImage.includes(":")) {
         dockerImage = `itzg/minecraft-server:java${javaVer}`;
       }
       delete env.DOCKER_IMAGE;

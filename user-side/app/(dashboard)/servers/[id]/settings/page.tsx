@@ -454,7 +454,7 @@ export default function SettingsPage() {
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
                 {javaVersions.map((jv) => {
-                  const isSelected = selectedJavaVersion === jv.version || selectedJavaVersionId === jv.id;
+                  const isSelected = selectedJavaVersion === jv.version;
                   return (
                     <div
                       key={jv.id}

@@ -30,9 +30,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.javaVersion !== undefined) {
     const cleanJava = String(body.javaVersion).trim();
     dataUpdate.javaVersion = cleanJava;
-    if (body.javaVersionId) {
-      dataUpdate.javaVersionId = body.javaVersionId;
-    }
+
+    // Find matching JavaVersion in DB to ensure javaVersionId matches cleanJava
+    const matchedJv = await db.javaVersion.findFirst({
+      where: {
+        version: cleanJava,
+        OR: [{ nodeId: null }, { nodeId: server.nodeId }],
+      },
+    });
+    dataUpdate.javaVersionId = matchedJv?.id || body.javaVersionId || null;
+
     try {
       const currentEnv = JSON.parse(server.environment || "{}");
       currentEnv.JAVA_VERSION = cleanJava;

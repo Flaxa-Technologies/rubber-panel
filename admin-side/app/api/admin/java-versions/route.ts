@@ -6,20 +6,36 @@ import { isAdminRole } from "@/lib/rbac";
 
 const DEFAULT_JAVA_VERSIONS = [
   {
-    name: "Java 25 (Latest LTS)",
+    name: "Java 21 (Recommended LTS)",
+    version: "21",
+    dockerImage: "itzg/minecraft-server:java21",
+    binaryPath: "java",
+    isDefault: true,
+    description: "Recommended LTS runtime for modern Minecraft 1.20.5+ and 1.21.x",
+  },
+  {
+    name: "Java 17 (LTS)",
+    version: "17",
+    dockerImage: "itzg/minecraft-server:java17",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Standard LTS runtime for Minecraft 1.17 through 1.20.4",
+  },
+  {
+    name: "Java 8 (Legacy)",
+    version: "8",
+    dockerImage: "itzg/minecraft-server:java8",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Required for vintage Minecraft 1.12.2 and older modpacks",
+  },
+  {
+    name: "Java 25 (Early Access)",
     version: "25",
     dockerImage: "itzg/minecraft-server:java25",
     binaryPath: "java",
     isDefault: false,
-    description: "Next-generation Java 25 LTS runtime with enhanced JVM & ZGC optimizations",
-  },
-  {
-    name: "Java 24",
-    version: "24",
-    dockerImage: "itzg/minecraft-server:java24",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Modern Java 24 performance release",
+    description: "Next-generation Java 25 development runtime",
   },
   {
     name: "Java 23",

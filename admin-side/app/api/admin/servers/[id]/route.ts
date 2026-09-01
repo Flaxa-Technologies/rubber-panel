@@ -104,6 +104,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.javaVersion !== undefined) {
     const cleanJava = String(body.javaVersion).trim();
     data.javaVersion = cleanJava;
+
+    const matchedJv = await db.javaVersion.findFirst({
+      where: {
+        version: cleanJava,
+        OR: [{ nodeId: null }, { nodeId: server.nodeId }],
+      },
+    });
+    data.javaVersionId = matchedJv?.id || body.javaVersionId || null;
+
     try {
       const currentEnv = JSON.parse((data.environment as string) || server.environment || "{}");
       currentEnv.JAVA_VERSION = cleanJava;
@@ -113,7 +122,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       data.environment = JSON.stringify(currentEnv);
     } catch {}
   }
-  if (body.javaVersionId !== undefined) data.javaVersionId = body.javaVersionId || null;
   // Permissions
   if (body.allowedPaths !== undefined) {
     // Accept array or comma-string
