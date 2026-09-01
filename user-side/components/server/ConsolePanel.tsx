@@ -130,10 +130,15 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
       const res = await fetch(`/api/user/servers/${serverId}/console?since=${lineCount}`);
       if (!res.ok) return;
       const data = await res.json() as { lines: string[]; total: number };
-      if (data.lines?.length > 0) {
+      if (data.total !== undefined && data.total < lineCount) {
+        // Log ring buffer was reset or restarted on node
+        const newLines: LogLine[] = (data.lines || []).map(text => ({ text, type: classifyLine(text) }));
+        setLines(newLines.slice(-1000));
+        setLineCount(data.total);
+      } else if (data.lines?.length > 0) {
         const newLines: LogLine[] = data.lines.map(text => ({ text, type: classifyLine(text) }));
         setLines(prev => [...prev, ...newLines].slice(-1000));
-        setLineCount(data.total ?? 0);
+        setLineCount(data.total ?? (lineCount + data.lines.length));
       }
     } catch { }
   }, [serverId, lineCount]);
@@ -154,7 +159,7 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
 
   useEffect(() => {
     fetchLogs();
-    const logInterval = setInterval(fetchLogs, isRunning ? 1500 : 5000);
+    const logInterval = setInterval(fetchLogs, isRunning ? 1200 : 2500);
     return () => clearInterval(logInterval);
   }, [serverId, isRunning, fetchLogs]);
 

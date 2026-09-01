@@ -118,33 +118,46 @@ export async function hibernateServer(serverId: string, reason = "Idle timeout")
   }
 }
 
+const wakingServers = new Set<string>();
+
 /**
  * Wake a server up from Cryo-Sleep.
  */
 export async function wakeServer(serverId: string, trigger = "Manual wake"): Promise<{ success: boolean; error?: string }> {
-  console.log(`[Cryo-Sleep] ⚡ WAKING server ${serverId} (${trigger})`);
-  appendLog(serverId, `[Cryo-Sleep] ⚡ Wake sequence initiated (${trigger})! Booting instance...`);
-
-  // 1. Stop and release the wake proxy TCP port
-  const config = serverConfigs.get(serverId);
-  const status = await getServerStatus(serverId);
-  const targetPort = config?.port || status?.port || 25565;
-  await stopWakeProxy(serverId, targetPort).catch(() => {});
-  const { stopWakeProxyByPort } = await import("./cryo-sleep-proxy");
-  await stopWakeProxyByPort(targetPort).catch(() => {});
-
-  // 2. Reset last active timer
-  lastActiveTimestamps.set(serverId, Date.now());
-
-  // 3. Start the actual server container
-  const startResult = await startServer(serverId);
-  if (!startResult.success) {
-    appendLog(serverId, `[Cryo-Sleep] ✗ Failed to boot container on wake: ${startResult.error}`);
-    return startResult;
+  if (wakingServers.has(serverId)) {
+    console.log(`[Cryo-Sleep] Wake already in progress for ${serverId}. Skipping duplicate trigger.`);
+    return { success: true };
   }
+  wakingServers.add(serverId);
 
-  appendLog(serverId, `[Cryo-Sleep] ✓ Server online and ready on assigned port!`);
-  return { success: true };
+  try {
+    console.log(`[Cryo-Sleep] ⚡ WAKING server ${serverId} (${trigger})`);
+    appendLog(serverId, `[Cryo-Sleep] ⚡ Wake sequence initiated (${trigger})! Booting instance...`);
+
+    // 1. Stop and release the wake proxy TCP port
+    const config = serverConfigs.get(serverId);
+    const status = await getServerStatus(serverId);
+    const targetPort = config?.port || status?.port || 25565;
+    await stopWakeProxy(serverId, targetPort).catch(() => {});
+    const { stopWakeProxyByPort } = await import("./cryo-sleep-proxy");
+    await stopWakeProxyByPort(targetPort).catch(() => {});
+
+    // 2. Reset last active timer
+    lastActiveTimestamps.set(serverId, Date.now());
+
+    // 3. Start the actual server container
+    const startResult = await startServer(serverId);
+    if (!startResult.success) {
+      appendLog(serverId, `[Cryo-Sleep] ✗ Failed to boot container on wake: ${startResult.error}`);
+      return startResult;
+    }
+
+    appendLog(serverId, `[Cryo-Sleep] ✓ Server online and ready on assigned port!`);
+    return { success: true };
+  } finally {
+    // Keep lock for a couple seconds while container stabilizes
+    setTimeout(() => wakingServers.delete(serverId), 5000);
+  }
 }
 
 let globalConfigState: {

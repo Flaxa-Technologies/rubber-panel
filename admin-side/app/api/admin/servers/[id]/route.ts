@@ -102,10 +102,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     } catch {}
   }
   if (body.javaVersion !== undefined) {
-    data.javaVersion = body.javaVersion;
+    const cleanJava = String(body.javaVersion).trim();
+    data.javaVersion = cleanJava;
     try {
       const currentEnv = JSON.parse((data.environment as string) || server.environment || "{}");
-      currentEnv.JAVA_VERSION = body.javaVersion;
+      currentEnv.JAVA_VERSION = cleanJava;
+      if (server.serverType === "MINECRAFT" || body.serverType === "MINECRAFT" || currentEnv.SERVER_TYPE === "MINECRAFT") {
+        currentEnv.DOCKER_IMAGE = `itzg/minecraft-server:java${cleanJava}`;
+      }
       data.environment = JSON.stringify(currentEnv);
     } catch {}
   }

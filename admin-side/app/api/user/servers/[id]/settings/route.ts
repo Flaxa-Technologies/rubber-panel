@@ -28,13 +28,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.startupCommand !== undefined) dataUpdate.startupCommand = body.startupCommand || null;
 
   if (body.javaVersion !== undefined) {
-    dataUpdate.javaVersion = String(body.javaVersion).trim();
+    const cleanJava = String(body.javaVersion).trim();
+    dataUpdate.javaVersion = cleanJava;
     if (body.javaVersionId) {
       dataUpdate.javaVersionId = body.javaVersionId;
     }
     try {
       const currentEnv = JSON.parse(server.environment || "{}");
-      currentEnv.JAVA_VERSION = String(body.javaVersion).trim();
+      currentEnv.JAVA_VERSION = cleanJava;
+      if (server.serverType === "MINECRAFT" || !currentEnv.SERVER_TYPE || currentEnv.SERVER_TYPE === "MINECRAFT") {
+        currentEnv.DOCKER_IMAGE = `itzg/minecraft-server:java${cleanJava}`;
+      }
       dataUpdate.environment = JSON.stringify(currentEnv);
     } catch {}
   }

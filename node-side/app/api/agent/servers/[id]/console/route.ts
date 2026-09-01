@@ -8,7 +8,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const since = parseInt(request.nextUrl.searchParams.get("since") ?? "0");
   const lines = getConsoleLogs(id);
-  const slice = since > 0 ? lines.slice(since) : lines;
+  const slice = (since > 0 && since <= lines.length) ? lines.slice(since) : lines;
   return NextResponse.json({ lines: slice, total: lines.length });
 }
 
