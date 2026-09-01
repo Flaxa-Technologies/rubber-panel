@@ -5,7 +5,7 @@ import {
   Send, Loader2, Trash2, Terminal as TerminalIcon, Play,
   ArrowDownToLine, Copy, Check, Users, Shield, ShieldAlert,
   UserX, UserCheck, MessageSquare, Plus, Search, ChevronLeft,
-  ChevronRight, Sparkles, SlidersHorizontal, X
+  ChevronRight, Sparkles, SlidersHorizontal, X, Maximize2, Minimize2
 } from "lucide-react";
 import Image from "next/image";
 import ConfirmationDialog from "@/components/ui/ConfirmationDialog";
@@ -73,6 +73,7 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
   const [lineCount, setLineCount] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Command History
   const [history, setHistory] = useState<string[]>([]);
@@ -111,6 +112,17 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [autoScroll]);
+
+  // Handle Escape key to exit fullscreen
+  useEffect(() => {
+    function handleKeyDownEvent(e: KeyboardEvent) {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDownEvent);
+    return () => window.removeEventListener("keydown", handleKeyDownEvent);
+  }, [isFullscreen]);
 
   // Fetch Logs
   const fetchLogs = useCallback(async () => {
@@ -266,18 +278,75 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* 1. Terminal Console Card */}
-      <div className="saas-card" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div
+        className="saas-card"
+        style={
+          isFullscreen
+            ? {
+                position: "fixed",
+                inset: 0,
+                zIndex: 99999,
+                width: "100vw",
+                height: "100vh",
+                borderRadius: 0,
+                margin: 0,
+                padding: 0,
+                background: "#050608",
+                display: "flex",
+                flexDirection: "column",
+                border: "none",
+                boxShadow: "none",
+              }
+            : { padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }
+        }
+      >
         {/* Top Console Bar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-surface-elevated)", flexWrap: "wrap", gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 16px",
+            borderBottom: "1px solid var(--border-subtle)",
+            background: isFullscreen ? "#0a0c10" : "var(--bg-surface-elevated)",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>
             <TerminalIcon size={14} style={{ color: isRunning ? "var(--status-online)" : "var(--text-dim)" }} />
-            <span style={{ color: "var(--text-pure)", fontWeight: 600 }}>Live Server Terminal</span>
+            <span style={{ color: "var(--text-pure)", fontWeight: 600 }}>
+              {isFullscreen ? "Full Screen Shell Terminal" : "Live Server Terminal"}
+            </span>
             <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
               ({lines.length} buffer lines)
             </span>
+            {isFullscreen && (
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6, background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: 4 }}>
+                Press <kbd style={{ color: "#fff", fontWeight: "bold" }}>Esc</kbd> to exit
+              </span>
+            )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* Fullscreen Toggle */}
+            <button
+              onClick={() => {
+                const nextState = !isFullscreen;
+                setIsFullscreen(nextState);
+                setTimeout(() => {
+                  inputRef.current?.focus();
+                  scrollToBottom();
+                }, 50);
+              }}
+              className="btn-secondary-dark"
+              style={{ padding: "4px 8px", fontSize: 11.5, borderColor: isFullscreen ? "var(--status-online)" : undefined }}
+              title={isFullscreen ? "Exit Fullscreen (Esc)" : "Full Screen Console"}
+            >
+              {isFullscreen ? <Minimize2 size={12} style={{ color: "var(--status-online)" }} /> : <Maximize2 size={12} />}
+              <span>{isFullscreen ? "Exit Shell" : "Fullscreen"}</span>
+            </button>
+
             {/* Auto-scroll Toggle */}
             <button
               onClick={() => setAutoScroll(!autoScroll)}
@@ -346,12 +415,14 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
         <div
           ref={outputRef}
           style={{
-            height: 380,
+            flex: isFullscreen ? 1 : "unset",
+            height: isFullscreen ? "100%" : 380,
+            minHeight: isFullscreen ? 0 : 380,
             overflowY: "auto",
             padding: "14px 16px",
             background: "#050608",
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            fontSize: 12.5,
+            fontSize: isFullscreen ? 13.5 : 12.5,
             lineHeight: 1.6,
             display: "flex",
             flexDirection: "column",
@@ -385,8 +456,8 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
           style={{
             display: "flex",
             alignItems: "center",
-            padding: "8px 12px",
-            background: "var(--bg-surface-elevated)",
+            padding: isFullscreen ? "12px 18px" : "8px 12px",
+            background: isFullscreen ? "#0a0c10" : "var(--bg-surface-elevated)",
             borderTop: "1px solid var(--border-subtle)",
             gap: 8,
           }}
@@ -409,14 +480,14 @@ export default function ConsolePanel({ serverId, status }: ConsolePanelProps) {
               outline: "none",
               color: "var(--text-primary)",
               fontFamily: "monospace",
-              fontSize: 13,
+              fontSize: isFullscreen ? 14 : 13,
             }}
           />
           <button
             type="submit"
             disabled={!isRunning || sending || !command.trim()}
             className="btn-solid-white"
-            style={{ padding: "5px 12px", fontSize: 12 }}
+            style={{ padding: isFullscreen ? "7px 16px" : "5px 12px", fontSize: 12 }}
           >
             {sending ? <Loader2 size={12} className="spin" /> : <Send size={12} />}
             <span>Send</span>

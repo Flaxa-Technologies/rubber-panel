@@ -8,7 +8,7 @@ import {
   Play, Square, RotateCcw, Zap, RefreshCw, Upload, Archive,
   Save, Trash2, Edit2, FilePlus, FolderPlus, Loader2, Lock,
   ChevronRight, Home, ExternalLink, CheckCircle2, ShieldAlert, Cpu, HardDrive,
-  FileText, Copy, Check, Globe, Code, Database, Box,
+  FileText, Copy, Check, Globe, Code, Database, Box, Maximize2, Minimize2, ArrowDownToLine
 } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -62,8 +62,23 @@ export default function AdminServerManagePage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
   const [sendingCmd, setSendingCmd] = useState(false);
+  const [isFullscreenConsole, setIsFullscreenConsole] = useState(false);
+  const [autoScrollConsole, setAutoScrollConsole] = useState(true);
+  const [copiedConsole, setCopiedConsole] = useState(false);
   const consoleBottomRef = useRef<HTMLDivElement>(null);
+  const consoleInputRef = useRef<HTMLInputElement>(null);
   const sinceRef = useRef<number>(0);
+
+  // Handle Escape key to exit fullscreen console
+  useEffect(() => {
+    function handleKeyDownEvent(e: KeyboardEvent) {
+      if (e.key === "Escape" && isFullscreenConsole) {
+        setIsFullscreenConsole(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDownEvent);
+    return () => window.removeEventListener("keydown", handleKeyDownEvent);
+  }, [isFullscreenConsole]);
 
   // ── Files State ────────────────────────────────────────────────────────────
   const [currentPath, setCurrentPath] = useState("/");
@@ -518,9 +533,88 @@ export default function AdminServerManagePage() {
 
       {/* TAB 1: Console */}
       {activeTab === "console" && (
-        <div className="space-y-3">
+        <div
+          className={
+            isFullscreenConsole
+              ? "fixed inset-0 z-[99999] w-screen h-screen bg-[#050608] flex flex-col p-4 space-y-3"
+              : "space-y-3"
+          }
+        >
+          {/* Top Console Toolbar */}
           <div
-            className="p-4 rounded-2xl border font-mono text-xs overflow-y-auto space-y-1 h-[480px] bg-black shadow-inner"
+            className="flex items-center justify-between px-4 py-2.5 rounded-xl border flex-wrap gap-2"
+            style={{
+              backgroundColor: "var(--color-rp-surface-2)",
+              borderColor: "var(--color-rp-border)",
+            }}
+          >
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+              <Terminal className="w-3.5 h-3.5 text-[var(--color-rp-accent)]" />
+              <span>{isFullscreenConsole ? "Full Screen Shell Terminal" : "Live Server Terminal"}</span>
+              <span className="text-zinc-500 font-normal">({logs.length} buffer lines)</span>
+              {isFullscreenConsole && (
+                <span className="text-[11px] text-zinc-400 ml-2 bg-white/10 px-2 py-0.5 rounded">
+                  Press <kbd className="font-bold text-white">Esc</kbd> to exit
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Fullscreen Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFullscreenConsole(!isFullscreenConsole);
+                  setTimeout(() => {
+                    consoleInputRef.current?.focus();
+                    consoleBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }, 50);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border hover:bg-white/5 transition-all text-zinc-300"
+                style={{
+                  borderColor: isFullscreenConsole ? "var(--color-rp-accent)" : "var(--color-rp-border)",
+                  color: isFullscreenConsole ? "var(--color-rp-accent)" : undefined,
+                }}
+                title={isFullscreenConsole ? "Exit Fullscreen (Esc)" : "Full Screen Console"}
+              >
+                {isFullscreenConsole ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                <span>{isFullscreenConsole ? "Exit Shell" : "Fullscreen"}</span>
+              </button>
+
+              {/* Copy Logs */}
+              <button
+                type="button"
+                onClick={async () => {
+                  await copyToClipboard(logs.join("\n"));
+                  setCopiedConsole(true);
+                  setTimeout(() => setCopiedConsole(false), 2000);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border hover:bg-white/5 transition-all text-zinc-300"
+                style={{ borderColor: "var(--color-rp-border)" }}
+                title="Copy logs to clipboard"
+              >
+                {copiedConsole ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedConsole ? "Copied" : "Copy"}</span>
+              </button>
+
+              {/* Clear Logs */}
+              <button
+                type="button"
+                onClick={() => setLogs([])}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border hover:bg-white/5 transition-all text-zinc-300"
+                style={{ borderColor: "var(--color-rp-border)" }}
+                title="Clear console window"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Clear</span>
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`p-4 rounded-2xl border font-mono text-xs overflow-y-auto space-y-1 bg-black shadow-inner ${
+              isFullscreenConsole ? "flex-1 min-h-0 text-[13.5px]" : "h-[480px]"
+            }`}
             style={{ borderColor: "var(--color-rp-border)" }}
           >
             {logs.length === 0 ? (
@@ -537,6 +631,7 @@ export default function AdminServerManagePage() {
 
           <form onSubmit={handleSendCommand} className="flex gap-2">
             <input
+              ref={consoleInputRef}
               type="text"
               value={command}
               onChange={e => setCommand(e.target.value)}
