@@ -43,20 +43,59 @@ const DEFAULT_JAVA_VERSIONS = [
     dockerImage: "ghcr.io/graalvm/jdk-community:21",
     binaryPath: "java",
     isDefault: false,
-    description: "Optimized GraalVM high-performance runtime for Minecraft 1.21+",
+    description: "Optimized GraalVM high-performance JIT runtime for Minecraft 1.21+",
+  },
+  {
+    name: "Java 17 GraalVM",
+    version: "17-graalvm",
+    dockerImage: "ghcr.io/graalvm/jdk-community:17",
+    binaryPath: "java",
+    isDefault: false,
+    description: "High-performance GraalVM runtime for Minecraft 1.18 - 1.20.4",
+  },
+  {
+    name: "Java 22",
+    version: "22",
+    dockerImage: "eclipse-temurin:22-jdk-alpine",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Adoptium OpenJDK 22 performance release",
+  },
+  {
+    name: "Java 23",
+    version: "23",
+    dockerImage: "eclipse-temurin:23-jdk-alpine",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Adoptium OpenJDK 23 modern runtime",
+  },
+  {
+    name: "Java 25 (Early Access)",
+    version: "25",
+    dockerImage: "eclipse-temurin:25-jdk-alpine",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Next-generation OpenJDK 25 early access development runtime",
+  },
+  {
+    name: "Amazon Corretto 21",
+    version: "corretto-21",
+    dockerImage: "amazoncorretto:21-alpine",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Amazon Corretto multiplatform production-ready OpenJDK 21",
+  },
+  {
+    name: "Azul Zulu 21",
+    version: "zulu-21",
+    dockerImage: "azul/zulu-openjdk-alpine:21-jre",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Azul Zulu tested and certified OpenJDK 21 build",
   },
 ];
 
 async function ensureDefaultJavaVersions() {
-  // 1. Remove non-existent Docker tags (22, 23, 24, 25) that cause Docker daemon pull failure
-  try {
-    await db.javaVersion.deleteMany({
-      where: {
-        version: { in: ["22", "23", "24", "25"] },
-        nodeId: null,
-      },
-    });
-  } catch {}
 
   // 2. Ensure verified LTS versions exist and are correctly configured
   let defaultJava21Id: string | null = null;

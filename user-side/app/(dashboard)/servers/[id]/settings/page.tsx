@@ -504,10 +504,11 @@ export default function SettingsPage() {
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
                           <div style={{
-                            width: 32,
+                            minWidth: 36,
                             height: 32,
+                            padding: "0 8px",
                             borderRadius: 8,
                             background: isSelected ? "rgba(56, 189, 248, 0.2)" : "#1c1c20",
                             border: isSelected ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid #2a2a30",
@@ -516,14 +517,16 @@ export default function SettingsPage() {
                             justifyContent: "center",
                             color: isSelected ? "#38bdf8" : "var(--text-primary)",
                             fontWeight: 700,
-                            fontSize: 13,
+                            fontSize: jv.version.length > 3 ? 11 : 13,
                             fontFamily: "monospace",
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
                           }}>
                             {jv.version}
                           </div>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-pure)", display: "flex", alignItems: "center", gap: 6 }}>
-                              {jv.name}
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-pure)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ wordBreak: "break-word" }}>{jv.name}</span>
                               {jv.isDefault && (
                                 <span style={{
                                   fontSize: 9.5,
@@ -534,6 +537,7 @@ export default function SettingsPage() {
                                   background: "rgba(245, 158, 11, 0.15)",
                                   color: "#fbbf24",
                                   border: "1px solid rgba(245, 158, 11, 0.3)",
+                                  flexShrink: 0,
                                 }}>
                                   Default
                                 </span>

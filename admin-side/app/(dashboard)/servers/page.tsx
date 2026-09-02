@@ -8,7 +8,7 @@ import {
   RotateCcw, ChevronLeft, ChevronRight, Trash2, Pencil,
   HardDrive, Cpu, Network, Shield, Upload, Check, Filter, User, Lock, FolderOpen,
   ExternalLink, Terminal, ArrowLeftRight, Zap, ShieldAlert, FastForward,
-  Calendar, Clock, Cloud, Coffee, Sparkles, Box, Gamepad2, Code, Database, Globe, Download, Flame
+  Calendar, Clock, Cloud, Coffee, Sparkles, Box, Gamepad2, Code, Database, Globe, Download, Flame, Star
 } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 
@@ -779,6 +779,19 @@ function ServersPageContent() {
       }
     } catch {}
     setDeletingJavaId(null);
+  }
+
+  async function handleSetDefaultJava(id: string) {
+    try {
+      const res = await fetch(`/api/admin/java-versions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (res.ok) {
+        await loadJavaVersions();
+      }
+    } catch {}
   }
 
   const searchParams = useSearchParams();
@@ -3320,6 +3333,46 @@ function ServersPageContent() {
                   )}
                 </div>
 
+                {/* Quick Presets */}
+                {!editingJavaVersion && (
+                  <div>
+                    <span className="text-[11px] font-semibold block mb-1.5" style={{ color: "var(--color-rp-text-muted)" }}>
+                      Quick Presets:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { name: "Java 21 (Recommended LTS)", version: "21", docker: "eclipse-temurin:21-jre-alpine", desc: "Recommended LTS for 1.20.5+ / 1.21.x" },
+                        { name: "Java 17 (LTS)", version: "17", docker: "eclipse-temurin:17-jre-alpine", desc: "Standard LTS for Minecraft 1.17 - 1.20.4" },
+                        { name: "Java 11 (LTS)", version: "11", docker: "eclipse-temurin:11-jre-alpine", desc: "Legacy LTS for Minecraft 1.16 - 1.16.5" },
+                        { name: "Java 8 (Legacy)", version: "8", docker: "eclipse-temurin:8-jre-alpine", desc: "For Minecraft 1.12.2 and older modpacks" },
+                        { name: "Java 21 GraalVM (High Performance)", version: "21-graalvm", docker: "ghcr.io/graalvm/jdk-community:21", desc: "Optimized GraalVM high-performance JIT runtime" },
+                        { name: "Java 17 GraalVM", version: "17-graalvm", docker: "ghcr.io/graalvm/jdk-community:17", desc: "High-performance GraalVM runtime for 1.18 - 1.20.4" },
+                        { name: "Java 22", version: "22", docker: "eclipse-temurin:22-jdk-alpine", desc: "Adoptium OpenJDK 22 performance release" },
+                        { name: "Java 23", version: "23", docker: "eclipse-temurin:23-jdk-alpine", desc: "Adoptium OpenJDK 23 modern runtime" },
+                        { name: "Java 25 (Early Access)", version: "25", docker: "eclipse-temurin:25-jdk-alpine", desc: "OpenJDK 25 development preview" },
+                        { name: "Amazon Corretto 21", version: "corretto-21", docker: "amazoncorretto:21-alpine", desc: "Amazon Corretto OpenJDK 21" },
+                        { name: "Azul Zulu 21", version: "zulu-21", docker: "azul/zulu-openjdk-alpine:21-jre", desc: "Azul Zulu certified OpenJDK 21" },
+                      ].map(preset => (
+                        <button
+                          key={preset.version}
+                          type="button"
+                          onClick={() => setJavaForm(f => ({
+                            ...f,
+                            name: preset.name,
+                            version: preset.version,
+                            dockerImage: preset.docker,
+                            description: preset.desc,
+                          }))}
+                          className="px-2 py-1 rounded-md border text-[11px] font-mono transition-all hover:border-amber-400 hover:text-amber-300"
+                          style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "var(--color-rp-border)", color: "var(--color-rp-text-secondary)" }}
+                        >
+                          + {preset.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs font-semibold block mb-1" style={{ color: "var(--color-rp-text-secondary)" }}>
@@ -3341,7 +3394,7 @@ function ServersPageContent() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 21, 17, 11, 8"
+                      placeholder="e.g. 21, 17, 11, 8, 21-graalvm"
                       value={javaForm.version}
                       onChange={e => setJavaForm(f => ({ ...f, version: e.target.value }))}
                       className="w-full h-9 px-3 rounded-lg border text-xs outline-none font-mono"
@@ -3374,7 +3427,7 @@ function ServersPageContent() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. itzg/minecraft-server:java21"
+                      placeholder="e.g. eclipse-temurin:21-jre-alpine"
                       value={javaForm.dockerImage}
                       onChange={e => setJavaForm(f => ({ ...f, dockerImage: e.target.value }))}
                       className="w-full h-9 px-3 rounded-lg border text-xs outline-none font-mono"
@@ -3464,24 +3517,24 @@ function ServersPageContent() {
                     javaVersions.map(jv => (
                       <div key={jv.id} className="p-3.5 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
                         style={{ borderColor: "var(--color-rp-border)" }}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono font-bold text-xs shrink-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="min-w-[38px] px-2 h-8 rounded-lg flex items-center justify-center bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono font-bold text-xs shrink-0 whitespace-nowrap">
                             {jv.version}
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-bold" style={{ color: "var(--color-rp-text)" }}>
                                 {jv.name}
                               </span>
                               {jv.isDefault && (
-                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
                                   Default
                                 </span>
                               )}
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800/80 text-zinc-400 border border-zinc-700">
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800/80 text-zinc-400 border border-zinc-700 shrink-0">
                                 {jv.node ? `Node: ${jv.node.name}` : "Global"}
                               </span>
-                              <span className="text-[10px] text-zinc-500">
+                              <span className="text-[10px] text-zinc-500 shrink-0">
                                 {jv._count?.servers ?? 0} active server(s)
                               </span>
                             </div>
@@ -3492,6 +3545,18 @@ function ServersPageContent() {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
+                          {!jv.isDefault && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetDefaultJava(jv.id)}
+                              className="px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all hover:opacity-80 flex items-center gap-1"
+                              style={{ borderColor: "rgba(245, 158, 11, 0.3)", color: "#fbbf24", backgroundColor: "rgba(245, 158, 11, 0.08)" }}
+                              title="Set as Default System Java Runtime"
+                            >
+                              <Star className="w-3 h-3" />
+                              <span>Set Default</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openEditJavaModal(jv)}
