@@ -106,16 +106,15 @@ export async function POST(request: NextRequest) {
 
   const thresholdsMap: Record<string, any> = {};
   for (const t of radarThresholdsList) {
-    if (t.serverId) {
-      thresholdsMap[t.serverId] = {
-        serverId: t.serverId,
-        maxConnPerIpPerWindow: t.maxConnPerIpPerWindow,
-        windowMs: t.windowMs,
-        banDurationMs: t.banDurationMs,
-        autoMitigate: t.autoMitigate,
-        underAttackMode: t.underAttackMode,
-      };
-    }
+    const key = t.serverId || "GLOBAL";
+    thresholdsMap[key] = {
+      serverId: key,
+      maxConnPerIpPerWindow: t.maxConnPerIpPerWindow,
+      windowMs: t.windowMs,
+      banDurationMs: t.banDurationMs,
+      autoMitigate: t.autoMitigate,
+      underAttackMode: t.underAttackMode,
+    };
   }
 
   const dbNode = await db.node.findUnique({

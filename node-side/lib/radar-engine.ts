@@ -169,14 +169,16 @@ export function updateTrustedIps(ips: string[]) {
 
 // ─── IPTABLES RUBBER_RADAR CHAIN MANAGEMENT ─────────────────────────────────
 
+const EXTENDED_PATH = `${process.env.PATH || ""}:/usr/sbin:/sbin:/usr/local/sbin:/usr/bin:/bin`;
+
 async function runCmd(cmd: string): Promise<string> {
   try {
-    const { stdout } = await execAsync(cmd);
+    const { stdout } = await execAsync(cmd, { env: { ...process.env, PATH: EXTENDED_PATH }, timeout: 4000 });
     return stdout.trim();
   } catch (err: any) {
     if (isLinux && !cmd.startsWith("sudo")) {
       try {
-        const { stdout } = await execAsync(`sudo -n ${cmd}`);
+        const { stdout } = await execAsync(`sudo -n ${cmd}`, { env: { ...process.env, PATH: EXTENDED_PATH }, timeout: 4000 });
         return stdout.trim();
       } catch {}
     }
@@ -225,6 +227,9 @@ async function applyIptablesBan(ip: string) {
   if (isIpTrusted(clean)) return;
   try {
     await runCmd(`iptables -A RUBBER_RADAR -s ${clean} -j DROP -m comment --comment "Rubber Radar Ban"`);
+    // Forcibly close any existing sockets from this banned IP
+    await runCmd(`ss -K dst ${clean} 2>/dev/null || true`);
+    await runCmd(`conntrack -D -s ${clean} 2>/dev/null || true`);
   } catch {}
 }
 
@@ -507,6 +512,71 @@ function extractEndpointsFromLine(line: string): { local: { ip: string; port: nu
   return null;
 }
 
+function hexToIpv4(hex: string): string {
+  if (hex.length !== 8) return "";
+  const b1 = parseInt(hex.substring(6, 8), 16);
+  const b2 = parseInt(hex.substring(4, 6), 16);
+  const b3 = parseInt(hex.substring(2, 4), 16);
+  const b4 = parseInt(hex.substring(0, 2), 16);
+  return `${b1}.${b2}.${b3}.${b4}`;
+}
+
+function hexToIpv6(hex: string): string {
+  if (hex.length !== 32) return "";
+  const lower = hex.toLowerCase();
+  if (lower.includes("ffff")) {
+    const b1 = parseInt(hex.substring(24, 26), 16);
+    const b2 = parseInt(hex.substring(26, 28), 16);
+    const b3 = parseInt(hex.substring(28, 30), 16);
+    const b4 = parseInt(hex.substring(30, 32), 16);
+    return `${b4}.${b3}.${b2}.${b1}`;
+  }
+  return "";
+}
+
+function parseProcNetFile(filePath: string): Array<{ localPort: number; peerIp: string; peerPort: number }> {
+  const results: Array<{ localPort: number; peerIp: string; peerPort: number }> = [];
+  try {
+    if (!fs.existsSync(filePath)) return results;
+    const content = fs.readFileSync(filePath, "utf-8");
+    const lines = content.split("\n");
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(/\s+/);
+      if (parts.length < 4) continue;
+
+      const localRaw = parts[1];
+      const remRaw = parts[2];
+      const state = parts[3];
+
+      // Ignore LISTEN (0A)
+      if (state === "0A") continue;
+
+      const localParts = localRaw.split(":");
+      const remParts = remRaw.split(":");
+      if (localParts.length < 2 || remParts.length < 2) continue;
+
+      const localPort = parseInt(localParts[1], 16) || 0;
+      const remPort = parseInt(remParts[1], 16) || 0;
+      if (!localPort || !remPort) continue;
+
+      let peerIp = "";
+      const remHex = remParts[0];
+      if (remHex.length === 8) {
+        peerIp = hexToIpv4(remHex);
+      } else if (remHex.length === 32) {
+        peerIp = hexToIpv6(remHex);
+      }
+
+      if (peerIp && peerIp !== "0.0.0.0" && peerIp !== "127.0.0.1") {
+        results.push({ localPort, peerIp, peerPort: remPort });
+      }
+    }
+  } catch {}
+  return results;
+}
+
 let isScanningConnections = false;
 const seenClientSockets = new Map<string, number>();
 
@@ -532,7 +602,32 @@ async function scanActiveConnections() {
 
     const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
 
-    // Universal scan command supporting Linux and Windows
+    // 1. Direct Linux kernel /proc/net/tcp & /proc/net/tcp6 inspection (fastest, zero-subprocess)
+    if (isLinux) {
+      const procSockets = [
+        ...parseProcNetFile("/proc/net/tcp"),
+        ...parseProcNetFile("/proc/net/tcp6"),
+      ];
+      for (const sock of procSockets) {
+        if (
+          sock.localPort >= 1024 &&
+          sock.localPort <= 65535 &&
+          !CONTROL_PORTS.has(sock.localPort) &&
+          sock.localPort !== agentPort &&
+          sock.peerIp &&
+          sock.peerPort > 0 &&
+          !isIpTrusted(sock.peerIp)
+        ) {
+          const sockKey = `${sock.peerIp}:${sock.peerPort}->${sock.localPort}`;
+          if (!seenClientSockets.has(sockKey)) {
+            seenClientSockets.set(sockKey, now);
+            recordConnection(sock.peerIp, sock.localPort, undefined, now);
+          }
+        }
+      }
+    }
+
+    // 2. Command-based scan fallback (ss / netstat)
     const cmd = isLinux
       ? "ss -t -a -n -H 2>/dev/null || ss -H -n -t 2>/dev/null || netstat -tan 2>/dev/null"
       : "netstat -ano -p tcp";

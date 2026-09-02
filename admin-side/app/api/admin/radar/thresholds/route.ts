@@ -78,9 +78,8 @@ export async function PUT(request: NextRequest) {
     const allThresholds = await db.radarThreshold.findMany();
     const thresholdsMap: Record<string, any> = {};
     for (const t of allThresholds) {
-      if (t.serverId) {
-        thresholdsMap[t.serverId] = t;
-      }
+      const key = t.serverId || "GLOBAL";
+      thresholdsMap[key] = t;
     }
     const nodes = await db.node.findMany({ where: { status: "ONLINE" } });
     for (const n of nodes) {
