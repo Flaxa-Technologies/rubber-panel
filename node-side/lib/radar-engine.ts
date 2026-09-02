@@ -174,7 +174,12 @@ async function runCmd(cmd: string): Promise<string> {
     const { stdout } = await execAsync(cmd);
     return stdout.trim();
   } catch (err: any) {
-    // If not on Linux or unprivileged, return empty without crashing
+    if (isLinux && !cmd.startsWith("sudo")) {
+      try {
+        const { stdout } = await execAsync(`sudo -n ${cmd}`);
+        return stdout.trim();
+      } catch {}
+    }
     return "";
   }
 }
@@ -367,20 +372,6 @@ export function recordConnection(ip: string, port: number, serverId?: string, no
     return 0;
   }
 
-  const key = `${cleanIp}:${port}`;
-  let w = connWindows.get(key);
-  if (!w) {
-    w = { timestamps: [], serverId };
-    connWindows.set(key, w);
-  }
-
-  w.timestamps.push(now);
-  if (serverId) w.serverId = serverId;
-
-  // Filter timestamps within sliding window
-  w.timestamps = w.timestamps.filter((t) => now - t < 10000);
-  const count = w.timestamps.length;
-
   // Determine effective threshold
   let effectiveMaxConn = globalThreshold.maxConnPerIpPerWindow;
   let effectiveWindow = globalThreshold.windowMs;
@@ -402,8 +393,23 @@ export function recordConnection(ip: string, port: number, serverId?: string, no
     effectiveMaxConn = Math.max(5, Math.floor(effectiveMaxConn / 2)); // Strict fleet shield
   }
 
+  const key = `${cleanIp}:${port}`;
+  let w = connWindows.get(key);
+  if (!w) {
+    w = { timestamps: [], serverId };
+    connWindows.set(key, w);
+  }
+
+  w.timestamps.push(now);
+  if (serverId) w.serverId = serverId;
+
+  // Filter timestamps within sliding window
+  w.timestamps = w.timestamps.filter((t) => now - t < effectiveWindow);
+  const count = w.timestamps.length;
+
   // Check breach
   if (count > effectiveMaxConn && autoMitigate && !activeBans.has(cleanIp)) {
+    console.log(`[Radar] 🚨 BREACH: IP ${cleanIp} reached ${count} conns (limit: ${effectiveMaxConn} in ${Math.round(effectiveWindow / 1000)}s) on port ${port}. Auto-banning!`);
     banIp(
       cleanIp,
       `Exceeded connection rate limit (${count} conns in ${Math.round(effectiveWindow / 1000)}s on port ${port})`,
@@ -488,6 +494,19 @@ export function parseSocketEndpoint(addrStr: string): { ip: string; port: number
   return { ip: normalizeIp(ip), port };
 }
 
+function extractEndpointsFromLine(line: string): { local: { ip: string; port: number }; peer: { ip: string; port: number } } | null {
+  const parts = line.trim().split(/\s+/);
+  // Find all tokens that contain ":" (e.g. 0.0.0.0:25645, 192.168.1.2:54321, [::ffff:192.168.1.3]:25645)
+  // Skip process info tokens like users:(("docker-proxy"...))
+  const tokens = parts.filter((p) => p.includes(":") && !p.startsWith("users:") && !p.startsWith("pid:") && !p.startsWith("ino:"));
+  if (tokens.length >= 2) {
+    const local = parseSocketEndpoint(tokens[0]);
+    const peer = parseSocketEndpoint(tokens[1]);
+    return { local, peer };
+  }
+  return null;
+}
+
 let isScanningConnections = false;
 const seenClientSockets = new Map<string, number>();
 
@@ -513,77 +532,33 @@ async function scanActiveConnections() {
 
     const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
 
-    if (isLinux) {
-      // Scan all active & recent TCP connection states via ss on Linux with fallback
-      const out = await runCmd("ss -t -a -n -H 2>/dev/null || ss -H -n -t 2>/dev/null || netstat -tan 2>/dev/null");
-      if (out) {
-        const lines = out.split("\n");
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length < 4) continue;
+    // Universal scan command supporting Linux and Windows
+    const cmd = isLinux
+      ? "ss -t -a -n -H 2>/dev/null || ss -H -n -t 2>/dev/null || netstat -tan 2>/dev/null"
+      : "netstat -ano -p tcp";
 
-          let localStr = "";
-          let peerStr = "";
-          if (parts[0].toLowerCase().startsWith("tcp")) {
-            // netstat format: proto recv send local peer state
-            localStr = parts[3];
-            peerStr = parts[4];
-          } else if (parts.length >= 5) {
-            // ss format with state: ESTAB 0 0 local peer
-            localStr = parts[3];
-            peerStr = parts[4];
-          } else if (parts.length >= 4) {
-            // ss format without state: 0 0 local peer
-            localStr = parts[2];
-            peerStr = parts[3];
-          }
+    const out = await runCmd(cmd);
+    if (out) {
+      const lines = out.split("\n");
+      for (const line of lines) {
+        const ep = extractEndpointsFromLine(line);
+        if (!ep) continue;
 
-          const local = parseSocketEndpoint(localStr);
-          const peer = parseSocketEndpoint(peerStr);
+        const { local, peer } = ep;
 
-          if (
-            local.port >= 1024 &&
-            local.port <= 65535 &&
-            !CONTROL_PORTS.has(local.port) &&
-            local.port !== agentPort &&
-            peer.ip &&
-            peer.port > 0 &&
-            !isIpTrusted(peer.ip)
-          ) {
-            const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
-            if (!seenClientSockets.has(sockKey)) {
-              seenClientSockets.set(sockKey, now);
-              recordConnection(peer.ip, local.port, undefined, now);
-            }
-          }
-        }
-      }
-    } else {
-      // Windows fallback via netstat
-      const out = await runCmd("netstat -ano -p tcp");
-      if (out) {
-        const lines = out.split("\n");
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          // Format: TCP Local_Address Foreign_Address State PID
-          if (parts.length >= 4 && (parts[3] === "ESTABLISHED" || parts[3] === "TIME_WAIT" || parts[3] === "CLOSE_WAIT")) {
-            const local = parseSocketEndpoint(parts[1]);
-            const peer = parseSocketEndpoint(parts[2]);
-
-            if (
-              local.port >= 1024 &&
-              !CONTROL_PORTS.has(local.port) &&
-              local.port !== agentPort &&
-              peer.ip &&
-              peer.port > 0 &&
-              !isIpTrusted(peer.ip)
-            ) {
-              const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
-              if (!seenClientSockets.has(sockKey)) {
-                seenClientSockets.set(sockKey, now);
-                recordConnection(peer.ip, local.port, undefined, now);
-              }
-            }
+        if (
+          local.port >= 1024 &&
+          local.port <= 65535 &&
+          !CONTROL_PORTS.has(local.port) &&
+          local.port !== agentPort &&
+          peer.ip &&
+          peer.port > 0 &&
+          !isIpTrusted(peer.ip)
+        ) {
+          const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
+          if (!seenClientSockets.has(sockKey)) {
+            seenClientSockets.set(sockKey, now);
+            recordConnection(peer.ip, local.port, undefined, now);
           }
         }
       }
