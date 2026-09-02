@@ -82,6 +82,7 @@ async function sendHeartbeat() {
         bytesPerSecIn: radarStats.current.bytesPerSecIn,
         bytesPerSecOut: radarStats.current.bytesPerSecOut,
         activeBans: radarStats.activeBansCount,
+        activeBansList: radarStats.activeBansList,
         topOffenders: radarStats.topOffenders.slice(0, 10),
       },
     };

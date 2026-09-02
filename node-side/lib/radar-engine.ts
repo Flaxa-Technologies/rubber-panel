@@ -460,7 +460,24 @@ async function collectNetworkBandwidth(): Promise<{ bytesInDelta: number; bytesO
   return { bytesInDelta, bytesOutDelta, dropDelta: droppedPacketsCounter };
 }
 
+export function parseSocketEndpoint(addrStr: string): { ip: string; port: number } {
+  if (!addrStr) return { ip: "", port: 0 };
+  let str = addrStr.trim();
+  if (str.startsWith("[") && str.includes("]:")) {
+    const bracketEnd = str.indexOf("]:");
+    const ip = str.slice(1, bracketEnd);
+    const port = parseInt(str.slice(bracketEnd + 2), 10) || 0;
+    return { ip: normalizeIp(ip), port };
+  }
+  const lastColon = str.lastIndexOf(":");
+  if (lastColon === -1) return { ip: normalizeIp(str), port: 0 };
+  const port = parseInt(str.slice(lastColon + 1), 10) || 0;
+  let ip = str.slice(0, lastColon);
+  return { ip: normalizeIp(ip), port };
+}
+
 let isScanningConnections = false;
+const seenClientSockets = new Map<string, number>();
 
 async function scanActiveConnections() {
   if (isScanningConnections) return;
@@ -469,7 +486,7 @@ async function scanActiveConnections() {
   try {
     const now = Date.now();
 
-    // Cap Map size to prevent memory leaks
+    // Cap Map sizes to prevent memory leaks
     if (connWindows.size > 1000) {
       for (const [key, w] of connWindows.entries()) {
         w.timestamps = w.timestamps.filter((t) => now - t < 30000);
@@ -477,31 +494,50 @@ async function scanActiveConnections() {
       }
     }
 
+    // Prune seenClientSockets older than 15s
+    for (const [sock, ts] of seenClientSockets.entries()) {
+      if (now - ts > 15000) seenClientSockets.delete(sock);
+    }
+
     const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
 
     if (isLinux) {
-      // Scan established connections via ss on Linux
-      const out = await runCmd("ss -H -t -o state established");
+      // Scan all active & recent TCP connection states via ss on Linux
+      const out = await runCmd("ss -H -n -t state all");
       if (out) {
         const lines = out.split("\n");
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
-          // Format: Recv-Q Send-Q Local Address:Port Peer Address:Port
-          if (parts.length >= 5) {
-            const local = parts[3];
-            const peer = parts[4];
-            const localPort = parseInt(local.split(":").pop() || "0", 10);
-            const peerIp = peer.split(":")[0]?.replace(/^\[|\]$/g, "");
+          // Format: State Recv-Q Send-Q Local Address:Port Peer Address:Port
+          // or: Recv-Q Send-Q Local Address:Port Peer Address:Port
+          if (parts.length >= 4) {
+            let localStr = "";
+            let peerStr = "";
+            if (parts.length >= 5 && parts[0].toUpperCase().match(/^(ESTAB|SYN-RECV|TIME-WAIT|CLOSE-WAIT|FIN-WAIT|LAST-ACK|CLOSING)$/)) {
+              localStr = parts[3];
+              peerStr = parts[4];
+            } else if (parts.length >= 4) {
+              localStr = parts[2];
+              peerStr = parts[3];
+            }
+
+            const local = parseSocketEndpoint(localStr);
+            const peer = parseSocketEndpoint(peerStr);
 
             if (
-              localPort >= 1024 &&
-              localPort <= 65535 &&
-              !CONTROL_PORTS.has(localPort) &&
-              localPort !== agentPort &&
-              peerIp &&
-              !isIpTrusted(peerIp)
+              local.port >= 1024 &&
+              local.port <= 65535 &&
+              !CONTROL_PORTS.has(local.port) &&
+              local.port !== agentPort &&
+              peer.ip &&
+              peer.port > 0 &&
+              !isIpTrusted(peer.ip)
             ) {
-              recordConnection(peerIp, localPort, undefined, now);
+              const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
+              if (!seenClientSockets.has(sockKey)) {
+                seenClientSockets.set(sockKey, now);
+                recordConnection(peer.ip, local.port, undefined, now);
+              }
             }
           }
         }
@@ -514,21 +550,23 @@ async function scanActiveConnections() {
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
           // Format: TCP Local_Address Foreign_Address State PID
-          if (parts.length >= 4 && parts[3] === "ESTABLISHED") {
-            const local = parts[1];
-            const peer = parts[2];
-            const localPort = parseInt(local.split(":").pop() || "0", 10);
-            const peerIp = peer.split(":")[0]?.replace(/^\[|\]$/g, "");
+          if (parts.length >= 4 && (parts[3] === "ESTABLISHED" || parts[3] === "TIME_WAIT" || parts[3] === "CLOSE_WAIT")) {
+            const local = parseSocketEndpoint(parts[1]);
+            const peer = parseSocketEndpoint(parts[2]);
 
-            // Only track game server ports (e.g. 25500-30000 or non-control ports)
             if (
-              localPort >= 1024 &&
-              !CONTROL_PORTS.has(localPort) &&
-              localPort !== agentPort &&
-              peerIp &&
-              !isIpTrusted(peerIp)
+              local.port >= 1024 &&
+              !CONTROL_PORTS.has(local.port) &&
+              local.port !== agentPort &&
+              peer.ip &&
+              peer.port > 0 &&
+              !isIpTrusted(peer.ip)
             ) {
-              recordConnection(peerIp, localPort, undefined, now);
+              const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
+              if (!seenClientSockets.has(sockKey)) {
+                seenClientSockets.set(sockKey, now);
+                recordConnection(peer.ip, local.port, undefined, now);
+              }
             }
           }
         }
@@ -608,7 +646,7 @@ setInterval(() => {
   }
 }, 10000);
 
-// Main Telemetry loop (every 2s)
+// Main Telemetry loop (every 1s)
 let radarLoopRunning = false;
 export function startRadarLoop() {
   if (radarLoopRunning) return;
@@ -637,14 +675,14 @@ export function startRadarLoop() {
       };
 
       recentSamples.push(sample);
-      if (recentSamples.length > 450) {
-        // Keep 15 minutes of 2s samples
+      if (recentSamples.length > 900) {
+        // Keep 15 minutes of 1s samples
         recentSamples.shift();
       }
     } catch (err) {
       console.error("Radar telemetry loop error:", err);
     }
-  }, 2000);
+  }, 1000);
 }
 
 // ─── PUBLIC RADAR ENGINE APIS ───────────────────────────────────────────────

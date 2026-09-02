@@ -56,6 +56,40 @@ export async function POST(request: NextRequest) {
       },
     }).catch(() => {});
 
+    // Sync any active bans reported by node daemon into db.radarBan
+    if (Array.isArray(radar.activeBansList) && radar.activeBansList.length > 0) {
+      for (const ban of radar.activeBansList) {
+        if (ban.ip) {
+          const cleanIp = String(ban.ip).trim();
+          db.radarBan.findFirst({
+            where: { ip: cleanIp, releasedAt: null },
+          }).then(async (existing) => {
+            if (existing) {
+              await db.radarBan.update({
+                where: { id: existing.id },
+                data: {
+                  expiresAt: new Date(ban.expiresAt || Date.now() + 15 * 60 * 1000),
+                  reason: ban.reason || "Exceeded connection rate limit",
+                },
+              });
+            } else {
+              await db.radarBan.create({
+                data: {
+                  ip: cleanIp,
+                  nodeId: node.nodeId,
+                  port: ban.port,
+                  serverId: ban.serverId,
+                  reason: ban.reason || "Exceeded connection rate limit",
+                  country: ban.country || "UN",
+                  expiresAt: new Date(ban.expiresAt || Date.now() + 15 * 60 * 1000),
+                },
+              });
+            }
+          }).catch(() => {});
+        }
+      }
+    }
+
     // Prune samples older than 24h (probabilistic 5% chance on heartbeat)
     if (Math.random() < 0.05) {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
