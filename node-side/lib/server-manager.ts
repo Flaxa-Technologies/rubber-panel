@@ -150,7 +150,7 @@ async function downloadMinecraftJarIfMissing(serverId: string, type = "PAPER", v
   const t = (type || "PAPER").toUpperCase();
   const v = (!version || version === "LATEST") ? "1.21.1" : version;
 
-  appendLog(serverId, `[ Rubber ] server.jar not found. Auto-downloading ${t} ${v}...`);
+  appendLog(serverId, `[Rubber] server.jar not found. Auto-downloading ${t} ${v}...`);
 
   try {
     if (t === "PAPER" || t === "VELOCITY" || t === "FOLIA" || t === "WATERFALL") {
@@ -164,29 +164,29 @@ async function downloadMinecraftJarIfMissing(serverId: string, type = "PAPER", v
           const downloadName = latestBuild.downloads?.application?.name || `${project}-${v}-${latestBuild.build}.jar`;
           const downloadUrl = `https://api.papermc.io/v2/projects/${project}/versions/${v}/builds/${latestBuild.build}/downloads/${downloadName}`;
           
-          appendLog(serverId, `[ Rubber ] Downloading from PaperMC API: ${downloadName}...`);
+          appendLog(serverId, `[Rubber] Downloading from PaperMC API: ${downloadName}...`);
           const res = await fetch(downloadUrl);
           if (res.ok && res.body) {
             const buf = Buffer.from(await res.arrayBuffer());
             await fs.writeFile(jarPath, buf);
-            appendLog(serverId, `[ Rubber ] ✓ Downloaded ${downloadName} (${(buf.length / 1024 / 1024).toFixed(1)} MB)!`);
+            appendLog(serverId, `[Rubber] ✓ Downloaded ${downloadName} (${(buf.length / 1024 / 1024).toFixed(1)} MB)!`);
             return true;
           }
         }
       }
     } else if (t === "PURPUR") {
       const purpurUrl = `https://api.purpurmc.org/v2/purpur/${v}/latest/download`;
-      appendLog(serverId, `[ Rubber ] Downloading from Purpur API: purpur-${v}.jar...`);
+      appendLog(serverId, `[Rubber] Downloading from Purpur API: purpur-${v}.jar...`);
       const res = await fetch(purpurUrl);
       if (res.ok && res.body) {
         const buf = Buffer.from(await res.arrayBuffer());
         await fs.writeFile(jarPath, buf);
-        appendLog(serverId, `[ Rubber ] ✓ Downloaded purpur-${v}.jar (${(buf.length / 1024 / 1024).toFixed(1)} MB)!`);
+        appendLog(serverId, `[Rubber] ✓ Downloaded purpur-${v}.jar (${(buf.length / 1024 / 1024).toFixed(1)} MB)!`);
         return true;
       }
     }
   } catch (err: any) {
-    appendLog(serverId, `[ Rubber ] Auto-download note: ${err.message}. You can upload server.jar manually via Files.`);
+    appendLog(serverId, `[Rubber] Auto-download note: ${err.message}. You can upload server.jar manually via Files.`);
   }
   return false;
 }
@@ -934,7 +934,7 @@ Welcome to your cloud-hosted **VS Code development environment** powered by Rubb
   serverStates.set(params.id, info);
   await saveState(params.id, info);
 
-  appendLog(params.id, `[ Rubber ] Server "${params.name}" (${runtime.label}) provisioned on port ${assignedPort}. Press Start to initialize.`);
+  appendLog(params.id, `[Rubber] Server "${params.name}" (${runtime.label}) provisioned on port ${assignedPort}. Press Start to initialize.`);
   return { success: true };
 }
 
@@ -957,7 +957,7 @@ export async function updateServerInfo(serverId: string, patch: Partial<ServerIn
 
   serverStates.set(serverId, info);
   await saveState(serverId, info);
-  appendLog(serverId, `[ Rubber ] Instance configuration updated.`);
+  appendLog(serverId, `[Rubber] Instance configuration updated.`);
   return { success: true };
 }
 
@@ -1036,7 +1036,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
   info.status = "STARTING";
   info.isCryoSleeping = false;
   serverStates.set(serverId, info);
-  appendLog(serverId, `[ Rubber ] Starting ${runtime.label} server container...`);
+  appendLog(serverId, `[Rubber] Starting ${runtime.label} server container...`);
 
   try {
     const dir = getServerDir(serverId);
@@ -1049,7 +1049,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
     // Clean up any stale or exited container before starting fresh
     const isRunning = await containerRunning(containerName);
     if (isRunning) {
-      appendLog(serverId, "[ Rubber ] Container already active, attaching to output...");
+      appendLog(serverId, "[Rubber] Container already active, attaching to output...");
       attachLogs(serverId);
       info.status = "RUNNING";
       info.isCryoSleeping = false;
@@ -1060,7 +1060,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
     const exists = await containerExists(containerName);
     if (exists) {
-      appendLog(serverId, "[ Rubber ] Removing previous container state for clean start...");
+      appendLog(serverId, "[Rubber] Removing previous container state for clean start...");
       try {
         await execAsync(`docker rm -f ${containerName}`);
       } catch {}
@@ -1089,9 +1089,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || "node server.js";
 
-      appendLog(serverId, `[ Rubber ] Launching Node.js ${dockerImage} on host port ${assignedPort}...`);
-      appendLog(serverId, `[ Rubber ] Security Shield: ${securityEnabled ? "ACTIVE (Threat Scanner & 5-Min Quarantine)" : "DISABLED"}`);
-      appendLog(serverId, `[ Rubber ] Startup Script:  ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching Node.js ${dockerImage} on host port ${assignedPort}...`);
+      appendLog(serverId, `[Rubber] Security Shield: ${securityEnabled ? "ACTIVE (Threat Scanner & 5-Min Quarantine)" : "DISABLED"}`);
+      appendLog(serverId, `[Rubber] Startup Script:  ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1107,7 +1107,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `if [ -f package.json ] && [ ! -d node_modules ]; then echo '[ Rubber ] Running npm install...'; npm install --production --no-audit; fi; echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
+        `if [ -f package.json ] && [ ! -d node_modules ]; then echo '[Rubber] Running npm install...'; npm install --production --no-audit; fi; echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isPhp) {
       const dockerImage = env.DOCKER_IMAGE || "php:8.3-cli-alpine";
@@ -1118,8 +1118,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || `php -S 0.0.0.0:${internalPort} index.php`;
 
-      appendLog(serverId, `[ Rubber ] Launching PHP ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching PHP ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1134,7 +1134,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
+        `echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isPython) {
       const pyVer = env.PYTHON_VERSION || "3.11";
@@ -1146,8 +1146,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || `python main.py`;
 
-      appendLog(serverId, `[ Rubber ] Launching Python ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching Python ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1162,7 +1162,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `if [ -f requirements.txt ] && [ -s requirements.txt ]; then echo '[ Rubber ] Installing pip packages...'; pip install --no-cache-dir -r requirements.txt; fi; echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
+        `if [ -f requirements.txt ] && [ -s requirements.txt ]; then echo '[Rubber] Installing pip packages...'; pip install --no-cache-dir -r requirements.txt; fi; echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isRust) {
       const dockerImage = env.DOCKER_IMAGE || "rust:alpine";
@@ -1173,8 +1173,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || "cargo run --release";
 
-      appendLog(serverId, `[ Rubber ] Launching Rust ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching Rust ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1189,7 +1189,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
+        `echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isGo) {
       const dockerImage = env.DOCKER_IMAGE || "golang:alpine";
@@ -1200,8 +1200,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim() || "go run main.go";
 
-      appendLog(serverId, `[ Rubber ] Launching Golang ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
-      appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching Golang ${dockerImage} on host port ${assignedPort} (internal :${internalPort})...`);
+      appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1216,7 +1216,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         ...envArgs,
         dockerImage,
         "sh", "-c",
-        `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`
+        `echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`
       ];
     } else if (runtime.isDatabase) {
       // Database Container Engine (MySQL, PostgreSQL, Redis, MongoDB, MariaDB)
@@ -1234,8 +1234,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[ Rubber ] Launching Database ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
-      if (startCmd) appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching Database ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
+      if (startCmd) appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1250,7 +1250,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       ];
 
       if (startCmd) {
-        dockerArgs.push("sh", "-c", `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`);
+        dockerArgs.push("sh", "-c", `echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`);
       }
     } else if (runtime.isCodeSandbox) {
       // VS Code Server Container Execution
@@ -1264,8 +1264,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
 
       const envArgs = buildEnvArgs(env);
 
-      appendLog(serverId, `[ Rubber ] Launching Cloud Code Sandbox (VS Code IDE) on host port :${assignedPort}...`);
-      appendLog(serverId, `[ Rubber ] Image: ${dockerImage} | Auth: ${authArg}`);
+      appendLog(serverId, `[Rubber] Launching Cloud Code Sandbox (VS Code IDE) on host port :${assignedPort}...`);
+      appendLog(serverId, `[Rubber] Image: ${dockerImage} | Auth: ${authArg}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1308,8 +1308,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const dockerImage = env.DOCKER_IMAGE || "debian:bookworm-slim";
       delete env.DOCKER_IMAGE;
 
-      appendLog(serverId, `[ Rubber ] Launching Pumpkin (Rust MC) on Java port :${javaPort} and Bedrock port :${bedrockPort}...`);
-      appendLog(serverId, `[ Rubber ] Version: ${env.VERSION || "Nightly"}`);
+      appendLog(serverId, `[Rubber] Launching Pumpkin (Rust MC) on Java port :${javaPort} and Bedrock port :${bedrockPort}...`);
+      appendLog(serverId, `[Rubber] Version: ${env.VERSION || "Nightly"}`);
 
       dockerArgs = [
         "run", "-d",
@@ -1369,10 +1369,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const defaultCmd = `java -Xms${initRam}M -Xmx${maxRam}M -jar server.jar nogui`;
       const javaExecCmd = customCmd || defaultCmd;
 
-      appendLog(serverId, `[ Rubber ] Launching ${dockerImage} on host port ${assignedPort}...`);
-      appendLog(serverId, `[ Rubber ] Software: ${swType} ${swVer}`);
-      appendLog(serverId, `[ Rubber ] Java Runtime: Adoptium OpenJDK ${javaVer}`);
-      appendLog(serverId, `[ Rubber ] Startup Command: ${javaExecCmd}`);
+      appendLog(serverId, `[Rubber] Launching ${dockerImage} on host port ${assignedPort}...`);
+      appendLog(serverId, `[Rubber] Software: ${swType} ${swVer}`);
+      appendLog(serverId, `[Rubber] Java Runtime: Adoptium OpenJDK ${javaVer}`);
+      appendLog(serverId, `[Rubber] Startup Command: ${javaExecCmd}`);
 
       dockerArgs = [
         "run", "-d", "-i",
@@ -1406,8 +1406,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[ Rubber ] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
-      if (startCmd) appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Launching Game Server ${dockerImage} on host port ${assignedPort} (internal :${internalPort} ${protocol.toUpperCase()})...`);
+      if (startCmd) appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       const portMappingArgs = (protocol === "both")
         ? ["-p", `${assignedPort}:${internalPort}/tcp`, "-p", `${assignedPort}:${internalPort}/udp`]
@@ -1430,7 +1430,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       ];
 
       if (startCmd) {
-        dockerArgs.push("sh", "-c", `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`);
+        dockerArgs.push("sh", "-c", `echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`);
       }
     } else {
       // Generic / Any Docker Container Image (Universal Auto-Port Compliance)
@@ -1446,9 +1446,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       const envArgs = buildEnvArgs(env);
       const startCmd = info.startupCommand?.trim();
 
-      appendLog(serverId, `[ Rubber ] Auto-detected container port: ${internalPort} (${protocol.toUpperCase()})`);
-      appendLog(serverId, `[ Rubber ] Launching Container ${dockerImage} on host port ${assignedPort} -> internal :${internalPort}...`);
-      if (startCmd) appendLog(serverId, `[ Rubber ] Startup Script: ${startCmd}`);
+      appendLog(serverId, `[Rubber] Auto-detected container port: ${internalPort} (${protocol.toUpperCase()})`);
+      appendLog(serverId, `[Rubber] Launching Container ${dockerImage} on host port ${assignedPort} -> internal :${internalPort}...`);
+      if (startCmd) appendLog(serverId, `[Rubber] Startup Script: ${startCmd}`);
 
       const portMappingArgs = (protocol === "both")
         ? ["-p", `${assignedPort}:${internalPort}/tcp`, "-p", `${assignedPort}:${internalPort}/udp`]
@@ -1477,15 +1477,15 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       ];
 
       if (startCmd) {
-        dockerArgs.push("sh", "-c", `echo '[ Rubber ] Executing: ${startCmd}'; exec ${startCmd}`);
+        dockerArgs.push("sh", "-c", `echo '[Rubber] Executing: ${startCmd}'; exec ${startCmd}`);
       } else if (dockerImage.includes("alpine") || dockerImage.includes("ubuntu") || dockerImage.includes("debian") || dockerImage.includes("busybox")) {
-        dockerArgs.push("sh", "-c", "echo '[ Rubber ] Interactive container active and running in background.'; tail -f /dev/null");
+        dockerArgs.push("sh", "-c", "echo '[Rubber] Interactive container active and running in background.'; tail -f /dev/null");
       }
     }
 
     console.log(`[ServerManager] docker ${dockerArgs.join(" ")}`);
     const { stdout } = await execAsync(`docker ${dockerArgs.map(a => JSON.stringify(a)).join(" ")}`);
-    appendLog(serverId, `[ Rubber ] Container initialized: ${stdout.trim().slice(0, 12)}`);
+    appendLog(serverId, `[Rubber] Container initialized: ${stdout.trim().slice(0, 12)}`);
 
     // Attach log stream
     attachLogs(serverId);
@@ -1498,6 +1498,13 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
     info.status = "RUNNING";
     serverStates.set(serverId, info);
     await saveState(serverId, info);
+
+    // Reset Cryo-Sleep active timer on fresh boot
+    try {
+      const { resetServerActiveTimer } = await import("./cryo-sleep-engine");
+      resetServerActiveTimer(serverId);
+    } catch {}
+
     return { success: true };
   } catch (err: any) {
     console.error(`[ServerManager] Failed to start server ${serverId}:`, err);
@@ -1524,7 +1531,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
 
   info.status = "STOPPING";
   serverStates.set(serverId, info);
-  appendLog(serverId, `[ Rubber ] ${force ? "Force-killing" : "Stopping"} server...`);
+  appendLog(serverId, `[Rubber] ${force ? "Force-killing" : "Stopping"} server...`);
 
   try {
     const containerName = getContainerName(serverId);
@@ -1533,7 +1540,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
     info.status = "STOPPED";
     serverStates.set(serverId, info);
     await saveState(serverId, info);
-    appendLog(serverId, "[ Rubber ] Server stopped.");
+    appendLog(serverId, "[Rubber] Server stopped.");
     syncServerJar(serverId).catch(() => {});
     return { success: true };
   } catch (err: any) {
@@ -1546,7 +1553,7 @@ export async function stopServer(serverId: string, force = false): Promise<{ suc
 }
 
 export async function restartServer(serverId: string): Promise<{ success: boolean; error?: string }> {
-  appendLog(serverId, "[ Rubber ] Restarting...");
+  appendLog(serverId, "[Rubber] Restarting...");
   const stop = await stopServer(serverId);
   if (!stop.success) return stop;
   await new Promise(r => setTimeout(r, 1500));
@@ -1580,7 +1587,7 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
 
   const running = await containerRunning(containerName);
   if (!running) {
-    appendLog(serverId, "[ Rubber ] Cannot execute command: Server instance is offline.");
+    appendLog(serverId, "[Rubber] Cannot execute command: Server instance is offline.");
     return { success: true };
   }
 
@@ -1618,7 +1625,7 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
     await execAsync(`docker exec ${containerName} rcon-cli '${escapedCmd}'`);
     return { success: true };
   } catch (err: any) {
-    appendLog(serverId, `[ Rubber ] Server console is not ready yet.`);
+    appendLog(serverId, `[Rubber] Server console is not ready yet.`);
     return { success: false, error: err.message };
   }
 }

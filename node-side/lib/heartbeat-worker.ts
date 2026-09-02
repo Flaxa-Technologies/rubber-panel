@@ -166,12 +166,6 @@ async function sendHeartbeat() {
               idleMinutes: s.cryoSleepIdleMinutes ?? data.config.cryosleep?.defaultIdleMinutes ?? 10,
               motd: s.cryoSleepMotd,
             });
-            if (s.cryoSleepEnabled) {
-              const live = await getServerStatus(s.id);
-              if (live && live.status === "RUNNING" && !isWakeProxyRunning(s.id)) {
-                hibernateServer(s.id).catch(() => {});
-              }
-            }
           }
         }
       } catch (innerErr) {

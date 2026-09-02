@@ -55,6 +55,13 @@ export function updateServerPlayerCount(serverId: string, count: number) {
 }
 
 /**
+ * Reset active idle timer (e.g. on server start or player connection).
+ */
+export function resetServerActiveTimer(serverId: string) {
+  lastActiveTimestamps.set(serverId, Date.now());
+}
+
+/**
  * Manually or automatically hibernate a server into Cryo-Sleep.
  */
 export async function hibernateServer(serverId: string, reason = "Idle timeout"): Promise<{ success: boolean; error?: string }> {
