@@ -182,20 +182,32 @@ async function runCmd(cmd: string): Promise<string> {
 export async function initRadarChain() {
   if (!isLinux) return;
   try {
-    // Create RUBBER_RADAR chain if not exists
+    // 1. Create RUBBER_RADAR chain if not exists
     await runCmd("iptables -N RUBBER_RADAR 2>/dev/null || true");
 
-    // Ensure control ports (SSH, Web, Node) are ALWAYS immune from drops
+    // 2. Ensure control ports (SSH, Web, Node) are ALWAYS immune from drops
     const controlPortsList = Array.from(CONTROL_PORTS).join(",");
     const checkControl = await runCmd(`iptables -C RUBBER_RADAR -p tcp -m multiport --dports ${controlPortsList} -j RETURN 2>/dev/null || true`);
     if (!checkControl) {
-      await runCmd(`iptables -I RUBBER_RADAR 1 -p tcp -m multiport --dports ${controlPortsList} -j RETURN`);
+      await runCmd(`iptables -I RUBBER_RADAR 1 -p tcp -m multiport --dports ${controlPortsList} -j RETURN 2>/dev/null || true`);
     }
 
-    // Ensure RUBBER_RADAR is hooked at top of INPUT chain
-    const check = await runCmd("iptables -C INPUT -j RUBBER_RADAR 2>/dev/null || true");
-    if (!check) {
-      await runCmd("iptables -I INPUT 1 -j RUBBER_RADAR");
+    // 3. Hook RUBBER_RADAR into INPUT chain (host services)
+    const checkInput = await runCmd("iptables -C INPUT -j RUBBER_RADAR 2>/dev/null || true");
+    if (!checkInput) {
+      await runCmd("iptables -I INPUT 1 -j RUBBER_RADAR 2>/dev/null || true");
+    }
+
+    // 4. Hook RUBBER_RADAR into DOCKER-USER chain (Docker game servers & containers)
+    const checkDocker = await runCmd("iptables -C DOCKER-USER -j RUBBER_RADAR 2>/dev/null || true");
+    if (!checkDocker) {
+      await runCmd("iptables -I DOCKER-USER 1 -j RUBBER_RADAR 2>/dev/null || true");
+    }
+
+    // 5. Hook RUBBER_RADAR into FORWARD chain (generic container forwarding fallback)
+    const checkForward = await runCmd("iptables -C FORWARD -j RUBBER_RADAR 2>/dev/null || true");
+    if (!checkForward) {
+      await runCmd("iptables -I FORWARD 1 -j RUBBER_RADAR 2>/dev/null || true");
     }
   } catch {
     // Graceful fallback
@@ -502,42 +514,46 @@ async function scanActiveConnections() {
     const agentPort = Number(process.env.AGENT_PORT || process.env.PORT || 3001);
 
     if (isLinux) {
-      // Scan all active & recent TCP connection states via ss on Linux
-      const out = await runCmd("ss -H -n -t state all");
+      // Scan all active & recent TCP connection states via ss on Linux with fallback
+      const out = await runCmd("ss -t -a -n -H 2>/dev/null || ss -H -n -t 2>/dev/null || netstat -tan 2>/dev/null");
       if (out) {
         const lines = out.split("\n");
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
-          // Format: State Recv-Q Send-Q Local Address:Port Peer Address:Port
-          // or: Recv-Q Send-Q Local Address:Port Peer Address:Port
-          if (parts.length >= 4) {
-            let localStr = "";
-            let peerStr = "";
-            if (parts.length >= 5 && parts[0].toUpperCase().match(/^(ESTAB|SYN-RECV|TIME-WAIT|CLOSE-WAIT|FIN-WAIT|LAST-ACK|CLOSING)$/)) {
-              localStr = parts[3];
-              peerStr = parts[4];
-            } else if (parts.length >= 4) {
-              localStr = parts[2];
-              peerStr = parts[3];
-            }
+          if (parts.length < 4) continue;
 
-            const local = parseSocketEndpoint(localStr);
-            const peer = parseSocketEndpoint(peerStr);
+          let localStr = "";
+          let peerStr = "";
+          if (parts[0].toLowerCase().startsWith("tcp")) {
+            // netstat format: proto recv send local peer state
+            localStr = parts[3];
+            peerStr = parts[4];
+          } else if (parts.length >= 5) {
+            // ss format with state: ESTAB 0 0 local peer
+            localStr = parts[3];
+            peerStr = parts[4];
+          } else if (parts.length >= 4) {
+            // ss format without state: 0 0 local peer
+            localStr = parts[2];
+            peerStr = parts[3];
+          }
 
-            if (
-              local.port >= 1024 &&
-              local.port <= 65535 &&
-              !CONTROL_PORTS.has(local.port) &&
-              local.port !== agentPort &&
-              peer.ip &&
-              peer.port > 0 &&
-              !isIpTrusted(peer.ip)
-            ) {
-              const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
-              if (!seenClientSockets.has(sockKey)) {
-                seenClientSockets.set(sockKey, now);
-                recordConnection(peer.ip, local.port, undefined, now);
-              }
+          const local = parseSocketEndpoint(localStr);
+          const peer = parseSocketEndpoint(peerStr);
+
+          if (
+            local.port >= 1024 &&
+            local.port <= 65535 &&
+            !CONTROL_PORTS.has(local.port) &&
+            local.port !== agentPort &&
+            peer.ip &&
+            peer.port > 0 &&
+            !isIpTrusted(peer.ip)
+          ) {
+            const sockKey = `${peer.ip}:${peer.port}->${local.port}`;
+            if (!seenClientSockets.has(sockKey)) {
+              seenClientSockets.set(sockKey, now);
+              recordConnection(peer.ip, local.port, undefined, now);
             }
           }
         }
