@@ -1532,26 +1532,29 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
 
   // Strategy 1: mc-send-to-console wrapper (official itzg helper)
   try {
-    const mcCmd = `docker exec ${containerName} mc-send-to-console '${escapedCmd}'`;
-    await execAsync(mcCmd);
+    await execAsync(`docker exec ${containerName} mc-send-to-console '${escapedCmd}'`);
     return { success: true };
-  } catch {
-    // Strategy 2: Named pipe — ONLY write if it is confirmed to be a FIFO (-p)
-    try {
-      const pipeCmd = `docker exec ${containerName} sh -c "if [ -p /tmp/minecraft-console-in ]; then echo '${escapedCmd}' > /tmp/minecraft-console-in; else exit 1; fi"`;
-      await execAsync(pipeCmd);
-      return { success: true };
-    } catch {
-      // Strategy 3: rcon-cli (if user explicitly enabled RCON)
-      try {
-        const rconCmd = `docker exec ${containerName} rcon-cli '${escapedCmd}'`;
-        await execAsync(rconCmd);
-        return { success: true };
-      } catch (err: any) {
-        appendLog(serverId, `[ Rubber ] Server is still starting or console pipe is not ready yet.`);
-        return { success: false, error: err.message };
-      }
-    }
+  } catch {}
+
+  // Strategy 2: Direct write to named console pipe (sh -c)
+  try {
+    await execAsync(`docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-console-in"`);
+    return { success: true };
+  } catch {}
+
+  // Strategy 3: User 1000 pipe write
+  try {
+    await execAsync(`docker exec -u 1000 ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-console-in"`);
+    return { success: true };
+  } catch {}
+
+  // Strategy 4: rcon-cli (if user explicitly enabled RCON)
+  try {
+    await execAsync(`docker exec ${containerName} rcon-cli '${escapedCmd}'`);
+    return { success: true };
+  } catch (err: any) {
+    appendLog(serverId, `[ Rubber ] Server is still starting or console pipe is not ready yet.`);
+    return { success: false, error: err.message };
   }
 }
 
