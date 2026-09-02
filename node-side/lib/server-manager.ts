@@ -1536,24 +1536,20 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
     return { success: true };
   } catch {}
 
-  // Strategy 2: Direct write to named console pipe (sh -c)
+  // Strategy 2: ONLY write if /tmp/minecraft-console-in is CONFIRMED to be a FIFO pipe (-p)
+  // NEVER write if it is not a FIFO, because creating a regular file crashes mc-server-runner on boot!
   try {
-    await execAsync(`docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-console-in"`);
+    const pipeCmd = `docker exec ${containerName} sh -c "if [ -p /tmp/minecraft-console-in ]; then echo '${escapedCmd}' > /tmp/minecraft-console-in; else exit 1; fi"`;
+    await execAsync(pipeCmd);
     return { success: true };
   } catch {}
 
-  // Strategy 3: User 1000 pipe write
-  try {
-    await execAsync(`docker exec -u 1000 ${containerName} sh -c "echo '${escapedCmd}' > /tmp/minecraft-console-in"`);
-    return { success: true };
-  } catch {}
-
-  // Strategy 4: rcon-cli (if user explicitly enabled RCON)
+  // Strategy 3: rcon-cli (if user explicitly enabled RCON)
   try {
     await execAsync(`docker exec ${containerName} rcon-cli '${escapedCmd}'`);
     return { success: true };
   } catch (err: any) {
-    appendLog(serverId, `[ Rubber ] Server is still starting or console pipe is not ready yet.`);
+    appendLog(serverId, `[ Rubber ] Server console pipe is not ready yet.`);
     return { success: false, error: err.message };
   }
 }

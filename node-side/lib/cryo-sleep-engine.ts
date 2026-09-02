@@ -225,13 +225,18 @@ export function initCryoSleepEngine(config?: {
         const status = await getServerStatus(serverId);
         if (!status || status.status !== "RUNNING") continue;
 
-        const currentPlayers = playerCounts.get(serverId) ?? 0;
+        // Ensure at least 3 minutes grace period after container start before idle checks begin
         const lastActive = lastActiveTimestamps.get(serverId) ?? now;
-        const idleMs = now - lastActive;
+        const uptimeMs = now - lastActive;
+        if (uptimeMs < 180000) {
+          continue;
+        }
+
+        const currentPlayers = playerCounts.get(serverId) ?? 0;
         const targetIdleMs = Math.max(1, config.idleMinutes) * 60 * 1000;
 
         // If 0 players online and idle timeout exceeded -> hibernate!
-        if (currentPlayers === 0 && idleMs >= targetIdleMs) {
+        if (currentPlayers === 0 && uptimeMs >= targetIdleMs) {
           await hibernateServer(serverId, `${config.idleMinutes}m idle timeout with 0 players`);
         }
       }
