@@ -27,6 +27,9 @@ export function startHeartbeat() {
   if (globalThis.__rubberHeartbeatStarted) return;
   globalThis.__rubberHeartbeatStarted = true;
 
+  // Ensure Radar telemetry and defense loop is running
+  import("./radar-engine").then((m) => m.startRadarLoop()).catch(() => {});
+
   // Don't start if token not configured
   if (!NODE_TOKEN || NODE_TOKEN === "dev-token-placeholder") {
     console.log("[Heartbeat] NODE_TOKEN not set — heartbeat disabled. Configure .env to connect to admin.");

@@ -737,6 +737,7 @@ let radarLoopRunning = false;
 export function startRadarLoop() {
   if (radarLoopRunning) return;
   radarLoopRunning = true;
+  console.log("[Radar Engine] 🛡️ Traffic Radar & Threat Shield loop STARTED (polling every 1000ms)");
   initRadarChain();
 
   setInterval(async () => {
