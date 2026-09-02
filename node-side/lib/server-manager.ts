@@ -1290,14 +1290,17 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       if (!env.INIT_MEMORY) env.INIT_MEMORY = `${initRam}M`;
       if (!env.JVM_XX_OPTS) env.JVM_XX_OPTS = `-Xms${initRam}M`;
 
-      const javaVer = env.JAVA_VERSION || info.javaVersion || "21";
+      // Sanitize Java version: only official supported LTS tags exist on Docker Hub for itzg/minecraft-server
+      const VALID_JAVA_TAGS = ["21", "17", "11", "8", "21-graalvm", "17-graalvm"];
+      let rawJava = String(env.JAVA_VERSION || info.javaVersion || "21").trim();
+      let javaVer = VALID_JAVA_TAGS.includes(rawJava) ? rawJava : "21";
+
       let dockerImage = env.DOCKER_IMAGE;
-      if (!dockerImage || dockerImage === "itzg/minecraft-server" || dockerImage === "itzg/minecraft-server:latest" || (dockerImage.includes("java25") && javaVer !== "25")) {
-        dockerImage = `itzg/minecraft-server:java${javaVer}`;
-      } else if (!dockerImage.includes(":")) {
+      if (!dockerImage || dockerImage.startsWith("itzg/minecraft-server")) {
         dockerImage = `itzg/minecraft-server:java${javaVer}`;
       }
       delete env.DOCKER_IMAGE;
+      env.JAVA_VERSION = javaVer;
 
       if (!env.TYPE) env.TYPE = "PAPER";
       if (!env.VERSION) env.VERSION = "LATEST";

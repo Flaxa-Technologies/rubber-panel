@@ -13,6 +13,14 @@ export default function ServerErrorBoundary({
 }) {
   useEffect(() => {
     console.error("Server layout/page error:", error);
+    if (
+      error.message?.includes("ChunkLoadError") ||
+      error.message?.includes("Failed to load chunk") ||
+      error.message?.includes("loading chunk")
+    ) {
+      // Automatically reload page to fetch fresh chunks from updated deployment
+      window.location.reload();
+    }
   }, [error]);
 
   return (
@@ -38,8 +46,22 @@ export default function ServerErrorBoundary({
           {error.message || "An unexpected error occurred while rendering the server interface."}
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-          <button onClick={() => reset()} className="btn-solid-white" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <RefreshCw size={14} /> Try again
+          <button
+            onClick={() => {
+              if (
+                error.message?.includes("ChunkLoadError") ||
+                error.message?.includes("Failed to load chunk") ||
+                error.message?.includes("chunk")
+              ) {
+                window.location.reload();
+              } else {
+                reset();
+              }
+            }}
+            className="btn-solid-white"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <RefreshCw size={14} /> Reload Interface
           </button>
           <Link href="/dashboard" className="btn-secondary-dark" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <ArrowLeft size={14} /> Back to servers

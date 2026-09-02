@@ -22,54 +22,6 @@ const DEFAULT_JAVA_VERSIONS = [
     description: "Standard LTS runtime for Minecraft 1.17 through 1.20.4",
   },
   {
-    name: "Java 8 (Legacy)",
-    version: "8",
-    dockerImage: "itzg/minecraft-server:java8",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Required for vintage Minecraft 1.12.2 and older modpacks",
-  },
-  {
-    name: "Java 25 (Early Access)",
-    version: "25",
-    dockerImage: "itzg/minecraft-server:java25",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Next-generation Java 25 development runtime",
-  },
-  {
-    name: "Java 23",
-    version: "23",
-    dockerImage: "itzg/minecraft-server:java23",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Cutting-edge Java 23 development runtime",
-  },
-  {
-    name: "Java 22",
-    version: "22",
-    dockerImage: "itzg/minecraft-server:java22",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Modern performance release with latest JVM optimizations",
-  },
-  {
-    name: "Java 21 (LTS)",
-    version: "21",
-    dockerImage: "itzg/minecraft-server:java21",
-    binaryPath: "java",
-    isDefault: true,
-    description: "Recommended runtime for modern Minecraft 1.20.5+ and 1.21.x",
-  },
-  {
-    name: "Java 17 (LTS)",
-    version: "17",
-    dockerImage: "itzg/minecraft-server:java17",
-    binaryPath: "java",
-    isDefault: false,
-    description: "Standard LTS runtime for Minecraft 1.17 through 1.20.4",
-  },
-  {
     name: "Java 11 (LTS)",
     version: "11",
     dockerImage: "itzg/minecraft-server:java11",
@@ -85,17 +37,64 @@ const DEFAULT_JAVA_VERSIONS = [
     isDefault: false,
     description: "Required for vintage Minecraft 1.12.2 and older modpacks",
   },
+  {
+    name: "Java 21 GraalVM (High Performance)",
+    version: "21-graalvm",
+    dockerImage: "itzg/minecraft-server:java21-graalvm",
+    binaryPath: "java",
+    isDefault: false,
+    description: "Optimized GraalVM high-performance runtime for Minecraft 1.21+",
+  },
 ];
 
 async function ensureDefaultJavaVersions() {
+  // 1. Remove non-existent Docker tags (22, 23, 24, 25) that cause Docker daemon pull failure
+  try {
+    await db.javaVersion.deleteMany({
+      where: {
+        version: { in: ["22", "23", "24", "25"] },
+        nodeId: null,
+      },
+    });
+  } catch {}
+
+  // 2. Ensure verified LTS versions exist and are correctly configured
+  let defaultJava21Id: string | null = null;
   for (const jv of DEFAULT_JAVA_VERSIONS) {
     const existing = await db.javaVersion.findFirst({
       where: { version: jv.version, nodeId: null },
     });
     if (!existing) {
-      await db.javaVersion.create({ data: jv });
+      const created = await db.javaVersion.create({ data: jv });
+      if (jv.isDefault) defaultJava21Id = created.id;
       console.log(`[JavaVersions] Added runtime: ${jv.name}`);
+    } else {
+      if (jv.isDefault) defaultJava21Id = existing.id;
+      await db.javaVersion.update({
+        where: { id: existing.id },
+        data: {
+          name: jv.name,
+          dockerImage: jv.dockerImage,
+          isDefault: jv.isDefault,
+          description: jv.description,
+        },
+      });
     }
+  }
+
+  // 3. Normalize any servers stuck on invalid versions (22, 23, 24, 25) back to Java 21
+  if (defaultJava21Id) {
+    try {
+      await db.server.updateMany({
+        where: {
+          javaVersion: { in: ["22", "23", "24", "25"] },
+        },
+        data: {
+          javaVersion: "21",
+          javaVersionId: defaultJava21Id,
+        },
+      });
+    } catch {}
   }
 }
 
