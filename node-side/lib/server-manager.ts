@@ -1342,10 +1342,26 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         await fs.writeFile(eulaPath, "eula=true\n");
       }
 
-      // 2. Auto-create server.properties if missing
+      // 2. Synchronize server.properties to bind internally to 25565
       const propPath = path.join(serverDir, "server.properties");
-      if (!fsSync.existsSync(propPath)) {
-        await fs.writeFile(propPath, "server-port=25565\nquery.port=25565\nenable-query=true\nenable-rcon=false\n");
+      if (fsSync.existsSync(propPath)) {
+        let propContent = await fs.readFile(propPath, "utf-8");
+        if (/^server-port=/m.test(propContent)) {
+          propContent = propContent.replace(/^server-port=.*$/m, "server-port=25565");
+        } else {
+          propContent += "\nserver-port=25565";
+        }
+        if (/^query\.port=/m.test(propContent)) {
+          propContent = propContent.replace(/^query\.port=.*$/m, "query.port=25565");
+        } else {
+          propContent += "\nquery.port=25565";
+        }
+        if (/^server-ip=/m.test(propContent)) {
+          propContent = propContent.replace(/^server-ip=.*$/m, "server-ip=");
+        }
+        await fs.writeFile(propPath, propContent, "utf-8");
+      } else {
+        await fs.writeFile(propPath, "server-port=25565\nquery.port=25565\nenable-query=true\nenable-rcon=false\nserver-ip=\n", "utf-8");
       }
 
       // 3. Ensure server.jar is present
@@ -1377,7 +1393,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       dockerArgs = [
         "run", "-d", "-i",
         "--name", containerName,
-        "-p", `${assignedPort}:25565`,
+        "-p", `${assignedPort}:25565/tcp`,
+        "-p", `${assignedPort}:25565/udp`,
         "--dns", "8.8.8.8",
         "--dns", "1.1.1.1",
         "-v", `${serverDir}:/app`,
