@@ -44,7 +44,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const currentEnv = JSON.parse(server.environment || "{}");
       currentEnv.JAVA_VERSION = cleanJava;
       if (server.serverType === "MINECRAFT" || !currentEnv.SERVER_TYPE || currentEnv.SERVER_TYPE === "MINECRAFT") {
-        currentEnv.DOCKER_IMAGE = `itzg/minecraft-server:java${cleanJava}`;
+        currentEnv.DOCKER_IMAGE = `eclipse-temurin:${cleanJava}-jre-alpine`;
       }
       dataUpdate.environment = JSON.stringify(currentEnv);
     } catch {}

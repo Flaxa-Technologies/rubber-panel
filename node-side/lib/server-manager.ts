@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import os from "os";
 import { exec, spawn } from "child_process";
@@ -136,6 +137,58 @@ async function syncServerJar(serverId: string) {
       } catch {}
     }
   } catch {}
+}
+
+/** Automatically download software jar if server.jar is missing */
+async function downloadMinecraftJarIfMissing(serverId: string, type = "PAPER", version = "1.21.1") {
+  const dir = getServerDir(serverId);
+  await fs.mkdir(dir, { recursive: true });
+  await syncServerJar(serverId);
+  const jarPath = path.join(dir, "server.jar");
+  if (fsSync.existsSync(jarPath)) return true;
+
+  const t = (type || "PAPER").toUpperCase();
+  const v = (!version || version === "LATEST") ? "1.21.1" : version;
+
+  appendLog(serverId, `[ Rubber ] server.jar not found. Auto-downloading ${t} ${v}...`);
+
+  try {
+    if (t === "PAPER" || t === "VELOCITY" || t === "FOLIA" || t === "WATERFALL") {
+      const project = t.toLowerCase();
+      const buildsRes = await fetch(`https://api.papermc.io/v2/projects/${project}/versions/${v}/builds`);
+      if (buildsRes.ok) {
+        const buildsData = await buildsRes.json() as any;
+        const builds = buildsData.builds;
+        if (builds && builds.length > 0) {
+          const latestBuild = builds[builds.length - 1];
+          const downloadName = latestBuild.downloads?.application?.name || `${project}-${v}-${latestBuild.build}.jar`;
+          const downloadUrl = `https://api.papermc.io/v2/projects/${project}/versions/${v}/builds/${latestBuild.build}/downloads/${downloadName}`;
+          
+          appendLog(serverId, `[ Rubber ] Downloading from PaperMC API: ${downloadName}...`);
+          const res = await fetch(downloadUrl);
+          if (res.ok && res.body) {
+            const buf = Buffer.from(await res.arrayBuffer());
+            await fs.writeFile(jarPath, buf);
+            appendLog(serverId, `[ Rubber ] ✓ Downloaded ${downloadName} (${(buf.length / 1024 / 1024).toFixed(1)} MB)!`);
+            return true;
+          }
+        }
+      }
+    } else if (t === "PURPUR") {
+      const purpurUrl = `https://api.purpurmc.org/v2/purpur/${v}/latest/download`;
+      appendLog(serverId, `[ Rubber ] Downloading from Purpur API: purpur-${v}.jar...`);
+      const res = await fetch(purpurUrl);
+      if (res.ok && res.body) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        await fs.writeFile(jarPath, buf);
+        appendLog(serverId, `[ Rubber ] ✓ Downloaded purpur-${v}.jar (${(buf.length / 1024 / 1024).toFixed(1)} MB)!`);
+        return true;
+      }
+    }
+  } catch (err: any) {
+    appendLog(serverId, `[ Rubber ] Auto-download note: ${err.message}. You can upload server.jar manually via Files.`);
+  }
+  return false;
 }
 
 export async function listFiles(serverId: string, dirPath: string) {
@@ -1277,44 +1330,49 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "/usr/local/bin/pumpkin",
       ];
     } else if (runtime.isMinecraft) {
-      // Standard Minecraft Server (itzg/minecraft-server)
+      // Native High-Performance Minecraft Server (Adoptium / Eclipse Temurin OpenJDK)
       const initRam = Math.max(256, Math.floor(info.ram * 0.25));
       const maxRam = info.ram;
+      const serverDir = getServerDir(serverId);
+      await fs.mkdir(serverDir, { recursive: true });
 
-      // Always pass non-freezing autopause parameters
-      env.ENABLE_AUTOPAUSE = "FALSE";
-      env.AUTOPAUSE_TIMEOUT_EST = "0";
-      env.AUTOPAUSE_TIMEOUT_INIT = "0";
+      // 1. Auto-create eula.txt
+      const eulaPath = path.join(serverDir, "eula.txt");
+      if (!fsSync.existsSync(eulaPath)) {
+        await fs.writeFile(eulaPath, "eula=true\n");
+      }
 
-      if (!env.MEMORY) env.MEMORY = `${maxRam}M`;
-      if (!env.INIT_MEMORY) env.INIT_MEMORY = `${initRam}M`;
-      if (!env.JVM_XX_OPTS) env.JVM_XX_OPTS = `-Xms${initRam}M`;
+      // 2. Auto-create server.properties if missing
+      const propPath = path.join(serverDir, "server.properties");
+      if (!fsSync.existsSync(propPath)) {
+        await fs.writeFile(propPath, "server-port=25565\nquery.port=25565\nenable-query=true\nenable-rcon=false\n");
+      }
 
-      // Sanitize Java version: only official supported LTS tags exist on Docker Hub for itzg/minecraft-server
-      const VALID_JAVA_TAGS = ["21", "17", "11", "8", "21-graalvm", "17-graalvm"];
-      let rawJava = String(env.JAVA_VERSION || info.javaVersion || "21").trim();
-      let javaVer = VALID_JAVA_TAGS.includes(rawJava) ? rawJava : "21";
+      // 3. Ensure server.jar is present
+      const rawJava = String(env.JAVA_VERSION || info.javaVersion || "21").trim();
+      const javaVer = ["21", "17", "11", "8"].includes(rawJava) ? rawJava : "21";
+      const swType = env.TYPE || "PAPER";
+      const swVer = env.VERSION || "1.21.1";
+      await downloadMinecraftJarIfMissing(serverId, swType, swVer);
 
+      // 4. Resolve Docker Image (Default: Adoptium OpenJDK)
       let dockerImage = env.DOCKER_IMAGE;
-      if (!dockerImage || dockerImage.startsWith("itzg/minecraft-server")) {
-        dockerImage = `itzg/minecraft-server:java${javaVer}`;
+      if (!dockerImage || dockerImage.startsWith("itzg/minecraft-server") || dockerImage.includes("minecraft")) {
+        dockerImage = `eclipse-temurin:${javaVer}-jre-alpine`;
       }
       delete env.DOCKER_IMAGE;
-      env.JAVA_VERSION = javaVer;
-
-      if (!env.TYPE) env.TYPE = "PAPER";
-      if (!env.VERSION) env.VERSION = "LATEST";
-      if (!env.EULA) env.EULA = "TRUE";
-
-      if (env.TYPE && env.TYPE !== "CUSTOM") {
-        delete env.CUSTOM_SERVER;
-      }
+      delete env.TYPE;
+      delete env.VERSION;
 
       const envArgs = buildEnvArgs(env);
+      const customCmd = info.startupCommand?.trim();
+      const defaultCmd = `java -Xms${initRam}M -Xmx${maxRam}M -jar server.jar nogui`;
+      const javaExecCmd = customCmd || defaultCmd;
 
       appendLog(serverId, `[ Rubber ] Launching ${dockerImage} on host port ${assignedPort}...`);
-      appendLog(serverId, `[ Rubber ] Software: ${env.TYPE} ${env.VERSION}`);
-      appendLog(serverId, `[ Rubber ] Java Runtime: Java ${javaVer}`);
+      appendLog(serverId, `[ Rubber ] Software: ${swType} ${swVer}`);
+      appendLog(serverId, `[ Rubber ] Java Runtime: Adoptium OpenJDK ${javaVer}`);
+      appendLog(serverId, `[ Rubber ] Startup Command: ${javaExecCmd}`);
 
       dockerArgs = [
         "run", "-d", "-i",
@@ -1322,15 +1380,15 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-p", `${assignedPort}:25565`,
         "--dns", "8.8.8.8",
         "--dns", "1.1.1.1",
-        "-v", `${getServerDir(serverId)}:/data`,
+        "-v", `${serverDir}:/app`,
+        "-w", "/app",
         "-m", `${info.ram}m`,
         `--cpus=${cpuLimit}`,
         "--restart=no",
-        "-e", "CREATE_CONSOLE_IN_PIPE=true",
-        "-e", "ENABLE_AUTOPAUSE=FALSE",
-        "-e", "ENABLE_RCON=false",
         ...envArgs,
         dockerImage,
+        "sh", "-c",
+        `mkfifo /tmp/console.in 2>/dev/null; (tail -f /tmp/console.in 2>/dev/null &) | exec ${javaExecCmd}`,
       ];
     } else if (runtime.isGame) {
       // SteamCMD & Multi-Game Dedicated Server Execution (Palworld, Rust, Valheim, CS2, Terraria, ARK, etc.)
@@ -1530,26 +1588,37 @@ export async function sendCommand(serverId: string, command: string): Promise<{ 
   const cleanCmd = command.startsWith("/") ? command.slice(1) : command;
   const escapedCmd = cleanCmd.replace(/'/g, "'\\''");
 
-  // Strategy 1: mc-send-to-console wrapper (official itzg helper)
+  // Strategy 1: Native console pipe (/tmp/console.in)
+  try {
+    await execAsync(`docker exec ${containerName} sh -c "echo '${escapedCmd}' > /tmp/console.in"`);
+    return { success: true };
+  } catch {}
+
+  // Strategy 2: Direct process stdin fd/0
+  try {
+    await execAsync(`docker exec ${containerName} sh -c "echo '${escapedCmd}' > /proc/1/fd/0"`);
+    return { success: true };
+  } catch {}
+
+  // Strategy 3: mc-send-to-console wrapper (legacy itzg containers)
   try {
     await execAsync(`docker exec ${containerName} mc-send-to-console '${escapedCmd}'`);
     return { success: true };
   } catch {}
 
-  // Strategy 2: ONLY write if /tmp/minecraft-console-in is CONFIRMED to be a FIFO pipe (-p)
-  // NEVER write if it is not a FIFO, because creating a regular file crashes mc-server-runner on boot!
+  // Strategy 4: Legacy itzg pipe (safe -p check)
   try {
     const pipeCmd = `docker exec ${containerName} sh -c "if [ -p /tmp/minecraft-console-in ]; then echo '${escapedCmd}' > /tmp/minecraft-console-in; else exit 1; fi"`;
     await execAsync(pipeCmd);
     return { success: true };
   } catch {}
 
-  // Strategy 3: rcon-cli (if user explicitly enabled RCON)
+  // Strategy 5: rcon-cli (if user explicitly enabled RCON)
   try {
     await execAsync(`docker exec ${containerName} rcon-cli '${escapedCmd}'`);
     return { success: true };
   } catch (err: any) {
-    appendLog(serverId, `[ Rubber ] Server console pipe is not ready yet.`);
+    appendLog(serverId, `[ Rubber ] Server console is not ready yet.`);
     return { success: false, error: err.message };
   }
 }

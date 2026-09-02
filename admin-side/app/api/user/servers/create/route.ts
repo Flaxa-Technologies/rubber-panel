@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
       SERVER_TYPE: isPumpkin ? "PUMPKIN" : "MINECRAFT",
       SECURITY_PROTECTION: "true",
       CRYO_SLEEP_ENABLED: "false",
-      DOCKER_IMAGE: isPumpkin ? "debian:bookworm-slim" : `itzg/minecraft-server:java${javaVersion || "21"}`,
+      DOCKER_IMAGE: isPumpkin ? "debian:bookworm-slim" : `eclipse-temurin:${javaVersion || "21"}-jre-alpine`,
       INTERNAL_PORT: "25565",
       EULA: "TRUE",
       TYPE: isPumpkin ? "PUMPKIN" : softwareType,

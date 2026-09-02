@@ -1545,7 +1545,7 @@ function ServersPageContent() {
                       <Field label="Docker Template (optional)">
                         <select value={form.templateId} onChange={e => setForm(f => ({ ...f, templateId: e.target.value }))}
                           className="w-full h-10 px-3 rounded-lg border text-sm outline-none" style={fieldStyle}>
-                          <option value="">(Default — itzg/minecraft-server)</option>
+                          <option value="">(Default — Standard Java Runner)</option>
                           {templatesList.map(t => <option key={t.id} value={t.id}>{t.name} {t.dockerImage ? `(${t.dockerImage})` : ""}</option>)}
                         </select>
                       </Field>

@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Find template docker image if applicable
-  let dockerImage = "itzg/minecraft-server";
+  let dockerImage = "eclipse-temurin:21-jre-alpine";
   if (cleanTemplateId) {
     const tpl = await db.template.findUnique({ where: { id: cleanTemplateId } });
     if (tpl?.dockerImage) dockerImage = tpl.dockerImage;
