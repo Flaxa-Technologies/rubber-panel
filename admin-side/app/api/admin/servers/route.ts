@@ -409,7 +409,7 @@ export async function POST(request: NextRequest) {
     CRYO_SLEEP_ENABLED: String(Boolean(rest.cryoSleepEnabled)),
     CRYO_SLEEP_IDLE_MINUTES: String(rest.cryoSleepIdleMinutes ?? 10),
     CRYO_SLEEP_MOTD: rest.cryoSleepMotd || "",
-    DOCKER_IMAGE: isPumpkin ? "debian:bookworm-slim" : isCustomImage ? customImg!.dockerImage : isNodeJs ? `node:${rest.nodeVersion || "20"}-alpine` : dockerImage,
+    DOCKER_IMAGE: isPumpkin ? "ubuntu:24.04" : isCustomImage ? customImg!.dockerImage : isNodeJs ? `node:${rest.nodeVersion || "20"}-alpine` : dockerImage,
     INTERNAL_PORT: isPumpkin ? `${assignedPort}` : isCustomImage ? String(customImg!.internalPort || 8080) : isNodeJs ? "3000" : "25565",
     EULA: "TRUE",
     TYPE: isPumpkin ? "PUMPKIN" : isCustomImage ? "CUSTOM" : isNodeJs ? "NODEJS" : softwareType,

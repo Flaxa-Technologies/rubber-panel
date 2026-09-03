@@ -1312,7 +1312,10 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       delete env.VERSION;
 
       const envArgs = buildEnvArgs(env);
-      const dockerImage = env.DOCKER_IMAGE || "debian:bookworm-slim";
+      let dockerImage = env.DOCKER_IMAGE;
+      if (!dockerImage || dockerImage === "debian:bookworm-slim") {
+        dockerImage = "ubuntu:24.04";
+      }
       delete env.DOCKER_IMAGE;
 
       appendLog(serverId, `[Rubber] Launching Pumpkin (Rust MC) on Java port :${javaPort} and Bedrock port :${bedrockPort}...`);
