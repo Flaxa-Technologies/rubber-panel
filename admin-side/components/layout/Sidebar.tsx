@@ -28,6 +28,7 @@ import {
   Code2,
   Globe,
   Radio,
+  Database,
 } from "lucide-react";
 
 
@@ -41,6 +42,7 @@ const navItems = [
   { href: "/sandboxes", label: "Code Sandboxes", icon: Code2 },
   { href: "/cryo-sleep", label: "Cryo-Sleep", icon: Zap },
   { href: "/nodes", label: "Nodes", icon: MonitorSpeaker },
+  { href: "/databases", label: "Databases", icon: Database },
   { href: "/allocations", label: "Port Management", icon: Network },
   { href: "/subdomains", label: "Subdomain Mgmt", icon: Globe },
   { href: "/radar", label: "Traffic Radar", icon: Radio },

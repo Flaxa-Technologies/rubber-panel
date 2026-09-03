@@ -47,7 +47,7 @@ async function getMysqlConfig(nodeId?: string): Promise<MysqlConnectionConfig> {
   };
 }
 
-export async function testMysqlConnection(cfg?: MysqlConnectionConfig): Promise<{ success: boolean; message?: string }> {
+export async function testMysqlConnection(cfg?: MysqlConnectionConfig): Promise<{ success: boolean; version?: string; message?: string }> {
   try {
     const config = cfg || await getMysqlConfig();
     const conn = await mysql.createConnection({
@@ -57,10 +57,23 @@ export async function testMysqlConnection(cfg?: MysqlConnectionConfig): Promise<
       password: config.password,
       connectTimeout: 5000,
     });
-    await conn.ping();
+    const [rows]: any = await conn.query("SELECT VERSION() as version;");
+    const version = rows?.[0]?.version || "MySQL";
     await conn.end();
-    return { success: true };
+    return { success: true, version, message: `Successfully connected (${version})` };
   } catch (err: any) {
+    if (err.code === "ECONNREFUSED") {
+      return {
+        success: false,
+        message: `Connection refused on ${cfg?.host || "127.0.0.1"}:${cfg?.port || 3306}. Ensure MariaDB/MySQL is running and port 3306 is open.`,
+      };
+    }
+    if (err.code === "ER_ACCESS_DENIED_ERROR") {
+      return {
+        success: false,
+        message: `Access denied for user '${cfg?.user || "root"}'@'${cfg?.host || "127.0.0.1"}'. Check the password or run the permission fix command.`,
+      };
+    }
     return { success: false, message: err?.message || "Connection failed" };
   }
 }
