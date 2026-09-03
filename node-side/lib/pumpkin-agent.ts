@@ -229,12 +229,39 @@ export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Pro
   }
 }
 
-// Generate or update Pumpkin's config.toml and configuration.toml with exact allocated Java & Bedrock ports
+// Generate or update Pumpkin's pumpkin.toml with exact allocated Java & Bedrock ports
 export async function ensurePumpkinConfiguration(serverDir: string, javaPort: number, bedrockPort: number) {
-  const configNames = ["config.toml", "configuration.toml", "Pumpkin.toml"];
-  
-  const generateInitialPumpkinToml = (jPort: number, bPort: number) => `# ─── PUMPKIN MINECRAFT CONFIGURATION (RUBBER PANEL) ───
-seed = "1789633435863525713"
+  // 1. Clean up obsolete duplicate files from older versions
+  const obsoletePaths = [
+    path.join(serverDir, "config", "configuration.toml"),
+    path.join(serverDir, "config", "config.toml"),
+    path.join(serverDir, "config", "Pumpkin.toml"),
+    path.join(serverDir, "config", "pumpkin.toml"),
+    path.join(serverDir, "configuration.toml"),
+    path.join(serverDir, "config.toml"),
+    path.join(serverDir, "Pumpkin.toml"),
+  ];
+
+  for (const p of obsoletePaths) {
+    try {
+      if (fsSync.existsSync(/*turbopackIgnore: true*/ p)) {
+        await fs.unlink(/*turbopackIgnore: true*/ p).catch(() => {});
+      }
+    } catch {}
+  }
+
+  // Remove config directory if empty
+  try {
+    const cfgDir = path.join(serverDir, "config");
+    if (fsSync.existsSync(cfgDir)) {
+      const items = await fs.readdir(cfgDir).catch(() => []);
+      if (items.length === 0) {
+        await fs.rmdir(cfgDir).catch(() => {});
+      }
+    }
+  } catch {}
+
+  const generateInitialPumpkinToml = (jPort: number, bPort: number) => `seed = "1789633435863525713"
 default_difficulty = "Normal"
 op_permission_level = 4
 allow_nether = true
@@ -252,9 +279,13 @@ enforce_whitelist = false
 
 [logging]
 enabled = true
-threads = true
+level = "info"
+threads = false
+thread_ids = false
+target = false
 color = true
 timestamp = true
+timestamp_format = "[hour]:[minute]:[second]"
 file = "latest.log"
 
 [resource_pack.java]
@@ -271,7 +302,7 @@ packs = []
 
 [world]
 lighting = "default"
-autosave_ticks = 0
+autosave_ticks = 6000
 
 [world.chunk]
 type = "anvil"
@@ -282,7 +313,7 @@ algorithm = "LZ4"
 level = 6
 
 [networking.query]
-enabled = false
+enabled = true
 address = "0.0.0.0:${jPort}"
 
 [networking.rcon]
@@ -363,6 +394,8 @@ max_players = 1000
 view_distance = 16
 simulation_distance = 10
 motd = "A blazingly fast Pumpkin server powered by Rubber Panel!"
+username_prefix = ""
+replace_username_spaces = true
 chunk_caching = true
 
 [networking.bedrock.compression]
@@ -454,58 +487,45 @@ verify_signatures = true
 save_advancements = true
 `;
 
-  // Ensure config/ directory exists for native Pumpkin engine discovery
-  const configSubDir = path.join(serverDir, "config");
-  await fs.mkdir(configSubDir, { recursive: true }).catch(() => {});
+  // 2. Official Pumpkin configuration file is strictly lowercase "pumpkin.toml" in root
+  const configPath = path.join(serverDir, "pumpkin.toml");
+  let content = "";
+  try {
+    content = await fs.readFile(/*turbopackIgnore: true*/ configPath, "utf-8");
+  } catch {
+    content = "";
+  }
 
-  const configFilesToSync = [
-    path.join(configSubDir, "configuration.toml"), // Official Pumpkin standard path
-    path.join(configSubDir, "config.toml"),
-    path.join(configSubDir, "Pumpkin.toml"),
-    path.join(serverDir, "configuration.toml"),
-    path.join(serverDir, "config.toml"),
-    path.join(serverDir, "Pumpkin.toml"),
-  ];
+  if (!content.trim()) {
+    await fs.writeFile(/*turbopackIgnore: true*/ configPath, generateInitialPumpkinToml(javaPort, bedrockPort), "utf-8");
+    console.log(`[PumpkinAgent] Generated initial pumpkin.toml at ${configPath} (Java :${javaPort}, Bedrock :${bedrockPort})`);
+  } else {
+    let updated = content;
 
-  for (const configPath of configFilesToSync) {
-    let content = "";
-    try {
-      content = await fs.readFile(/*turbopackIgnore: true*/ configPath, "utf-8");
-    } catch {
-      content = "";
+    // 1. Update [networking.java] address
+    if (/\[networking\.java\][^\[]*address\s*=\s*"[^"]*"/m.test(updated)) {
+      updated = updated.replace(/(\[networking\.java\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${javaPort}$2`);
+    } else if (updated.includes("[networking.java]")) {
+      updated = updated.replace(/\[networking\.java\]/m, `[networking.java]\naddress = "0.0.0.0:${javaPort}"`);
     }
 
-    if (!content.trim()) {
-      await fs.writeFile(/*turbopackIgnore: true*/ configPath, generateInitialPumpkinToml(javaPort, bedrockPort), "utf-8");
-      console.log(`[PumpkinAgent] Generated initial config at ${configPath} (Java :${javaPort}, Bedrock :${bedrockPort})`);
-    } else {
-      let updated = content;
-
-      // Update Java address
-      if (updated.includes("[networking.java]")) {
-        updated = updated.replace(/(\[networking\.java\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${javaPort}$2`);
-      } else {
-        updated += `\n\n[networking.java]\nenabled = true\naddress = "0.0.0.0:${javaPort}"\n`;
-      }
-
-      // Update Bedrock NetherNet address
-      if (updated.includes("[networking.bedrock.nethernet]")) {
-        updated = updated.replace(/(\[networking\.bedrock\.nethernet\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${bedrockPort}$2`);
-      } else if (updated.includes("[networking.bedrock]")) {
-        updated = updated.replace(/\[networking\.bedrock\][^\[]*/m, (match) => {
-          return `${match}\n[networking.bedrock.nethernet]\nenabled = true\naddress = "0.0.0.0:${bedrockPort}"\n`;
-        });
-      } else {
-        updated += `\n\n[networking.bedrock]\nenabled = true\n\n[networking.bedrock.nethernet]\nenabled = true\naddress = "0.0.0.0:${bedrockPort}"\n`;
-      }
-
-      // Ensure query port matches or disabled
-      if (updated.includes("[networking.query]")) {
-        updated = updated.replace(/(\[networking\.query\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${javaPort}$2`);
-      }
-
-      await fs.writeFile(configPath, updated, "utf-8");
-      console.log(`[PumpkinAgent] Synchronized ports in ${configPath} (Java :${javaPort}, Bedrock :${bedrockPort})`);
+    // 2. Update [networking.query] address
+    if (/\[networking\.query\][^\[]*address\s*=\s*"[^"]*"/m.test(updated)) {
+      updated = updated.replace(/(\[networking\.query\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${javaPort}$2`);
+    } else if (updated.includes("[networking.query]")) {
+      updated = updated.replace(/\[networking\.query\]/m, `[networking.query]\naddress = "0.0.0.0:${javaPort}"`);
     }
+
+    // 3. Update [networking.bedrock.nethernet] address
+    if (/\[networking\.bedrock\.nethernet\][^\[]*address\s*=\s*"[^"]*"/m.test(updated)) {
+      updated = updated.replace(/(\[networking\.bedrock\.nethernet\][^\[]*address\s*=\s*")[^"]*(")/m, `$10.0.0.0:${bedrockPort}$2`);
+    } else if (updated.includes("[networking.bedrock.nethernet]")) {
+      updated = updated.replace(/\[networking\.bedrock\.nethernet\]/m, `[networking.bedrock.nethernet]\naddress = "0.0.0.0:${bedrockPort}"`);
+    } else if (updated.includes("[networking.bedrock]")) {
+      updated = updated.replace(/\[networking\.bedrock\]/m, `[networking.bedrock]\n\n[networking.bedrock.nethernet]\nenabled = true\naddress = "0.0.0.0:${bedrockPort}"`);
+    }
+
+    await fs.writeFile(configPath, updated, "utf-8");
+    console.log(`[PumpkinAgent] Synchronized ports in pumpkin.toml (Java :${javaPort}, Bedrock :${bedrockPort})`);
   }
 }

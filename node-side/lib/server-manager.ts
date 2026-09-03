@@ -1324,6 +1324,7 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       dockerArgs = [
         "run", "-d",
         "--name", containerName,
+        "-i",
         "-p", `${javaPort}:${javaPort}/tcp`,
         "-p", `${bedrockPort}:${bedrockPort}/udp`,
         "-v", `${serverDir}:/app`,
@@ -1337,7 +1338,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         "-e", `PORT=${javaPort}`,
         ...envArgs,
         dockerImage,
-        "/usr/local/bin/pumpkin",
+        "sh", "-c",
+        "mkfifo /tmp/console.in 2>/dev/null; (tail -f /tmp/console.in 2>/dev/null &) | exec /usr/local/bin/pumpkin",
       ];
     } else if (runtime.isMinecraft) {
       // Native High-Performance Minecraft Server (Adoptium / Eclipse Temurin OpenJDK)
