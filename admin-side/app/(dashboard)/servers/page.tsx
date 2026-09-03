@@ -231,6 +231,7 @@ function ServersPageContent() {
     ram: "", cpu: "", disk: "", swap: "", startupCommand: "",
     allowedPaths: "", protectedPaths: "", blockedUploadPaths: "", allowFileUploads: true,
     showStableOnly: false, allowNodeTransfer: false, allowGoogleDriveBackups: true,
+    sftpEnabled: true, databaseLimit: "0",
     cryoSleepEnabled: false, cryoSleepIdleMinutes: "10", cryoSleepCustomMotdAllowed: true, cryoSleepMotd: "",
     expiresAt: "", gracePeriodDays: "3", autoSuspendOnExpiry: true, autoDeleteOnGraceExpiry: false,
     suspensionReason: "",
@@ -323,6 +324,8 @@ function ServersPageContent() {
           showStableOnly: false,
           allowNodeTransfer: Boolean(s.allowNodeTransfer),
           allowGoogleDriveBackups: s.allowGoogleDriveBackups !== false,
+          sftpEnabled: s.sftpEnabled !== false,
+          databaseLimit: String(s.databaseLimit ?? 0),
           cryoSleepEnabled: Boolean(s.cryoSleepEnabled),
           cryoSleepIdleMinutes: String(s.cryoSleepIdleMinutes ?? 10),
           cryoSleepCustomMotdAllowed: s.cryoSleepCustomMotdAllowed !== false,
@@ -570,6 +573,8 @@ function ServersPageContent() {
         blockedUploadPaths: editForm.blockedUploadPaths.split(",").map(p => p.trim()).filter(Boolean),
         allowNodeTransfer: editForm.allowNodeTransfer,
         allowGoogleDriveBackups: editForm.allowGoogleDriveBackups,
+        sftpEnabled: editForm.sftpEnabled,
+        databaseLimit: parseInt(editForm.databaseLimit) || 0,
         cryoSleepEnabled: editForm.cryoSleepEnabled,
         cryoSleepIdleMinutes: parseInt(editForm.cryoSleepIdleMinutes) || 10,
         cryoSleepCustomMotdAllowed: editForm.cryoSleepCustomMotdAllowed,
@@ -1774,7 +1779,7 @@ function ServersPageContent() {
                         <Database className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>MySQL Databases Limit (Pterodactyl-Style)</p>
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>MySQL Databases Limit</p>
                         <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
                           Maximum number of databases this server can provision (0 to disable)
                         </p>
@@ -2642,6 +2647,53 @@ function ServersPageContent() {
                     <ToggleSwitch
                       checked={editForm.allowGoogleDriveBackups}
                       onChange={() => setEditForm(f => ({ ...f, allowGoogleDriveBackups: !f.allowGoogleDriveBackups }))}
+                    />
+                  </div>
+
+                  {/* SFTP Access Toggle */}
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+                        <FolderOpen className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Enable SFTP Access (Port 2022)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits server owners to connect with FileZilla/WinSCP using account credentials
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={editForm.sftpEnabled}
+                      onChange={() => setEditForm(f => ({ ...f, sftpEnabled: !f.sftpEnabled }))}
+                    />
+                  </div>
+
+                  {/* MySQL Database Quota Limit */}
+                  <div className="p-4 rounded-xl border space-y-3"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
+                        <Database className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>MySQL Databases Limit</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Maximum number of databases this server can provision (0 to disable)
+                        </p>
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={editForm.databaseLimit}
+                      onChange={e => setEditForm(f => ({ ...f, databaseLimit: e.target.value }))}
+                      className="w-full h-10 px-3 rounded-lg border text-sm outline-none font-mono"
+                      style={fieldStyle}
                     />
                   </div>
 
