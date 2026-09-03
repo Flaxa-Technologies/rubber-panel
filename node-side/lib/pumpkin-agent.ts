@@ -45,9 +45,10 @@ export async function getLocalPumpkinBuilds(): Promise<{ commitSha: string; vers
   }
 }
 
-// Download file with redirect handling and SHA-256 verification
+// Download file with redirect handling, atomic temp-file write, and SHA-256 verification
 function downloadFile(url: string, destPath: string, expectedSha256?: string | null): Promise<boolean> {
   return new Promise((resolve, reject) => {
+    const tempPath = `${destPath}.dl.${Date.now()}.${Math.random().toString(36).slice(2, 7)}`;
     const parsedUrl = new URL(url);
     const client = parsedUrl.protocol === "https:" ? https : http;
 
@@ -68,7 +69,7 @@ function downloadFile(url: string, destPath: string, expectedSha256?: string | n
         return reject(new Error(`Download failed with status ${response.statusCode}`));
       }
 
-      const fileStream = fsSync.createWriteStream(destPath);
+      const fileStream = fsSync.createWriteStream(tempPath);
       const hash = crypto.createHash("sha256");
 
       response.on("data", (chunk) => {
@@ -78,23 +79,40 @@ function downloadFile(url: string, destPath: string, expectedSha256?: string | n
 
       response.on("end", () => {
         fileStream.end();
-        fileStream.on("finish", () => {
+      });
+
+      // Wait for underlying file descriptor to fully close to prevent "text file busy" (ETXTBUSY)
+      fileStream.on("close", () => {
+        try {
           const calculatedHash = hash.digest("hex").toLowerCase();
           if (expectedSha256 && expectedSha256.trim()) {
             const cleanExpected = expectedSha256.trim().toLowerCase();
             if (calculatedHash !== cleanExpected) {
-              try { fsSync.unlinkSync(destPath); } catch {}
+              try { fsSync.unlinkSync(tempPath); } catch {}
               return reject(new Error(`SHA-256 checksum mismatch: expected ${cleanExpected}, got ${calculatedHash}`));
             }
           }
-          console.log(`[PumpkinAgent] Verified SHA-256 for ${path.basename(destPath)} (${calculatedHash.slice(0, 12)}...)`);
+          // Set executable permissions on temp file before atomic rename
+          fsSync.chmodSync(tempPath, 0o755);
+          // Atomic rename replaces the target file cleanly
+          fsSync.renameSync(tempPath, destPath);
+          console.log(`[PumpkinAgent] Verified & installed ${path.basename(destPath)} (${calculatedHash.slice(0, 12)}...)`);
           resolve(true);
-        });
+        } catch (postErr) {
+          try { fsSync.unlinkSync(tempPath); } catch {}
+          reject(postErr);
+        }
+      });
+
+      fileStream.on("error", (err) => {
+        fileStream.destroy();
+        try { fsSync.unlinkSync(tempPath); } catch {}
+        reject(err);
       });
 
       response.on("error", (err) => {
         fileStream.destroy();
-        try { fsSync.unlinkSync(destPath); } catch {}
+        try { fsSync.unlinkSync(tempPath); } catch {}
         reject(err);
       });
     });
@@ -105,102 +123,110 @@ function downloadFile(url: string, destPath: string, expectedSha256?: string | n
   });
 }
 
+// Global in-memory lock to prevent multiple concurrent downloads writing to the same binary
+const activeDownloads = new Map<string, Promise<{ success: boolean; path: string; error?: string }>>();
+
 // Download and install Pumpkin binary onto this node
 export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Promise<{ success: boolean; path: string; error?: string }> {
   const commit = (params.commitSha || "nightly").trim() || "nightly";
 
-  const targetDir = path.join(PUMPKIN_STORAGE_DIR, commit);
-  const targetBin = path.join(targetDir, "pumpkin");
-
-  // Clean up any corrupt directory created by Docker or failed runs
-  try {
-    if (fsSync.existsSync(targetBin) && fsSync.statSync(targetBin).isDirectory()) {
-      fsSync.rmSync(targetBin, { recursive: true, force: true });
-    }
-  } catch {}
-
-  try {
-    if (fsSync.existsSync("/usr/local/bin/pumpkin") && fsSync.statSync("/usr/local/bin/pumpkin").isDirectory()) {
-      fsSync.rmSync("/usr/local/bin/pumpkin", { recursive: true, force: true });
-    }
-  } catch {}
-
-  // If targetBin already exists and is a valid binary (> 1MB), return success
-  try {
-    const stat = await fs.stat(targetBin);
-    if (!stat.isDirectory() && stat.size > 1000000) {
-      await fs.chmod(targetBin, 0o755).catch(() => {});
-      return { success: true, path: targetBin };
-    }
-  } catch {}
-
-  await fs.mkdir(targetDir, { recursive: true });
-
-  // Determine architecture: x64 vs arm64 (glibc Linux)
-  const isArm = process.arch === "arm64";
-  const archName = isArm ? "ARM64" : "X64";
-  const preferredUrl = isArm ? (params.arm64Url || params.x64Url) : (params.x64Url || params.arm64Url);
-  const expectedHash = isArm ? (params.arm64Sha256 || params.x64Sha256) : (params.x64Sha256 || params.arm64Sha256);
-
-  // Candidate download URLs in priority order
-  const candidateUrls: string[] = [];
-  if (preferredUrl) candidateUrls.push(preferredUrl);
-  candidateUrls.push(`https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-${archName}-Linux`);
-  candidateUrls.push(`https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-${archName}-Linux-musl`);
-
-  let downloaded = false;
-
-  // 1. Try downloading directly from GitHub Release Assets
-  for (const dlUrl of candidateUrls) {
-    try {
-      console.log(`[PumpkinAgent] Downloading Pumpkin (${commit}) for ${archName} from ${dlUrl}...`);
-      await downloadFile(dlUrl, targetBin, expectedHash);
-      const downloadedStat = await fs.stat(targetBin);
-      if (downloadedStat.size > 1000000) {
-        downloaded = true;
-        break;
-      }
-    } catch (err: any) {
-      console.warn(`[PumpkinAgent] Download from ${dlUrl} failed:`, err?.message);
-      try { fsSync.unlinkSync(targetBin); } catch {}
-    }
+  if (activeDownloads.has(commit)) {
+    return activeDownloads.get(commit)!;
   }
 
-  // 2. If GitHub asset failed or is expired/replaced, try downloading from peer nodes
-  if (!downloaded && params.peerNodeUrls && params.peerNodeUrls.length > 0) {
-    for (const peer of params.peerNodeUrls) {
+  const downloadPromise = (async () => {
+    const targetDir = path.join(PUMPKIN_STORAGE_DIR, commit);
+    const targetBin = path.join(targetDir, "pumpkin");
+
+    // Clean up any corrupt directory created by Docker or failed runs
+    try {
+      if (fsSync.existsSync(targetBin) && fsSync.statSync(targetBin).isDirectory()) {
+        fsSync.rmSync(targetBin, { recursive: true, force: true });
+      }
+    } catch {}
+
+    try {
+      if (fsSync.existsSync("/usr/local/bin/pumpkin") && fsSync.statSync("/usr/local/bin/pumpkin").isDirectory()) {
+        fsSync.rmSync("/usr/local/bin/pumpkin", { recursive: true, force: true });
+      }
+    } catch {}
+
+    // If targetBin already exists and is a valid binary (> 1MB), return success immediately
+    try {
+      const stat = await fs.stat(targetBin);
+      if (!stat.isDirectory() && stat.size > 1000000) {
+        await fs.chmod(targetBin, 0o755).catch(() => {});
+        return { success: true, path: targetBin };
+      }
+    } catch {}
+
+    await fs.mkdir(targetDir, { recursive: true });
+
+    // Determine architecture: x64 vs arm64 (glibc Linux)
+    const isArm = process.arch === "arm64";
+    const archName = isArm ? "ARM64" : "X64";
+    const preferredUrl = isArm ? (params.arm64Url || params.x64Url) : (params.x64Url || params.arm64Url);
+    const expectedHash = isArm ? (params.arm64Sha256 || params.x64Sha256) : (params.x64Sha256 || params.arm64Sha256);
+
+    // Candidate download URLs in priority order
+    const candidateUrls: string[] = [];
+    if (preferredUrl) candidateUrls.push(preferredUrl);
+    candidateUrls.push(`https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-${archName}-Linux`);
+    candidateUrls.push(`https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-${archName}-Linux-musl`);
+
+    let downloaded = false;
+
+    // 1. Try downloading directly from GitHub Release Assets
+    for (const dlUrl of candidateUrls) {
       try {
-        const peerUrl = `${peer.replace(/\/$/, "")}/api/agent/software/pumpkin/binary?commit=${commit}`;
-        console.log(`[PumpkinAgent] Attempting peer node download from ${peerUrl}...`);
-        await downloadFile(peerUrl, targetBin, expectedHash);
+        console.log(`[PumpkinAgent] Downloading Pumpkin (${commit}) for ${archName} from ${dlUrl}...`);
+        await downloadFile(dlUrl, targetBin, expectedHash);
         const downloadedStat = await fs.stat(targetBin);
         if (downloadedStat.size > 1000000) {
           downloaded = true;
           break;
         }
-      } catch (pErr: any) {
-        console.warn(`[PumpkinAgent] Peer sync from ${peer} failed:`, pErr?.message);
+      } catch (err: any) {
+        console.warn(`[PumpkinAgent] Download from ${dlUrl} failed:`, err?.message);
         try { fsSync.unlinkSync(targetBin); } catch {}
       }
     }
-  }
 
-  if (!downloaded) {
-    return { success: false, path: "", error: "Failed to download Pumpkin binary from GitHub assets and peer nodes." };
-  }
-
-  // Set executable permission (chmod 755)
-  await fs.chmod(targetBin, 0o755).catch(() => {});
-
-  // Mirror to /usr/local/bin/pumpkin if writable and clean
-  try {
-    if (!fsSync.existsSync("/usr/local/bin/pumpkin") || !fsSync.statSync("/usr/local/bin/pumpkin").isDirectory()) {
-      await fs.copyFile(targetBin, "/usr/local/bin/pumpkin").catch(() => {});
-      await fs.chmod("/usr/local/bin/pumpkin", 0o755).catch(() => {});
+    // 2. If GitHub asset failed or is expired/replaced, try downloading from peer nodes
+    if (!downloaded && params.peerNodeUrls && params.peerNodeUrls.length > 0) {
+      for (const peer of params.peerNodeUrls) {
+        try {
+          const peerUrl = `${peer.replace(/\/$/, "")}/api/agent/software/pumpkin/binary?commit=${commit}`;
+          console.log(`[PumpkinAgent] Attempting peer node download from ${peerUrl}...`);
+          await downloadFile(peerUrl, targetBin, expectedHash);
+          const downloadedStat = await fs.stat(targetBin);
+          if (downloadedStat.size > 1000000) {
+            downloaded = true;
+            break;
+          }
+        } catch (pErr: any) {
+          console.warn(`[PumpkinAgent] Peer sync from ${peer} failed:`, pErr?.message);
+          try { fsSync.unlinkSync(targetBin); } catch {}
+        }
+      }
     }
-  } catch {}
 
-  return { success: true, path: targetBin };
+    if (!downloaded) {
+      return { success: false, path: "", error: "Failed to download Pumpkin binary from GitHub assets and peer nodes." };
+    }
+
+    // Set executable permission (chmod 755)
+    await fs.chmod(targetBin, 0o755).catch(() => {});
+
+    return { success: true, path: targetBin };
+  })();
+
+  activeDownloads.set(commit, downloadPromise);
+  try {
+    return await downloadPromise;
+  } finally {
+    activeDownloads.delete(commit);
+  }
 }
 
 // Generate or update Pumpkin's config.toml and configuration.toml with exact allocated Java & Bedrock ports

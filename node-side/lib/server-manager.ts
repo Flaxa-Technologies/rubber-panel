@@ -1302,6 +1302,9 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
       }
       const binaryPath = dlRes.path;
 
+      // Ensure file descriptor quiescence before launching container
+      await new Promise((r) => setTimeout(r, 200));
+
       // Clean Pumpkin environment variables
       delete env.SERVER_TYPE;
       delete env.TYPE;
