@@ -22,6 +22,8 @@ import {
   Activity,
   KeyRound,
   Users,
+  Database,
+  AlertCircle,
 } from "lucide-react";
 
 interface SettingsData {
@@ -99,19 +101,80 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "auth" | "security" | "servers" | "nodes" | "cryosleep">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "auth" | "security" | "servers" | "nodes" | "cryosleep" | "databases">("all");
+  const [dbHost, setDbHost] = useState({
+    name: "Primary MySQL Server",
+    host: "127.0.0.1",
+    port: 3306,
+    username: "root",
+    password: "",
+  });
+  const [testingDb, setTestingDb] = useState(false);
+  const [dbTestResult, setDbTestResult] = useState<{ success: boolean; message?: string } | null>(null);
+  const [savingDb, setSavingDb] = useState(false);
+  const [dbSavedSuccess, setDbSavedSuccess] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/settings?_t=" + Date.now(), { cache: "no-store" });
+      const [res, dbRes] = await Promise.all([
+        fetch("/api/admin/settings?_t=" + Date.now(), { cache: "no-store" }),
+        fetch("/api/admin/database-hosts?_t=" + Date.now(), { cache: "no-store" }),
+      ]);
       const d = await res.json();
       setSettings(d.settings ?? {});
+      if (dbRes.ok) {
+        const dbData = await dbRes.json();
+        if (dbData.host) setDbHost(dbData.host);
+      }
     } catch {
       setError("Failed to load settings from server.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function testDbConnection() {
+    setTestingDb(true);
+    setDbTestResult(null);
+    try {
+      const res = await fetch("/api/admin/database-hosts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dbHost),
+      });
+      const data = await res.json();
+      setDbTestResult({
+        success: data.success === true,
+        message: data.message || (data.success ? "Connection established successfully!" : "Connection failed"),
+      });
+    } catch {
+      setDbTestResult({ success: false, message: "Network error testing MySQL connection." });
+    }
+    setTestingDb(false);
+  }
+
+  async function saveDbHost() {
+    setSavingDb(true);
+    setDbSavedSuccess(false);
+    try {
+      const res = await fetch("/api/admin/database-hosts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dbHost),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDbSavedSuccess(true);
+        setTimeout(() => setDbSavedSuccess(false), 3000);
+        if (data.testResult) setDbTestResult(data.testResult);
+      } else {
+        setDbTestResult({ success: false, message: data.error || "Failed to save MySQL host" });
+      }
+    } catch {
+      setDbTestResult({ success: false, message: "Network error saving MySQL host" });
+    }
+    setSavingDb(false);
+  }
 
   useEffect(() => {
     loadSettings();
@@ -187,6 +250,7 @@ export default function SettingsPage() {
   const showServers = (activeTab === "all" || activeTab === "servers") && matchesSearch("server ram cpu disk backup defaults");
   const showNodes = (activeTab === "all" || activeTab === "nodes") && matchesSearch("node heartbeat timeout agent");
   const showCryo = (activeTab === "all" || activeTab === "cryosleep") && matchesSearch("cryosleep hibernation motd wake proxy idle");
+  const showDatabases = (activeTab === "all" || activeTab === "databases") && matchesSearch("database mysql host port mariadb sql");
 
   return (
     <div className="space-y-6 w-full">
@@ -261,6 +325,7 @@ export default function SettingsPage() {
             { id: "servers", label: "Resource Defaults", icon: Server },
             { id: "nodes", label: "Node Fleet", icon: MonitorSpeaker },
             { id: "cryosleep", label: "Cryo-Sleep", icon: Zap },
+            { id: "databases", label: "MySQL Databases", icon: Database },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -638,6 +703,108 @@ export default function SettingsPage() {
                         }}
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+            </SettingsSection>
+          </div>
+        )}
+
+        {/* Full-Width Section: MySQL Databases Host */}
+        {showDatabases && (
+          <div className="col-span-full">
+            <SettingsSection
+              title="MySQL Database Host Configuration"
+              description="Primary MySQL/MariaDB database host for auto-provisioning game server databases"
+              icon={Database}
+              badge="Database Engine"
+            >
+              <div className="space-y-5">
+                {/* Informational Banner */}
+                <div
+                  className="p-4 rounded-xl border flex items-start gap-3 text-xs leading-relaxed"
+                  style={{
+                    backgroundColor: "rgba(245, 158, 11, 0.06)",
+                    borderColor: "rgba(245, 158, 11, 0.25)",
+                    color: "var(--color-rp-text)",
+                  }}
+                >
+                  <Database className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-amber-400">MySQL Database Orchestration:</span> Rubber Panel uses this connection to dynamically create databases and credentials for servers.
+                    If MySQL/MariaDB is installed locally on this Panel VPS, use <code className="text-lime-400">127.0.0.1</code>. If MySQL runs on a Node VPS or remote server, enter that server&apos;s IP address.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Database Host Address / IP"
+                    value={dbHost.host}
+                    onChange={(e) => setDbHost((h) => ({ ...h, host: e.target.value }))}
+                    hint="e.g. 127.0.0.1 (local) or Node VPS IP"
+                  />
+                  <Input
+                    label="MySQL Port"
+                    type="number"
+                    value={String(dbHost.port)}
+                    onChange={(e) => setDbHost((h) => ({ ...h, port: parseInt(e.target.value) || 3306 }))}
+                    hint="Default MySQL port is 3306"
+                  />
+                  <Input
+                    label="Admin / Root Username"
+                    value={dbHost.username}
+                    onChange={(e) => setDbHost((h) => ({ ...h, username: e.target.value }))}
+                    hint="Must have CREATE DATABASE and CREATE USER privileges"
+                  />
+                  <Input
+                    label="Admin / Root Password"
+                    type="password"
+                    value={dbHost.password}
+                    onChange={(e) => setDbHost((h) => ({ ...h, password: e.target.value }))}
+                    hint="Password for root/admin MySQL user (leave blank if none)"
+                  />
+                </div>
+
+                {/* Test Result Banner */}
+                {dbTestResult && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs flex items-center gap-2.5 ${
+                      dbTestResult.success
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : "bg-red-500/10 border-red-500/30 text-red-400"
+                    }`}
+                  >
+                    {dbTestResult.success ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                    <span>{dbTestResult.success ? "Successfully connected to MySQL server!" : dbTestResult.message}</span>
+                  </div>
+                )}
+
+                {/* Bottom Actions */}
+                <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: "var(--color-rp-border)" }}>
+                  <button
+                    type="button"
+                    onClick={testDbConnection}
+                    disabled={testingDb}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all hover:bg-white/5 active:scale-95"
+                    style={{ borderColor: "var(--color-rp-border)", color: "var(--color-rp-text)" }}
+                  >
+                    {testingDb ? <div className="w-3 h-3 rounded-full border-2 border-lime-400 border-t-transparent animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                    <span>{testingDb ? "Testing Connection..." : "Test Connection"}</span>
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    {dbSavedSuccess && (
+                      <span className="text-xs text-lime-400 font-semibold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Saved!
+                      </span>
+                    )}
+                    <Button
+                      loading={savingDb}
+                      onClick={saveDbHost}
+                      className="text-xs font-semibold shadow-md"
+                    >
+                      Save Database Host
+                    </Button>
                   </div>
                 </div>
               </div>

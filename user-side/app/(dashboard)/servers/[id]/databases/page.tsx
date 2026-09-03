@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
   Database, Plus, Trash2, RotateCcw, Copy, Check, Eye, EyeOff,
-  Server, Shield, AlertCircle, Loader2, Link2, Globe
+  Server, AlertCircle, Loader2, Globe, X, CheckCircle2
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useServer } from "@/components/server/ServerContext";
@@ -30,6 +30,7 @@ export default function ServerDatabasesPage() {
   const [nodeHost, setNodeHost] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // Create Modal
   const [showCreate, setShowCreate] = useState(false);
@@ -56,7 +57,7 @@ export default function ServerDatabasesPage() {
         setNodeHost(data.nodeHost || "");
         setError("");
       } else {
-        const d = await res.json();
+        const d = await res.json().catch(() => ({}));
         setError(d.error || "Failed to load databases");
       }
     } catch {
@@ -100,6 +101,8 @@ export default function ServerDatabasesPage() {
         setShowCreate(false);
         setDbNameSuffix("");
         setConnectionsFrom("%");
+        setSuccess(`Database ${data.database?.name || ""} provisioned successfully!`);
+        setTimeout(() => setSuccess(""), 4000);
         await loadDatabases();
       } else {
         setCreateError(data.error || "Failed to create database");
@@ -118,6 +121,8 @@ export default function ServerDatabasesPage() {
         method: "PATCH",
       });
       if (res.ok) {
+        setSuccess("Database password rotated successfully!");
+        setTimeout(() => setSuccess(""), 4000);
         await loadDatabases();
       }
     } catch {}
@@ -132,6 +137,8 @@ export default function ServerDatabasesPage() {
       });
       if (res.ok) {
         setDeleteConfirmId(null);
+        setSuccess("Database dropped successfully.");
+        setTimeout(() => setSuccess(""), 4000);
         await loadDatabases();
       }
     } catch {}
@@ -152,175 +159,277 @@ export default function ServerDatabasesPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Top Banner / Quota Header */}
-      <div className="card" style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f59e0b" }}>
-            <Database size={22} />
-          </div>
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#ffffff", display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Top Header Card */}
+      <div className="saas-card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Database size={18} style={{ color: "var(--text-pure)" }} />
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-pure)" }}>
               MySQL Databases
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: isLimitReached ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)", color: isLimitReached ? "#ef4444" : "#10b981", border: `1px solid ${isLimitReached ? "rgba(239, 68, 68, 0.3)" : "rgba(16, 185, 129, 0.3)"}` }}>
-                {usedCount} / {databaseLimit} Used
-              </span>
             </h2>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-              Dedicated MySQL databases for Minecraft plugins (LuckPerms, CoreProtect) and applications
-            </p>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: 9999,
+                background: isLimitReached ? "rgba(239, 68, 68, 0.15)" : "var(--bg-surface-elevated)",
+                color: isLimitReached ? "#f87171" : "var(--text-primary)",
+                border: isLimitReached ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid var(--border-medium)",
+              }}
+            >
+              {usedCount} / {databaseLimit} Used
+            </span>
           </div>
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 4 }}>
+            Provision isolated MySQL databases, manage dedicated credentials, and configure remote connections.
+          </p>
         </div>
 
         <button
-          onClick={() => setShowCreate(true)}
-          disabled={isLimitReached || isCreationDisabled}
-          className="btn btn-primary"
-          style={{
-            opacity: (isLimitReached || isCreationDisabled) ? 0.5 : 1,
-            cursor: (isLimitReached || isCreationDisabled) ? "not-allowed" : "pointer",
+          onClick={() => {
+            setCreateError("");
+            setShowCreate(true);
           }}
-          title={isCreationDisabled ? "Database creation is disabled for this server" : isLimitReached ? "Database limit reached" : ""}
+          disabled={isLimitReached || isCreationDisabled}
+          className="btn-solid-white"
+          style={{
+            padding: "8px 16px",
+            fontSize: 12.5,
+            opacity: isLimitReached || isCreationDisabled ? 0.5 : 1,
+            cursor: isLimitReached || isCreationDisabled ? "not-allowed" : "pointer",
+          }}
         >
-          <Plus size={15} />
+          <Plus size={14} />
           <span>New Database</span>
         </button>
       </div>
 
+      {/* Alert Banners */}
       {error && (
-        <div className="card" style={{ borderColor: "rgba(239, 68, 68, 0.3)", backgroundColor: "rgba(239, 68, 68, 0.08)", padding: 14, color: "#ef4444", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-          <AlertCircle size={16} />
-          <span>{error}</span>
+        <div style={{ padding: "12px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "var(--radius-sm)", color: "#f87171", fontSize: 12.5, display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p style={{ fontWeight: 600 }}>Database Service Notice</p>
+            <p style={{ opacity: 0.9, marginTop: 2 }}>{error}</p>
+          </div>
         </div>
       )}
 
+      {success && (
+        <div style={{ padding: "10px 14px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "var(--radius-sm)", color: "#34d399", fontSize: 12.5, display: "flex", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={15} />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Database Limit 0 Notice */}
       {isCreationDisabled && (
-        <div className="card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, backgroundColor: "rgba(255, 255, 255, 0.02)" }}>
-          <AlertCircle size={18} style={{ color: "#f59e0b", flexShrink: 0 }} />
-          <div style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>
-            Database provisioning is currently set to <strong>0 databases</strong> for this server. If you require MySQL databases for plugins, contact an administrator to increase your database limit.
+        <div className="saas-card" style={{ padding: "20px", display: "flex", alignItems: "center", gap: 14, background: "rgba(245, 158, 11, 0.05)", border: "1px solid rgba(245, 158, 11, 0.2)" }}>
+          <AlertCircle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
+          <div>
+            <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "#f59e0b" }}>
+              Database Provisioning Not Configured
+            </h4>
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+              The database quota for this instance is set to 0. An administrator can increase the MySQL Databases Limit from the Admin Panel.
+            </p>
           </div>
         </div>
       )}
 
-      {/* Database Cards List */}
+      {/* Database List */}
       {databases.length === 0 ? (
-        <div className="card" style={{ padding: "48px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", marginBottom: 16 }}>
-            <Database size={24} />
+        <div className="saas-card" style={{ padding: "48px 24px", textAlign: "center" }}>
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-medium)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", color: "var(--text-dim)" }}>
+            <Database size={20} />
           </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#ffffff" }}>No Databases Created</h3>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6, maxWidth: 420, lineHeight: 1.5 }}>
-            You haven't provisioned any MySQL databases for this instance yet. Click <strong>New Database</strong> to generate a dedicated database and credentials.
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-pure)" }}>No databases created</h3>
+          <p style={{ fontSize: 12, color: "var(--text-dim)", maxWidth: 360, margin: "6px auto 16px" }}>
+            {isCreationDisabled
+              ? "Databases are currently disabled for this instance."
+              : "Click 'New Database' to spin up an isolated MySQL database and user credentials."}
           </p>
+          {!isCreationDisabled && !isLimitReached && (
+            <button
+              onClick={() => {
+                setCreateError("");
+                setShowCreate(true);
+              }}
+              className="btn-solid-white"
+              style={{ padding: "7px 14px", fontSize: 12.5 }}
+            >
+              <Plus size={13} />
+              <span>Create Database</span>
+            </button>
+          )}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {databases.map((dbItem) => {
-            const isPwVisible = Boolean(visiblePasswords[dbItem.id]);
-            const jdbcString = `jdbc:mysql://${dbItem.databaseUser}:${dbItem.password || "PASSWORD"}@${dbItem.host}:${dbItem.port}/${dbItem.name}`;
+            const isPasswordVisible = visiblePasswords[dbItem.id];
+            const jdbcUrl = `jdbc:mysql://${dbItem.host}:${dbItem.port}/${dbItem.name}`;
 
             return (
-              <div key={dbItem.id} className="card" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-                {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div
+                key={dbItem.id}
+                className="saas-card"
+                style={{ padding: "18px 20px" }}
+              >
+                {/* Header Row */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#38bdf8" }}>
-                      <Database size={16} />
+                    <div style={{ width: 32, height: 32, borderRadius: "var(--radius-sm)", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f59e0b" }}>
+                      <Database size={15} />
                     </div>
                     <div>
-                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "#ffffff", fontFamily: "monospace" }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: "var(--text-pure)" }}>
                         {dbItem.name}
-                      </h4>
-                      <p style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                        Connections: {dbItem.connectionsFrom}
-                      </p>
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>
+                        Created {new Date(dbItem.createdAt).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {/* Actions */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                       onClick={() => handleRotatePassword(dbItem.id)}
                       disabled={rotatingId === dbItem.id}
-                      className="btn btn-ghost"
-                      style={{ padding: "6px 8px" }}
-                      title="Rotate Password"
+                      className="btn-secondary-dark"
+                      style={{ padding: "6px 12px", fontSize: 11.5 }}
+                      title="Generate a new secure password"
                     >
-                      <RotateCcw size={14} className={rotatingId === dbItem.id ? "animate-spin" : ""} />
+                      <RotateCcw size={12} className={rotatingId === dbItem.id ? "spin" : ""} />
+                      <span>Rotate Password</span>
                     </button>
-                    <button
-                      onClick={() => setDeleteConfirmId(dbItem.id)}
-                      className="btn btn-ghost"
-                      style={{ padding: "6px 8px", color: "#ef4444" }}
-                      title="Delete Database"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+
+                    {deleteConfirmId === dbItem.id ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                          onClick={() => handleDelete(dbItem.id)}
+                          disabled={deletingId === dbItem.id}
+                          className="btn-danger-dark"
+                          style={{ padding: "6px 12px", fontSize: 11.5 }}
+                        >
+                          {deletingId === dbItem.id ? <Loader2 size={12} className="spin" /> : <Trash2 size={12} />}
+                          <span>Confirm Delete</span>
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="btn-secondary-dark"
+                          style={{ padding: "6px 10px", fontSize: 11.5 }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirmId(dbItem.id)}
+                        className="btn-secondary-dark"
+                        style={{ padding: "6px 10px", fontSize: 11.5, color: "#f87171" }}
+                        title="Delete database"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Details Table */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12, backgroundColor: "rgba(0, 0, 0, 0.2)", padding: 12, borderRadius: 8, border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                {/* Connection Grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginTop: 14 }}>
                   {/* Host Endpoint */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Endpoint</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{dbItem.host}:{dbItem.port}</span>
-                      <button onClick={() => handleCopy(`${dbItem.host}:${dbItem.port}`, `host-${dbItem.id}`)} className="btn btn-ghost" style={{ padding: 2 }}>
-                        {copiedKey === `host-${dbItem.id}` ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+                  <div style={{ padding: "10px 12px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Endpoint</span>
+                      <button
+                        onClick={() => handleCopy(`${dbItem.host}:${dbItem.port}`, `endpoint-${dbItem.id}`)}
+                        style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 2 }}
+                        title="Copy Endpoint"
+                      >
+                        {copiedKey === `endpoint-${dbItem.id}` ? <Check size={12} style={{ color: "#34d399" }} /> : <Copy size={12} />}
                       </button>
                     </div>
+                    <span style={{ fontSize: 12.5, fontFamily: "monospace", color: "var(--text-primary)" }}>
+                      {dbItem.host}:{dbItem.port}
+                    </span>
                   </div>
 
                   {/* Username */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Username</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{dbItem.databaseUser}</span>
-                      <button onClick={() => handleCopy(dbItem.databaseUser, `user-${dbItem.id}`)} className="btn btn-ghost" style={{ padding: 2 }}>
-                        {copiedKey === `user-${dbItem.id}` ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+                  <div style={{ padding: "10px 12px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Username</span>
+                      <button
+                        onClick={() => handleCopy(dbItem.databaseUser, `user-${dbItem.id}`)}
+                        style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 2 }}
+                        title="Copy Username"
+                      >
+                        {copiedKey === `user-${dbItem.id}` ? <Check size={12} style={{ color: "#34d399" }} /> : <Copy size={12} />}
                       </button>
                     </div>
+                    <span style={{ fontSize: 12.5, fontFamily: "monospace", color: "var(--text-primary)" }}>
+                      {dbItem.databaseUser}
+                    </span>
                   </div>
 
                   {/* Password */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Password</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>
-                        {isPwVisible ? (dbItem.password || "••••••••") : "••••••••••••••••"}
-                      </span>
-                      <button onClick={() => togglePasswordVisibility(dbItem.id)} className="btn btn-ghost" style={{ padding: 2 }} title={isPwVisible ? "Hide" : "Show"}>
-                        {isPwVisible ? <EyeOff size={12} /> : <Eye size={12} />}
-                      </button>
-                      <button onClick={() => handleCopy(dbItem.password || "", `pw-${dbItem.id}`)} className="btn btn-ghost" style={{ padding: 2 }} title="Copy Password">
-                        {copiedKey === `pw-${dbItem.id}` ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
-                      </button>
+                  <div style={{ padding: "10px 12px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Password</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                          onClick={() => togglePasswordVisibility(dbItem.id)}
+                          style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 2 }}
+                          title={isPasswordVisible ? "Hide password" : "Show password"}
+                        >
+                          {isPasswordVisible ? <EyeOff size={12} /> : <Eye size={12} />}
+                        </button>
+                        {dbItem.password && (
+                          <button
+                            onClick={() => handleCopy(dbItem.password!, `pass-${dbItem.id}`)}
+                            style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 2 }}
+                            title="Copy Password"
+                          >
+                            {copiedKey === `pass-${dbItem.id}` ? <Check size={12} style={{ color: "#34d399" }} /> : <Copy size={12} />}
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    <span style={{ fontSize: 12.5, fontFamily: "monospace", color: "var(--text-primary)" }}>
+                      {isPasswordVisible ? (dbItem.password || "••••••••") : "••••••••••••••••"}
+                    </span>
                   </div>
 
-                  {/* JDBC String */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4, borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
-                    <span style={{ color: "var(--text-dim)" }}>JDBC String</span>
-                    <button onClick={() => handleCopy(jdbcString, `jdbc-${dbItem.id}`)} className="btn btn-ghost" style={{ padding: "2px 6px", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
-                      {copiedKey === `jdbc-${dbItem.id}` ? <Check size={11} style={{ color: "#10b981" }} /> : <Copy size={11} />}
-                      <span>Copy Connection String</span>
-                    </button>
+                  {/* Connections From */}
+                  <div style={{ padding: "10px 12px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Allowed IPs</span>
+                    </div>
+                    <span style={{ fontSize: 12.5, fontFamily: "monospace", color: "var(--text-primary)" }}>
+                      {dbItem.connectionsFrom === "%" ? "Any (%)" : dbItem.connectionsFrom}
+                    </span>
                   </div>
                 </div>
 
-                {/* Delete Confirmation Inline */}
-                {deleteConfirmId === dbItem.id && (
-                  <div style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.25)", padding: 10, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 11.5, color: "#f87171" }}>Are you sure? This cannot be undone.</span>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => setDeleteConfirmId(null)} className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11 }}>Cancel</button>
-                      <button onClick={() => handleDelete(dbItem.id)} disabled={deletingId === dbItem.id} className="btn btn-primary" style={{ padding: "4px 8px", fontSize: 11, backgroundColor: "#ef4444", borderColor: "#ef4444" }}>
-                        {deletingId === dbItem.id ? "Deleting..." : "Confirm Delete"}
-                      </button>
-                    </div>
+                {/* JDBC Connection String */}
+                <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: "var(--radius-sm)", background: "rgba(0,0,0,0.2)", border: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase" }}>JDBC</span>
+                    <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {jdbcUrl}
+                    </span>
                   </div>
-                )}
+                  <button
+                    onClick={() => handleCopy(jdbcUrl, `jdbc-${dbItem.id}`)}
+                    className="btn-secondary-dark"
+                    style={{ padding: "4px 8px", fontSize: 11, flexShrink: 0 }}
+                  >
+                    {copiedKey === `jdbc-${dbItem.id}` ? <Check size={11} style={{ color: "#34d399" }} /> : <Copy size={11} />}
+                    <span>Copy</span>
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -329,31 +438,55 @@ export default function ServerDatabasesPage() {
 
       {/* ── Create Database Modal ── */}
       {showCreate && (
-        <div className="modal-backdrop" onClick={() => setShowCreate(false)}>
-          <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 8, background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f59e0b" }}>
-                <Database size={18} />
+        <div className="saas-modal-backdrop" onClick={() => setShowCreate(false)}>
+          <div
+            className="saas-modal-box"
+            style={{
+              maxWidth: 480,
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-medium)",
+              borderRadius: "var(--radius-md)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-surface-elevated)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "var(--radius-sm)", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f59e0b" }}>
+                  <Database size={16} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text-pure)" }}>
+                    Create New Database
+                  </h3>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    Generate an isolated MySQL database and credentials
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>Create New Database</h3>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Generate an isolated MySQL database and credentials</p>
-              </div>
+              <button
+                onClick={() => setShowCreate(false)}
+                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4 }}
+              >
+                <X size={17} />
+              </button>
             </div>
 
-            {createError && (
-              <div style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: 10, borderRadius: 8, color: "#ef4444", fontSize: 12, marginBottom: 14 }}>
-                {createError}
-              </div>
-            )}
+            {/* Modal Body */}
+            <form onSubmit={handleCreate} style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+              {createError && (
+                <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "var(--radius-sm)", color: "#f87171", fontSize: 12 }}>
+                  {createError}
+                </div>
+              )}
 
-            <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-secondary)", marginBottom: 6 }}>
                   Database Name
                 </label>
-                <div style={{ display: "flex", alignItems: "center", borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "var(--surface)", overflow: "hidden" }}>
-                  <span style={{ padding: "0 10px", fontSize: 12, color: "var(--text-dim)", backgroundColor: "rgba(255, 255, 255, 0.03)", borderRight: "1px solid var(--border)", fontFamily: "monospace", height: 38, display: "flex", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-medium)", background: "var(--bg-surface-elevated)", overflow: "hidden" }}>
+                  <span style={{ padding: "0 10px", fontSize: 12, color: "var(--text-dim)", background: "rgba(255, 255, 255, 0.03)", borderRight: "1px solid var(--border-medium)", fontFamily: "monospace", height: 38, display: "flex", alignItems: "center" }}>
                     s_{shortId}_
                   </span>
                   <input
@@ -363,46 +496,48 @@ export default function ServerDatabasesPage() {
                     placeholder="luckperms"
                     required
                     maxLength={16}
-                    style={{ flex: 1, height: 38, padding: "0 12px", background: "transparent", border: "none", color: "#ffffff", fontSize: 13, outline: "none", fontFamily: "monospace" }}
+                    style={{ flex: 1, height: 38, padding: "0 12px", background: "transparent", border: "none", color: "var(--text-pure)", fontSize: 13, outline: "none", fontFamily: "monospace" }}
                   />
                 </div>
-                <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-                  Full name will be: <code>s_{shortId}_{dbNameSuffix || "name"}</code>
-                </p>
+                <span style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4, display: "block" }}>
+                  Full name: <code>s_{shortId}_{dbNameSuffix || "suffix"}</code>
+                </span>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Connections From
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-secondary)", marginBottom: 6 }}>
+                  Connections Allowed From
                 </label>
                 <input
                   type="text"
                   value={connectionsFrom}
                   onChange={(e) => setConnectionsFrom(e.target.value)}
                   placeholder="%"
-                  className="input"
-                  style={{ width: "100%", height: 38, fontSize: 13, fontFamily: "monospace" }}
+                  className="saas-input"
+                  style={{ fontFamily: "monospace", fontSize: 12.5 }}
                 />
-                <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-                  Use <code>%</code> to allow connections from any host/IP, or specify a specific IP address.
-                </p>
+                <span style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4, display: "block" }}>
+                  Use <code>%</code> for any remote host, or enter a specific IP (e.g. 192.168.1.3).
+                </span>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="btn btn-ghost"
+                  className="btn-secondary-dark"
+                  style={{ padding: "7px 14px", fontSize: 12.5 }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="btn btn-primary"
+                  className="btn-solid-white"
+                  style={{ padding: "7px 16px", fontSize: 12.5 }}
                 >
-                  {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                  <span>{creating ? "Creating..." : "Create Database"}</span>
+                  {creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}
+                  <span>{creating ? "Provisioning..." : "Create Database"}</span>
                 </button>
               </div>
             </form>

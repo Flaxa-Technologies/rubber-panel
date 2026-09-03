@@ -103,12 +103,29 @@ export async function createDatabaseForServer(params: {
   const password = crypto.randomBytes(18).toString("base64url");
 
   const config = await getMysqlConfig(server.nodeId);
-  const conn = await mysql.createConnection({
-    host: config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password,
-  });
+  let conn;
+  try {
+    conn = await mysql.createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      connectTimeout: 5000,
+    });
+  } catch (connErr: any) {
+    if (connErr.code === "ECONNREFUSED") {
+      throw new Error(
+        `Cannot connect to MySQL server at ${config.host}:${config.port} (Connection Refused). ` +
+        `Please ensure MySQL/MariaDB service is installed and running on the server, or configure the Database Host in Admin Settings.`
+      );
+    }
+    if (connErr.code === "ER_ACCESS_DENIED_ERROR") {
+      throw new Error(
+        `MySQL access denied for user '${config.user}'@'${config.host}'. Check your Database Host password in Admin Settings.`
+      );
+    }
+    throw connErr;
+  }
 
   try {
     // 1. Create Database
