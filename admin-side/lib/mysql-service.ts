@@ -242,3 +242,185 @@ export async function deleteServerDatabase(databaseId: string) {
 
   return { success: true };
 }
+
+// ─── Database Explorer & Command Shell Service ──────────────────────────────
+
+export async function getDatabaseTables(databaseName: string, hostId?: string) {
+  let config: MysqlConnectionConfig;
+  if (hostId) {
+    const host = await db.databaseHost.findUnique({ where: { id: hostId } });
+    if (host) {
+      config = { host: host.host, port: host.port, user: host.username, password: host.password };
+    } else {
+      config = await getMysqlConfig();
+    }
+  } else {
+    const sdb = await db.serverDatabase.findFirst({
+      where: { name: databaseName },
+      include: { server: true },
+    });
+    config = await getMysqlConfig(sdb?.server?.nodeId);
+  }
+
+  const conn = await mysql.createConnection({
+    host: config.host,
+    port: config.port,
+    user: config.user,
+    password: config.password,
+    database: databaseName,
+    connectTimeout: 5000,
+  });
+
+  try {
+    const [rows]: any = await conn.query(`SHOW TABLE STATUS FROM \`${databaseName}\`;`);
+    const tables = (rows || []).map((r: any) => ({
+      name: r.Name || r.name,
+      rows: r.Rows ?? r.rows ?? 0,
+      dataLength: r.Data_length ?? r.data_length ?? 0,
+      engine: r.Engine || r.engine || "InnoDB",
+      collation: r.Collation || r.collation || "utf8mb4_unicode_ci",
+    }));
+    return { tables };
+  } finally {
+    await conn.end().catch(() => {});
+  }
+}
+
+export async function getTableDataAndSchema(
+  databaseName: string,
+  tableName: string,
+  page: number = 1,
+  limit: number = 50,
+  hostId?: string
+) {
+  let config: MysqlConnectionConfig;
+  if (hostId) {
+    const host = await db.databaseHost.findUnique({ where: { id: hostId } });
+    if (host) {
+      config = { host: host.host, port: host.port, user: host.username, password: host.password };
+    } else {
+      config = await getMysqlConfig();
+    }
+  } else {
+    const sdb = await db.serverDatabase.findFirst({
+      where: { name: databaseName },
+      include: { server: true },
+    });
+    config = await getMysqlConfig(sdb?.server?.nodeId);
+  }
+
+  const conn = await mysql.createConnection({
+    host: config.host,
+    port: config.port,
+    user: config.user,
+    password: config.password,
+    database: databaseName,
+    connectTimeout: 5000,
+  });
+
+  const cleanTable = tableName.replace(/[`]/g, "");
+  const offset = Math.max(0, (page - 1) * limit);
+
+  try {
+    // 1. Get Columns
+    const [cols]: any = await conn.query(`DESCRIBE \`${cleanTable}\`;`);
+    const columns = (cols || []).map((c: any) => ({
+      field: c.Field,
+      type: c.Type,
+      null: c.Null,
+      key: c.Key,
+      default: c.Default,
+      extra: c.Extra,
+    }));
+
+    // 2. Count total rows
+    const [countRows]: any = await conn.query(`SELECT COUNT(*) as total FROM \`${cleanTable}\`;`);
+    const total = Number(countRows?.[0]?.total || 0);
+
+    // 3. Get page rows
+    const [rows]: any = await conn.query(`SELECT * FROM \`${cleanTable}\` LIMIT ? OFFSET ?;`, [limit, offset]);
+
+    return {
+      tableName: cleanTable,
+      columns,
+      rows: rows || [],
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  } finally {
+    await conn.end().catch(() => {});
+  }
+}
+
+export async function executeSqlOnDatabase(
+  databaseName: string,
+  sqlQuery: string,
+  hostId?: string
+) {
+  const trimmed = sqlQuery.trim();
+  if (!trimmed) {
+    throw new Error("SQL query cannot be empty");
+  }
+
+  let config: MysqlConnectionConfig;
+  if (hostId) {
+    const host = await db.databaseHost.findUnique({ where: { id: hostId } });
+    if (host) {
+      config = { host: host.host, port: host.port, user: host.username, password: host.password };
+    } else {
+      config = await getMysqlConfig();
+    }
+  } else {
+    const sdb = await db.serverDatabase.findFirst({
+      where: { name: databaseName },
+      include: { server: true },
+    });
+    config = await getMysqlConfig(sdb?.server?.nodeId);
+  }
+
+  const conn = await mysql.createConnection({
+    host: config.host,
+    port: config.port,
+    user: config.user,
+    password: config.password,
+    database: databaseName,
+    multipleStatements: true,
+    connectTimeout: 5000,
+  });
+
+  const startTime = Date.now();
+
+  try {
+    const [results, fields]: any = await conn.query(trimmed);
+    const durationMs = Date.now() - startTime;
+
+    if (Array.isArray(results)) {
+      // Result is rows from SELECT, SHOW, DESCRIBE, etc.
+      const columns = fields && Array.isArray(fields) ? fields.map((f: any) => f.name) : Object.keys(results[0] || {});
+      return {
+        success: true,
+        isSelect: true,
+        durationMs,
+        columns,
+        rows: results,
+        rowCount: results.length,
+      };
+    } else {
+      // Result is ResultSetHeader (INSERT, UPDATE, DELETE, etc.)
+      return {
+        success: true,
+        isSelect: false,
+        durationMs,
+        affectedRows: results?.affectedRows ?? 0,
+        insertId: results?.insertId ?? 0,
+        warningStatus: results?.warningStatus ?? 0,
+        message: results?.message || `Query OK, ${results?.affectedRows ?? 0} row(s) affected`,
+      };
+    }
+  } finally {
+    await conn.end().catch(() => {});
+  }
+}
+

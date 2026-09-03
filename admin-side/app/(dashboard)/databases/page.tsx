@@ -5,7 +5,8 @@ import Link from "next/link";
 import {
   Database, Plus, Trash2, Edit3, Server, Check, X, AlertCircle,
   Loader2, RefreshCw, Terminal, Copy, Eye, EyeOff, Activity, ShieldAlert,
-  ServerCrash, HardDrive, CheckCircle2, ChevronRight, ExternalLink
+  ServerCrash, HardDrive, CheckCircle2, ChevronRight, ExternalLink,
+  Table, Layers, Play, Clock, ChevronLeft, Search
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -79,6 +80,28 @@ export default function AdminDatabasesPage() {
   const [deleteHostTarget, setDeleteHostTarget] = useState<DatabaseHostItem | null>(null);
   const [deleteDbTarget, setDeleteDbTarget] = useState<ServerDatabaseItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Admin Explorer Modal State
+  const [explorerDbName, setExplorerDbName] = useState<string | null>(null);
+  const [explorerEndpoint, setExplorerEndpoint] = useState<string>("");
+  const [explorerHostId, setExplorerHostId] = useState<string | undefined>(undefined);
+  const [explorerTab, setExplorerTab] = useState<"data" | "schema" | "sql">("data");
+  const [explorerTables, setExplorerTables] = useState<any[]>([]);
+  const [explorerSelectedTable, setExplorerSelectedTable] = useState("");
+  const [explorerTableSearch, setExplorerTableSearch] = useState("");
+  const [loadingExplorerTables, setLoadingExplorerTables] = useState(false);
+
+  const [explorerColumns, setExplorerColumns] = useState<any[]>([]);
+  const [explorerRows, setExplorerRows] = useState<any[]>([]);
+  const [explorerTotalRows, setExplorerTotalRows] = useState(0);
+  const [explorerPage, setExplorerPage] = useState(1);
+  const [loadingExplorerData, setLoadingExplorerData] = useState(false);
+  const [explorerDataError, setExplorerDataError] = useState("");
+
+  const [adminSqlQuery, setAdminSqlQuery] = useState("SELECT * FROM `` LIMIT 20;");
+  const [runningAdminSql, setRunningAdminSql] = useState(false);
+  const [adminSqlResult, setAdminSqlResult] = useState<any>(null);
+  const [adminSqlError, setAdminSqlError] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -236,6 +259,102 @@ export default function AdminDatabasesPage() {
       }
     } catch {}
     setDeleting(false);
+  }
+
+  // Open Explorer
+  async function openExplorer(dbName: string, endpoint: string, hostId?: string) {
+    setExplorerDbName(dbName);
+    setExplorerEndpoint(endpoint);
+    setExplorerHostId(hostId);
+    setExplorerTab("data");
+    setExplorerTables([]);
+    setExplorerSelectedTable("");
+    setExplorerColumns([]);
+    setExplorerRows([]);
+    setAdminSqlResult(null);
+    setAdminSqlError("");
+    setLoadingExplorerTables(true);
+
+    try {
+      const url = `/api/admin/databases/explorer?action=tables&databaseName=${encodeURIComponent(dbName)}${hostId ? `&hostId=${hostId}` : ""}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        const tList = data.tables || [];
+        setExplorerTables(tList);
+        if (tList.length > 0) {
+          const first = tList[0].name;
+          setExplorerSelectedTable(first);
+          setAdminSqlQuery(`SELECT * FROM \`${first}\` LIMIT 20;`);
+          loadExplorerTableData(dbName, first, 1, hostId);
+        } else {
+          setAdminSqlQuery(`SHOW TABLES;`);
+        }
+      }
+    } catch {}
+    setLoadingExplorerTables(false);
+  }
+
+  async function loadExplorerTableData(dbName: string, tableName: string, page = 1, hostId?: string) {
+    if (!tableName) return;
+    setLoadingExplorerData(true);
+    setExplorerDataError("");
+    try {
+      const url = `/api/admin/databases/explorer?action=data&databaseName=${encodeURIComponent(dbName)}&table=${encodeURIComponent(tableName)}&page=${page}&limit=50${hostId ? `&hostId=${hostId}` : ""}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setExplorerColumns(data.columns || []);
+        setExplorerRows(data.rows || []);
+        setExplorerTotalRows(data.total || 0);
+        setExplorerPage(page);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setExplorerDataError(err.error || "Failed to load table data");
+      }
+    } catch {
+      setExplorerDataError("Network error loading table data");
+    } finally {
+      setLoadingExplorerData(false);
+    }
+  }
+
+  async function runAdminQuery() {
+    if (!adminSqlQuery.trim() || !explorerDbName) return;
+    setRunningAdminSql(true);
+    setAdminSqlError("");
+    setAdminSqlResult(null);
+
+    try {
+      const res = await fetch("/api/admin/databases/explorer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          databaseName: explorerDbName,
+          query: adminSqlQuery.trim(),
+          hostId: explorerHostId,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAdminSqlResult(data);
+        if (adminSqlQuery.toUpperCase().includes("CREATE") || adminSqlQuery.toUpperCase().includes("DROP") || adminSqlQuery.toUpperCase().includes("ALTER")) {
+          // Refresh tables
+          const tRes = await fetch(`/api/admin/databases/explorer?action=tables&databaseName=${encodeURIComponent(explorerDbName)}${explorerHostId ? `&hostId=${explorerHostId}` : ""}`);
+          if (tRes.ok) {
+            const td = await tRes.json();
+            setExplorerTables(td.tables || []);
+          }
+        }
+      } else {
+        setAdminSqlError(data.error || "SQL execution failed");
+      }
+    } catch (err: any) {
+      setAdminSqlError(err?.message || "Error running SQL command");
+    } finally {
+      setRunningAdminSql(false);
+    }
   }
 
   const scriptCommand = `curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/setup-mysql.sh | sudo bash`;
@@ -564,7 +683,16 @@ export default function AdminDatabasesPage() {
                     <td className="px-6 py-3.5 font-mono text-gray-400">
                       {db.connectionsFrom}
                     </td>
-                    <td className="px-6 py-3.5 text-right">
+                    <td className="px-6 py-3.5 text-right flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openExplorer(db.name, `${db.host}:${db.port}`)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 font-semibold transition-all"
+                        title="Open Web GUI Database Explorer & SQL Shell"
+                      >
+                        <Terminal className="w-3 h-3" />
+                        <span>Manage &amp; Shell</span>
+                      </button>
+
                       <button
                         onClick={() => setDeleteDbTarget(db)}
                         className="p-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-all"
@@ -897,6 +1025,476 @@ export default function AdminDatabasesPage() {
           </div>
         </div>
       )}
+      {/* ── Modal: Admin Web GUI Database Explorer & SQL Command Shell ── */}
+      {explorerDbName && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div
+            className="w-full max-w-7xl h-[88vh] rounded-2xl border overflow-hidden flex flex-col shadow-2xl"
+            style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+          >
+            {/* Header */}
+            <div
+              className="px-6 py-3.5 border-b flex items-center justify-between flex-wrap gap-3"
+              style={{ borderColor: "var(--color-rp-border)", backgroundColor: "var(--color-rp-surface-2)" }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/25 flex items-center justify-center">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold font-mono" style={{ color: "var(--color-rp-text)" }}>
+                      {explorerDbName}
+                    </h3>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-gray-400 border border-white/10">
+                      {explorerEndpoint}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Administrator Database Explorer &amp; Interactive SQL Terminal
+                  </p>
+                </div>
+              </div>
+
+              {/* View Tabs */}
+              <div className="flex items-center gap-4">
+                <div className="flex p-1 rounded-xl border border-white/10 bg-black/30">
+                  <button
+                    onClick={() => setExplorerTab("data")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      explorerTab === "data" ? "bg-white text-black" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <Table className="w-3.5 h-3.5" />
+                    <span>Table Data</span>
+                  </button>
+                  <button
+                    onClick={() => setExplorerTab("schema")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      explorerTab === "schema" ? "bg-white text-black" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Schema Structure</span>
+                  </button>
+                  <button
+                    onClick={() => setExplorerTab("sql")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      explorerTab === "sql" ? "bg-lime-400 text-black font-bold" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>SQL Shell</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setExplorerDbName(null)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Split Screen Body */}
+            <div className="flex flex-1 min-h-0">
+              {/* Left Column: Tables List */}
+              <div
+                className="w-64 border-r flex flex-col bg-black/20"
+                style={{ borderColor: "var(--color-rp-border)" }}
+              >
+                <div className="p-2.5 border-b" style={{ borderColor: "var(--color-rp-border)" }}>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Filter tables..."
+                      value={explorerTableSearch}
+                      onChange={(e) => setExplorerTableSearch(e.target.value)}
+                      className="w-full pl-8 pr-2.5 py-1.5 rounded-lg text-xs border outline-none font-medium"
+                      style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)", color: "var(--color-rp-text)" }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+                  {loadingExplorerTables ? (
+                    <div className="p-8 text-center text-xs text-gray-500">
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2 text-lime-400" />
+                      <span>Reading schema...</span>
+                    </div>
+                  ) : explorerTables.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-gray-500">
+                      0 tables found in database
+                    </div>
+                  ) : (
+                    explorerTables
+                      .filter((t) => t.name.toLowerCase().includes(explorerTableSearch.toLowerCase()))
+                      .map((t) => {
+                        const isSelected = explorerSelectedTable === t.name;
+                        return (
+                          <button
+                            key={t.name}
+                            onClick={() => {
+                              setExplorerSelectedTable(t.name);
+                              setAdminSqlQuery(`SELECT * FROM \`${t.name}\` LIMIT 20;`);
+                              loadExplorerTableData(explorerDbName, t.name, 1, explorerHostId);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-mono transition-all text-left ${
+                              isSelected
+                                ? "bg-lime-400/15 text-lime-400 border border-lime-400/30 font-bold"
+                                : "text-gray-400 hover:text-white hover:bg-white/5"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Table className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">{t.name}</span>
+                            </div>
+                            <span className="text-[10px] bg-black/40 px-1.5 py-0.5 rounded text-gray-500 shrink-0">
+                              {t.rows}
+                            </span>
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+
+                <div
+                  className="px-3 py-2 border-t text-[11px] text-gray-500 flex items-center justify-between"
+                  style={{ borderColor: "var(--color-rp-border)", backgroundColor: "var(--color-rp-surface-2)" }}
+                >
+                  <span>{explorerTables.length} total tables</span>
+                  <button
+                    onClick={() => openExplorer(explorerDbName, explorerEndpoint, explorerHostId)}
+                    className="p-1 hover:text-white"
+                    title="Reload schema"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: View Contents */}
+              <div className="flex-1 flex flex-col min-w-0 bg-black/10">
+                {/* ── View 1: Data Grid ── */}
+                {explorerTab === "data" && (
+                  <div className="flex flex-col h-full min-h-0">
+                    {/* Toolbar */}
+                    <div
+                      className="px-4 py-2 border-b flex items-center justify-between"
+                      style={{ borderColor: "var(--color-rp-border)", backgroundColor: "var(--color-rp-surface)" }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-lime-400">
+                          {explorerSelectedTable || "No Table Selected"}
+                        </span>
+                        <span className="text-[11px] text-gray-500">
+                          ({explorerTotalRows} total rows)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => loadExplorerTableData(explorerDbName, explorerSelectedTable, explorerPage, explorerHostId)}
+                          disabled={loadingExplorerData || !explorerSelectedTable}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs border hover:bg-white/5 transition-all text-gray-300"
+                          style={{ borderColor: "var(--color-rp-border)" }}
+                        >
+                          <RefreshCw className={`w-3 h-3 ${loadingExplorerData ? "animate-spin" : ""}`} />
+                          <span>Refresh</span>
+                        </button>
+
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <button
+                            onClick={() => loadExplorerTableData(explorerDbName, explorerSelectedTable, explorerPage - 1, explorerHostId)}
+                            disabled={explorerPage <= 1 || loadingExplorerData}
+                            className="p-1 rounded border hover:bg-white/5 disabled:opacity-30"
+                            style={{ borderColor: "var(--color-rp-border)" }}
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span>{explorerPage} / {Math.ceil(explorerTotalRows / 50) || 1}</span>
+                          <button
+                            onClick={() => loadExplorerTableData(explorerDbName, explorerSelectedTable, explorerPage + 1, explorerHostId)}
+                            disabled={explorerPage >= Math.ceil(explorerTotalRows / 50) || loadingExplorerData}
+                            className="p-1 rounded border hover:bg-white/5 disabled:opacity-30"
+                            style={{ borderColor: "var(--color-rp-border)" }}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {explorerDataError && (
+                      <div className="p-3 text-xs bg-red-500/10 border-b border-red-500/25 text-red-400 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{explorerDataError}</span>
+                      </div>
+                    )}
+
+                    {/* Table View */}
+                    <div className="flex-1 overflow-auto">
+                      {loadingExplorerData ? (
+                        <div className="p-16 text-center text-xs text-gray-500">
+                          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-lime-400" />
+                          <span>Loading data rows...</span>
+                        </div>
+                      ) : explorerRows.length === 0 ? (
+                        <div className="p-16 text-center text-xs text-gray-500">
+                          This table contains 0 rows.
+                        </div>
+                      ) : (
+                        <table className="w-full text-left text-xs font-mono border-collapse">
+                          <thead
+                            className="sticky top-0 z-10 border-b"
+                            style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                          >
+                            <tr>
+                              <th className="px-3 py-2 text-gray-500 border-r w-10 text-center" style={{ borderColor: "var(--color-rp-border)" }}>#</th>
+                              {explorerColumns.map((c) => (
+                                <th
+                                  key={c.field}
+                                  className="px-3 py-2 text-gray-300 font-bold border-r whitespace-nowrap"
+                                  style={{ borderColor: "var(--color-rp-border)" }}
+                                >
+                                  <span>{c.field}</span>
+                                  <span className="ml-1 text-[10px] text-gray-500 font-normal">{c.type}</span>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y" style={{ borderColor: "var(--color-rp-border)" }}>
+                            {explorerRows.map((r, i) => (
+                              <tr key={i} className="hover:bg-white/[0.02]">
+                                <td className="px-3 py-1.5 text-gray-500 border-r text-center text-[10.5px]" style={{ borderColor: "var(--color-rp-border)" }}>
+                                  {(explorerPage - 1) * 50 + i + 1}
+                                </td>
+                                {explorerColumns.map((c) => (
+                                  <td
+                                    key={c.field}
+                                    className="px-3 py-1.5 border-r truncate max-w-xs text-gray-200"
+                                    style={{ borderColor: "var(--color-rp-border)" }}
+                                    title={String(r[c.field])}
+                                  >
+                                    {r[c.field] === null ? <span className="text-gray-500 italic">NULL</span> : String(r[c.field])}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── View 2: Schema Structure ── */}
+                {explorerTab === "schema" && (
+                  <div className="flex-1 overflow-auto p-6">
+                    <div
+                      className="rounded-xl border overflow-hidden"
+                      style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                    >
+                      <div
+                        className="px-4 py-3 border-b flex items-center gap-2 font-bold text-xs"
+                        style={{ borderColor: "var(--color-rp-border)", backgroundColor: "var(--color-rp-surface-2)" }}
+                      >
+                        <Layers className="w-3.5 h-3.5 text-lime-400" />
+                        <span>{explorerSelectedTable} Columns &amp; Data Types</span>
+                      </div>
+                      <table className="w-full text-left text-xs font-mono">
+                        <thead className="border-b uppercase text-gray-500 text-[10px]" style={{ borderColor: "var(--color-rp-border)" }}>
+                          <tr>
+                            <th className="px-4 py-2.5">Field</th>
+                            <th className="px-4 py-2.5">Type</th>
+                            <th className="px-4 py-2.5">Null</th>
+                            <th className="px-4 py-2.5">Key</th>
+                            <th className="px-4 py-2.5">Default</th>
+                            <th className="px-4 py-2.5">Extra</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y" style={{ borderColor: "var(--color-rp-border)" }}>
+                          {explorerColumns.map((col) => (
+                            <tr key={col.field} className="hover:bg-white/[0.02]">
+                              <td className="px-4 py-2 font-bold text-white">{col.field}</td>
+                              <td className="px-4 py-2 text-sky-400">{col.type}</td>
+                              <td className="px-4 py-2 text-gray-400">{col.null}</td>
+                              <td className="px-4 py-2">
+                                {col.key === "PRI" ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+                                    PRIMARY
+                                  </span>
+                                ) : (
+                                  col.key || "—"
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-gray-500">{col.default ?? "NULL"}</td>
+                              <td className="px-4 py-2 text-gray-500">{col.extra || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── View 3: Interactive SQL Terminal ── */}
+                {explorerTab === "sql" && (
+                  <div className="flex flex-col h-full min-h-0">
+                    <div
+                      className="p-4 border-b space-y-3"
+                      style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                    >
+                      {/* Snippets */}
+                      <div className="flex items-center gap-2 overflow-x-auto text-[11px]">
+                        <span className="text-gray-500 uppercase font-semibold">Snippets:</span>
+                        <button
+                          onClick={() => setAdminSqlQuery(explorerSelectedTable ? `SELECT * FROM \`${explorerSelectedTable}\` LIMIT 50;` : `SHOW TABLES;`)}
+                          className="px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 font-mono text-gray-300"
+                        >
+                          SELECT *
+                        </button>
+                        <button
+                          onClick={() => setAdminSqlQuery(explorerSelectedTable ? `SELECT COUNT(*) as total FROM \`${explorerSelectedTable}\`;` : `SHOW TABLES;`)}
+                          className="px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 font-mono text-gray-300"
+                        >
+                          COUNT(*)
+                        </button>
+                        <button
+                          onClick={() => setAdminSqlQuery(`SHOW TABLES;`)}
+                          className="px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 font-mono text-gray-300"
+                        >
+                          SHOW TABLES
+                        </button>
+                        <button
+                          onClick={() => setAdminSqlQuery(explorerSelectedTable ? `DESCRIBE \`${explorerSelectedTable}\`;` : `SHOW TABLES;`)}
+                          className="px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 font-mono text-gray-300"
+                        >
+                          DESCRIBE
+                        </button>
+                      </div>
+
+                      {/* SQL Code Input */}
+                      <textarea
+                        rows={4}
+                        value={adminSqlQuery}
+                        onChange={(e) => setAdminSqlQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            runAdminQuery();
+                          }
+                        }}
+                        placeholder="Enter SQL command..."
+                        className="w-full p-3 rounded-xl font-mono text-xs outline-none border resize-vertical leading-relaxed text-lime-400 bg-black/60"
+                        style={{ borderColor: "var(--color-rp-border)" }}
+                      />
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-gray-500">
+                          Press <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10">Ctrl+Enter</kbd> to execute
+                        </span>
+
+                        <button
+                          onClick={runAdminQuery}
+                          disabled={runningAdminSql || !adminSqlQuery.trim()}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-lime-400 text-black hover:brightness-110 disabled:opacity-50"
+                        >
+                          {runningAdminSql ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-black" />}
+                          <span>{runningAdminSql ? "Executing..." : "Execute Query"}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {adminSqlError && (
+                      <div className="p-3 text-xs bg-red-500/10 border-b border-red-500/25 text-red-400 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{adminSqlError}</span>
+                      </div>
+                    )}
+
+                    {/* Results Container */}
+                    <div className="flex-1 overflow-auto">
+                      {adminSqlResult ? (
+                        <div className="flex flex-col h-full">
+                          {/* Telemetry bar */}
+                          <div
+                            className="px-4 py-2 border-b flex items-center gap-4 text-xs font-mono"
+                            style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                          >
+                            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Query Succeeded
+                            </span>
+                            <span className="text-gray-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {adminSqlResult.durationMs}ms
+                            </span>
+                            <span className="text-gray-400">
+                              {adminSqlResult.isSelect ? `${adminSqlResult.rowCount} rows returned` : `${adminSqlResult.affectedRows} rows affected`}
+                            </span>
+                          </div>
+
+                          {adminSqlResult.isSelect && adminSqlResult.rows ? (
+                            <div className="flex-1 overflow-auto">
+                              <table className="w-full text-left text-xs font-mono border-collapse">
+                                <thead
+                                  className="sticky top-0 z-10 border-b"
+                                  style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)" }}
+                                >
+                                  <tr>
+                                    <th className="px-3 py-2 text-gray-500 border-r w-10 text-center" style={{ borderColor: "var(--color-rp-border)" }}>#</th>
+                                    {adminSqlResult.columns?.map((col: string) => (
+                                      <th key={col} className="px-3 py-2 text-gray-300 font-bold border-r whitespace-nowrap" style={{ borderColor: "var(--color-rp-border)" }}>
+                                        {col}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y" style={{ borderColor: "var(--color-rp-border)" }}>
+                                  {adminSqlResult.rows.map((row: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-white/[0.02]">
+                                      <td className="px-3 py-1.5 text-gray-500 border-r text-center text-[10.5px]" style={{ borderColor: "var(--color-rp-border)" }}>
+                                        {idx + 1}
+                                      </td>
+                                      {adminSqlResult.columns?.map((col: string) => (
+                                        <td
+                                          key={col}
+                                          className="px-3 py-1.5 border-r truncate max-w-xs text-gray-200"
+                                          style={{ borderColor: "var(--color-rp-border)" }}
+                                          title={String(row[col])}
+                                        >
+                                          {row[col] === null ? <span className="text-gray-500 italic">NULL</span> : String(row[col])}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="p-6 text-xs text-gray-300">
+                              <p>{adminSqlResult.message || `Query OK, ${adminSqlResult.affectedRows} row(s) affected.`}</p>
+                              {adminSqlResult.insertId ? <p className="mt-1 font-mono text-lime-400">Last Insert ID: {adminSqlResult.insertId}</p> : null}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-16 text-center text-xs text-gray-500">
+                          Enter SQL commands above and click &quot;Execute Query&quot; to see real-time output.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

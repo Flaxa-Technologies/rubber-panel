@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
   Database, Plus, Trash2, RotateCcw, Copy, Check, Eye, EyeOff,
-  Server, AlertCircle, Loader2, Globe, X, CheckCircle2
+  Server, AlertCircle, Loader2, Globe, X, CheckCircle2, Terminal
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useServer } from "@/components/server/ServerContext";
+import DatabaseExplorerModal from "@/components/database/DatabaseExplorerModal";
 
 interface ServerDatabaseItem {
   id: string;
@@ -40,6 +41,7 @@ export default function ServerDatabasesPage() {
   const [createError, setCreateError] = useState("");
 
   // Action states
+  const [activeExplorerDb, setActiveExplorerDb] = useState<ServerDatabaseItem | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [rotatingId, setRotatingId] = useState<string | null>(null);
@@ -296,6 +298,16 @@ export default function ServerDatabasesPage() {
                   {/* Actions */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
+                      onClick={() => setActiveExplorerDb(dbItem)}
+                      className="btn-solid-white"
+                      style={{ padding: "6px 12px", fontSize: 11.5, background: "#a3e635", color: "#000000", fontWeight: 700 }}
+                      title="Open Web GUI Database Explorer & SQL Shell"
+                    >
+                      <Terminal size={12} />
+                      <span>Manage &amp; SQL Shell</span>
+                    </button>
+
+                    <button
                       onClick={() => handleRotatePassword(dbItem.id)}
                       disabled={rotatingId === dbItem.id}
                       className="btn-secondary-dark"
@@ -543,6 +555,17 @@ export default function ServerDatabasesPage() {
             </form>
           </div>
         </div>
+      )}
+      {/* ── Web GUI Database Explorer & SQL Command Shell Modal ── */}
+      {activeExplorerDb && (
+        <DatabaseExplorerModal
+          isOpen={Boolean(activeExplorerDb)}
+          onClose={() => setActiveExplorerDb(null)}
+          serverId={id}
+          databaseId={activeExplorerDb.id}
+          databaseName={activeExplorerDb.name}
+          hostEndpoint={`${activeExplorerDb.host}:${activeExplorerDb.port}`}
+        />
       )}
     </div>
   );
