@@ -1296,7 +1296,11 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
         versionId: env.VERSION || "pumpkin-nightly-latest",
         commitSha: "nightly",
       });
-      const binaryPath = dlRes.path || "/usr/local/bin/pumpkin";
+      if (!dlRes.success || !dlRes.path || !fsSync.existsSync(dlRes.path) || fsSync.statSync(dlRes.path).isDirectory()) {
+        appendLog(serverId, `[Rubber] ❌ Failed to prepare Pumpkin server: ${dlRes.error || "Pumpkin binary not available"}`);
+        throw new Error(dlRes.error || "Pumpkin binary not available");
+      }
+      const binaryPath = dlRes.path;
 
       // Clean Pumpkin environment variables
       delete env.SERVER_TYPE;

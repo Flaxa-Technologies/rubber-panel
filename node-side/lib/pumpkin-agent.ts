@@ -107,16 +107,28 @@ function downloadFile(url: string, destPath: string, expectedSha256?: string | n
 
 // Download and install Pumpkin binary onto this node
 export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Promise<{ success: boolean; path: string; error?: string }> {
-  const commit = (params.commitSha || "").trim();
-  if (!commit) return { success: false, path: "", error: "Missing commitSha" };
+  const commit = (params.commitSha || "nightly").trim() || "nightly";
 
   const targetDir = path.join(PUMPKIN_STORAGE_DIR, commit);
   const targetBin = path.join(targetDir, "pumpkin");
 
-  // If already exists and valid, return success
+  // Clean up any corrupt directory created by Docker or failed runs
+  try {
+    if (fsSync.existsSync(targetBin) && fsSync.statSync(targetBin).isDirectory()) {
+      fsSync.rmSync(targetBin, { recursive: true, force: true });
+    }
+  } catch {}
+
+  try {
+    if (fsSync.existsSync("/usr/local/bin/pumpkin") && fsSync.statSync("/usr/local/bin/pumpkin").isDirectory()) {
+      fsSync.rmSync("/usr/local/bin/pumpkin", { recursive: true, force: true });
+    }
+  } catch {}
+
+  // If targetBin already exists and is a valid binary (> 1MB), return success
   try {
     const stat = await fs.stat(targetBin);
-    if (stat.size > 1000000) {
+    if (!stat.isDirectory() && stat.size > 1000000) {
       await fs.chmod(targetBin, 0o755).catch(() => {});
       return { success: true, path: targetBin };
     }
@@ -126,19 +138,31 @@ export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Pro
 
   // Determine architecture: x64 vs arm64 (glibc Linux)
   const isArm = process.arch === "arm64";
-  const downloadUrl = isArm ? (params.arm64Url || params.x64Url) : (params.x64Url || params.arm64Url);
+  const archName = isArm ? "ARM64" : "X64";
+  const preferredUrl = isArm ? (params.arm64Url || params.x64Url) : (params.x64Url || params.arm64Url);
   const expectedHash = isArm ? (params.arm64Sha256 || params.x64Sha256) : (params.x64Sha256 || params.arm64Sha256);
+
+  // Candidate download URLs in priority order
+  const candidateUrls: string[] = [];
+  if (preferredUrl) candidateUrls.push(preferredUrl);
+  candidateUrls.push(`https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-${archName}-Linux`);
+  candidateUrls.push(`https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/pumpkin-${archName}-Linux-musl`);
 
   let downloaded = false;
 
-  // 1. Try downloading directly from GitHub Release Asset
-  if (downloadUrl) {
+  // 1. Try downloading directly from GitHub Release Assets
+  for (const dlUrl of candidateUrls) {
     try {
-      console.log(`[PumpkinAgent] Downloading Pumpkin (${commit}) for ${process.arch} from ${downloadUrl}...`);
-      await downloadFile(downloadUrl, targetBin, expectedHash);
-      downloaded = true;
+      console.log(`[PumpkinAgent] Downloading Pumpkin (${commit}) for ${archName} from ${dlUrl}...`);
+      await downloadFile(dlUrl, targetBin, expectedHash);
+      const downloadedStat = await fs.stat(targetBin);
+      if (downloadedStat.size > 1000000) {
+        downloaded = true;
+        break;
+      }
     } catch (err: any) {
-      console.warn(`[PumpkinAgent] GitHub download failed for ${commit}:`, err?.message);
+      console.warn(`[PumpkinAgent] Download from ${dlUrl} failed:`, err?.message);
+      try { fsSync.unlinkSync(targetBin); } catch {}
     }
   }
 
@@ -149,10 +173,14 @@ export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Pro
         const peerUrl = `${peer.replace(/\/$/, "")}/api/agent/software/pumpkin/binary?commit=${commit}`;
         console.log(`[PumpkinAgent] Attempting peer node download from ${peerUrl}...`);
         await downloadFile(peerUrl, targetBin, expectedHash);
-        downloaded = true;
-        break;
+        const downloadedStat = await fs.stat(targetBin);
+        if (downloadedStat.size > 1000000) {
+          downloaded = true;
+          break;
+        }
       } catch (pErr: any) {
         console.warn(`[PumpkinAgent] Peer sync from ${peer} failed:`, pErr?.message);
+        try { fsSync.unlinkSync(targetBin); } catch {}
       }
     }
   }
@@ -163,6 +191,15 @@ export async function installPumpkinBinaryOnNode(params: SyncPumpkinParams): Pro
 
   // Set executable permission (chmod 755)
   await fs.chmod(targetBin, 0o755).catch(() => {});
+
+  // Mirror to /usr/local/bin/pumpkin if writable and clean
+  try {
+    if (!fsSync.existsSync("/usr/local/bin/pumpkin") || !fsSync.statSync("/usr/local/bin/pumpkin").isDirectory()) {
+      await fs.copyFile(targetBin, "/usr/local/bin/pumpkin").catch(() => {});
+      await fs.chmod("/usr/local/bin/pumpkin", 0o755).catch(() => {});
+    }
+  } catch {}
+
   return { success: true, path: targetBin };
 }
 

@@ -87,6 +87,12 @@ fi
 
 rm -rf "${TEMP_DIR}"
 
+# Clean up any corrupt directory created by Docker at /usr/local/bin/pumpkin
+if [ -d "/usr/local/bin/pumpkin" ]; then
+  echo -e "${YELLOW}[Cleanup] Removing corrupt directory at /usr/local/bin/pumpkin...${NC}"
+  rm -rf "/usr/local/bin/pumpkin"
+fi
+
 if command -v pm2 >/dev/null 2>&1; then
   sudo pm2 stop rubber-node 2>/dev/null || pm2 stop rubber-node 2>/dev/null || true
 fi

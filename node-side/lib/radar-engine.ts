@@ -767,7 +767,7 @@ export function startRadarLoop() {
         recentSamples.shift();
       }
     } catch (err) {
-      console.error("Radar telemetry loop error:", err);
+      console.error("Radar telemetry loop error:", err); 
     }
   }, 1000);
 }
