@@ -1,6 +1,6 @@
 {
   "name": "node-side",
-  "version": "0.1.0-beta.61",
+  "version": "0.1.0-beta.62",
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001",
@@ -16,6 +16,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ssh2": "^1.15.6",
     "adm-zip": "^0.6.0",
     "archiver": "^8.0.0",
     "geoip-lite": "^1.4.10",
@@ -24,6 +25,7 @@
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "ssh2": "^1.17.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "zod": "^4.4.3"

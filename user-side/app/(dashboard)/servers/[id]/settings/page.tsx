@@ -6,8 +6,10 @@ import { formatDisk, formatRam } from "@/lib/server-utils";
 import {
   Settings, Shield, Zap, Box, Globe, Save, AlertTriangle, Loader2, Check,
   Coffee, Sparkles, Cpu, HardDrive, Terminal, RefreshCw, CheckCircle2,
-  ShieldCheck, ShieldAlert, Code2, Play, Moon
+  ShieldCheck, ShieldAlert, Code2, Play, Moon, FolderOpen, Copy, ExternalLink
 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 interface JavaVersionItem {
   id: string;
@@ -165,6 +167,15 @@ export default function SettingsPage() {
 
   const [javaVersions, setJavaVersions] = useState<JavaVersionItem[]>([]);
   const [loadingJava, setLoadingJava] = useState(isMinecraft);
+
+  const { data: session } = useSession();
+  const [copiedSftp, setCopiedSftp] = useState<string | null>(null);
+  const sessionUser = session?.user as any;
+  const sftpUsername = `${sessionUser?.username || sessionUser?.name || "user"}.${(server.uuid || server.id).replace(/-/g, "").slice(0, 8)}`;
+  const sftpHost = server.node?.fqdn || (server.node as any)?.ip || "127.0.0.1";
+  const sftpPort = 2022;
+  const sftpAddress = `sftp://${sftpUsername}@${sftpHost}:${sftpPort}`;
+  const isSftpEnabled = (server as any).sftpEnabled !== false;
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -782,6 +793,78 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
+
+      {/* SFTP Connection Details Card (Pterodactyl-Style) */}
+      <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#10b981" }}>
+              <FolderOpen size={20} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "flex", alignItems: "center", gap: 8 }}>
+                SFTP Remote Access Details
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: isSftpEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isSftpEnabled ? "#10b981" : "#ef4444", border: `1px solid ${isSftpEnabled ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}` }}>
+                  {isSftpEnabled ? "PORT 2022 ACTIVE" : "DISABLED"}
+                </span>
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                Upload or manage files directly with FileZilla, WinSCP, or Cyberduck
+              </p>
+            </div>
+          </div>
+
+          {isSftpEnabled && (
+            <a
+              href={sftpAddress}
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: "7px 14px", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <ExternalLink size={13} />
+              <span>Launch SFTP Client</span>
+            </a>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, backgroundColor: "rgba(0, 0, 0, 0.2)", padding: 12, borderRadius: 8, border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Host / Server Address</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpHost}</span>
+              <button onClick={() => { copyToClipboard(sftpHost); setCopiedSftp("sftp-host"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                {copiedSftp === "sftp-host" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>SFTP Port</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>2022</span>
+              <button onClick={() => { copyToClipboard("2022"); setCopiedSftp("sftp-port"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                {copiedSftp === "sftp-port" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Username</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpUsername}</span>
+              <button onClick={() => { copyToClipboard(sftpUsername); setCopiedSftp("sftp-user"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                {copiedSftp === "sftp-user" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Password</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-secondary)", fontStyle: "italic" }}>
+              Your Account Password
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Danger Zone */}
       <div className="saas-card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(239, 68, 68, 0.25)", width: "100%" }}>

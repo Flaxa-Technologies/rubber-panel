@@ -223,6 +223,8 @@ export async function POST(req: NextRequest) {
           environment: JSON.stringify(environment),
           startupCommand,
           allowNodeTransfer: false,
+          sftpEnabled: true,
+          databaseLimit: 1,
           quotaId: quota.id,
           expiresAt: quota.expiresAt,
           gracePeriodDays: quota.gracePeriodDays,

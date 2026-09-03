@@ -30,6 +30,9 @@ export function startHeartbeat() {
   // Ensure Radar telemetry and defense loop is running
   import("./radar-engine").then((m) => m.startRadarLoop()).catch(() => {});
 
+  // Ensure SFTP file transfer server is running on port 2022
+  import("./sftp-server").then((m) => m.startSftpServer()).catch(() => {});
+
   // Don't start if token not configured
   if (!NODE_TOKEN || NODE_TOKEN === "dev-token-placeholder") {
     console.log("[Heartbeat] NODE_TOKEN not set — heartbeat disabled. Configure .env to connect to admin.");

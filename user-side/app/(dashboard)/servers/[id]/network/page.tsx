@@ -2,8 +2,10 @@
 
 import { useServer } from "@/components/server/ServerContext";
 import { formatAllocation } from "@/lib/server-utils";
-import { Network, Copy, Check, Plus, Trash2, Loader2, AlertTriangle, Sparkles, Globe, ExternalLink, ArrowRight, Radio, ShieldAlert } from "lucide-react";
+import { Network, Copy, Check, Plus, Trash2, Loader2, AlertTriangle, Sparkles, Globe, ExternalLink, ArrowRight, Radio, ShieldAlert, FolderOpen } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { copyToClipboard } from "@/lib/clipboard";
 import EmptyState from "@/components/ui/EmptyState";
 import Link from "next/link";
 
@@ -171,6 +173,16 @@ export default function NetworkPage() {
     setReleasingId(null);
   }
 
+  const { data: session } = useSession();
+  const sessionUser = session?.user as any;
+  const username = sessionUser?.username || sessionUser?.name || "user";
+  const shortId = (server.uuid || server.id).replace(/-/g, "").slice(0, 8);
+  const sftpHost = server.node?.fqdn || (server.node as any)?.ip || "127.0.0.1";
+  const sftpPort = 2022;
+  const sftpUsername = `${username}.${shortId}`;
+  const sftpAddress = `sftp://${sftpUsername}@${sftpHost}:${sftpPort}`;
+  const isSftpEnabled = (server as any).sftpEnabled !== false;
+
   const primary = server.allocations[0];
   const additional = server.allocations.slice(1);
 
@@ -212,6 +224,78 @@ export default function NetworkPage() {
           <span>{success}</span>
         </div>
       )}
+
+      {/* SFTP Connection Details Card (Pterodactyl-Style) */}
+      <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#10b981" }}>
+              <FolderOpen size={20} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "flex", alignItems: "center", gap: 8 }}>
+                SFTP Remote File Transfer
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: isSftpEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isSftpEnabled ? "#10b981" : "#ef4444", border: `1px solid ${isSftpEnabled ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}` }}>
+                  {isSftpEnabled ? "PORT 2022 ACTIVE" : "DISABLED"}
+                </span>
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                Connect using FileZilla, WinSCP, Cyberduck, or any SFTP client with your panel password
+              </p>
+            </div>
+          </div>
+
+          {isSftpEnabled && (
+            <a
+              href={sftpAddress}
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: "7px 14px", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <ExternalLink size={13} />
+              <span>Launch SFTP Client</span>
+            </a>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, backgroundColor: "rgba(0, 0, 0, 0.2)", padding: 12, borderRadius: 8, border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Host / Server Address</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpHost}</span>
+              <button onClick={() => { copyToClipboard(sftpHost); setCopied("sftp-host"); setTimeout(() => setCopied(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                {copied === "sftp-host" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>SFTP Port</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>2022</span>
+              <button onClick={() => { copyToClipboard("2022"); setCopied("sftp-port"); setTimeout(() => setCopied(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                {copied === "sftp-port" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Username</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpUsername}</span>
+              <button onClick={() => { copyToClipboard(sftpUsername); setCopied("sftp-user"); setTimeout(() => setCopied(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                {copied === "sftp-user" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Password</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-secondary)", fontStyle: "italic" }}>
+              Your Account Password
+            </div>
+          </div>
+        </div>
+      </div>
 
       {server.allocations.length === 0 ? (
         <EmptyState

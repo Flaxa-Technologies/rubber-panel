@@ -93,6 +93,11 @@ if [ -d "/usr/local/bin/pumpkin" ]; then
   rm -rf "/usr/local/bin/pumpkin"
 fi
 
+# Ensure SFTP port 2022 is open in ufw firewall
+if command -v ufw >/dev/null 2>&1; then
+  ufw allow 2022/tcp >/dev/null 2>&1 || true
+fi
+
 if command -v pm2 >/dev/null 2>&1; then
   sudo pm2 stop rubber-node 2>/dev/null || pm2 stop rubber-node 2>/dev/null || true
 fi

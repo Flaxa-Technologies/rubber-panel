@@ -38,6 +38,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       softwareVersion: true,
       allocations: { orderBy: { port: "asc" } },
       backups: { take: 10, orderBy: { createdAt: "desc" } },
+      databases: { orderBy: { createdAt: "desc" } },
     },
   });
 
@@ -174,6 +175,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
   if (body.cryoSleepMotd !== undefined) {
     data.cryoSleepMotd = body.cryoSleepMotd || null;
+  }
+  if (body.sftpEnabled !== undefined) {
+    data.sftpEnabled = Boolean(body.sftpEnabled);
+  }
+  if (body.databaseLimit !== undefined) {
+    data.databaseLimit = Math.max(0, parseInt(body.databaseLimit) || 0);
   }
 
   // Handle port allocations update if provided

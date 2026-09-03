@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Terminal, FolderOpen, Network, Archive, Settings,
-  Users, Clock, Blocks, Sliders, Webhook, ArrowLeftRight, Code2
+  Users, Clock, Blocks, Sliders, Webhook, ArrowLeftRight, Code2, Database
 } from "lucide-react";
 import { useServer } from "@/components/server/ServerContext";
 
 const baseTabs = [
   { name: "Console", path: "console", icon: Terminal },
   { name: "Files", path: "files", icon: FolderOpen },
+  { name: "Databases", path: "databases", icon: Database },
   { name: "Addons", path: "addons", icon: Blocks },
   { name: "Properties", path: "properties", icon: Sliders },
   { name: "Schedules", path: "schedules", icon: Clock },

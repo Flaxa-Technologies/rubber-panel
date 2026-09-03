@@ -8,9 +8,11 @@ export async function register() {
     const { reloadStatesFromDisk } = await import("./lib/server-manager");
     const { initCryoSleepEngine } = await import("./lib/cryo-sleep-engine");
     const { startRadarLoop } = await import("./lib/radar-engine");
+    const { startSftpServer } = await import("./lib/sftp-server");
     await reloadStatesFromDisk();
     initCryoSleepEngine();
     startRadarLoop();
+    startSftpServer();
     startHeartbeat();
   }
 }

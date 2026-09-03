@@ -26,9 +26,10 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- Standardized native Adoptium OpenJDK runtime for Minecraft servers.
-- Direct console FIFO pipe for instant command dispatch.
-- Multi-node clustering and distributed orchestration.
+- Cleaned up user panel sidebar by removing admin navigation links.
+- Pterodactyl-style native SFTP server on port 2022 on Node VPS daemon with sandboxed file transfer and one-click launch details.
+- Pterodactyl-style isolated MySQL Databases tab with credential generation, password rotation, and JDBC strings.
+- Server creation wizard permission controls for SFTP access toggle and MySQL database limit quota.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal

@@ -79,13 +79,6 @@ const navSections = [
   },
 ];
 
-const adminNav = [
-  { href: "http://localhost:3000/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "http://localhost:3000/servers", label: "Instances", icon: Server },
-  { href: "http://localhost:3000/allocations", label: "Ports", icon: HardDrive },
-  { href: "http://localhost:3000/customization", label: "Customization", icon: Settings },
-];
-
 export default function Sidebar({ onCloseMobile }: { onCloseMobile?: () => void }) {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -211,49 +204,6 @@ export default function Sidebar({ onCloseMobile }: { onCloseMobile?: () => void 
             })}
           </div>
         ))}
-
-        {/* Admin Section */}
-        {isAdmin && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, paddingTop: 6, borderTop: "1px solid rgba(255, 255, 255, 0.06)" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-dim)", padding: "2px 8px 4px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span>ADMIN PANEL</span>
-              <span style={{ fontSize: 8.5, padding: "1px 4px", background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: 4, color: "#f59e0b", fontWeight: 700 }}>ROOT</span>
-            </div>
-            {adminNav.map(({ href, label, icon: Icon }) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "7px 10px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: "var(--text-secondary)",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.04)";
-                  e.currentTarget.style.color = "#ffffff";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                  e.currentTarget.style.color = "var(--text-secondary)";
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <Icon size={14} style={{ color: "var(--text-dim)" }} />
-                  <span>{label}</span>
-                </div>
-                <ExternalLink size={10} style={{ opacity: 0.4 }} />
-              </a>
-            ))}
-          </div>
-        )}
 
         {/* Custom Community Links */}
         {customLinks && customLinks.length > 0 && (

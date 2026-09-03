@@ -126,6 +126,8 @@ const EMPTY_FORM = {
   blockedUploadPaths: "",
   allowNodeTransfer: false,
   allowGoogleDriveBackups: true,
+  sftpEnabled: true,
+  databaseLimit: "1",
   // Step 5: Billing & Lifecycle
   expiresAt: "",
   gracePeriodDays: "3",
@@ -944,6 +946,8 @@ function ServersPageContent() {
         blockedUploadPaths: JSON.stringify(form.blockedUploadPaths.split(",").map(p => p.trim()).filter(Boolean)),
         allowNodeTransfer: form.allowNodeTransfer,
         allowGoogleDriveBackups: form.allowGoogleDriveBackups,
+        sftpEnabled: form.sftpEnabled !== false,
+        databaseLimit: parseInt(form.databaseLimit) || 0,
         cryoSleepEnabled: form.cryoSleepEnabled,
         cryoSleepIdleMinutes: parseInt(form.cryoSleepIdleMinutes) || 10,
         cryoSleepCustomMotdAllowed: form.cryoSleepCustomMotdAllowed,
@@ -1737,6 +1741,53 @@ function ServersPageContent() {
                     <ToggleSwitch
                       checked={form.allowGoogleDriveBackups}
                       onChange={() => setForm(f => ({ ...f, allowGoogleDriveBackups: !f.allowGoogleDriveBackups }))}
+                    />
+                  </div>
+
+                  {/* SFTP Access Toggle */}
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+                        <FolderOpen className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Enable SFTP Access (Port 2022)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits server owners to connect with FileZilla/WinSCP using account credentials
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={form.sftpEnabled}
+                      onChange={() => setForm(f => ({ ...f, sftpEnabled: !f.sftpEnabled }))}
+                    />
+                  </div>
+
+                  {/* MySQL Database Quota Limit */}
+                  <div className="p-4 rounded-xl border space-y-3"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
+                        <Database className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>MySQL Databases Limit (Pterodactyl-Style)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Maximum number of databases this server can provision (0 to disable)
+                        </p>
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.databaseLimit}
+                      onChange={e => setForm(f => ({ ...f, databaseLimit: e.target.value }))}
+                      className="w-full h-10 px-3 rounded-lg border text-sm outline-none font-mono"
+                      style={fieldStyle}
                     />
                   </div>
 

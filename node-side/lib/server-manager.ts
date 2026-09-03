@@ -72,7 +72,7 @@ export function getConsoleLogs(serverId: string): string[] {
 
 // ─── FILE SYSTEM HELPERS ───────────────────────────────────────────────────
 
-function getServerDir(serverId: string): string {
+export function getServerDir(serverId: string): string {
   return path.join(process.cwd(), ".data", "servers", serverId);
 }
 

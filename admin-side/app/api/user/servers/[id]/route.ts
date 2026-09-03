@@ -40,6 +40,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       cryoSleepEnabled: true, cryoSleepIdleMinutes: true, cryoSleepCustomMotdAllowed: true, cryoSleepMotd: true,
       isSandbox: true, sandboxRuntime: true, sandboxDailyHoursLimit: true, sandboxUsedMinutesToday: true,
       sandboxAutoShutdownMinutes: true, sandboxPassword: true,
+      sftpEnabled: true, sftpPort: true, databaseLimit: true,
+      databases: { select: { id: true, name: true, databaseUser: true, host: true, port: true, connectionsFrom: true, createdAt: true } },
       node: { select: { id: true, name: true, status: true, fqdn: true, port: true } },
       software: { select: { name: true, type: true } },
       softwareVersion: { select: { version: true } },

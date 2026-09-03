@@ -214,6 +214,13 @@ model Server {
   // Custom Subdomains (Individual SRV Records)
   customDomainLimit        Int?      @default(-1) // -1 = Inherit Global Default, 0 = Disabled, >0 = Custom Limit
 
+  // SFTP & Remote Access (Pterodactyl-style)
+  sftpEnabled              Boolean   @default(true)
+  sftpPort                 Int       @default(2022)
+
+  // MySQL Databases (Pterodactyl-style)
+  databaseLimit            Int       @default(0) // 0 = disabled, >0 = max databases allowed
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -232,6 +239,7 @@ model Server {
   webhooks        ServerWebhook[]
   transfers       ServerTransfer[]
   subdomains      Subdomain[]
+  databases       ServerDatabase[]
 
   @@map("servers")
 }
@@ -735,6 +743,42 @@ model RadarWebhook {
   createdAt DateTime @default(now())
 
   @@map("radar_webhooks")
+}
+
+// ─── SERVER DATABASES (PTERODACTYL-STYLE) ────────────────────────────────────
+
+model ServerDatabase {
+  id              String    @id @default(uuid())
+  serverId        String
+  name            String    // Database name, e.g. "s_81173e26_db1"
+  databaseUser    String    // Database username, e.g. "u_81173e26_db1"
+  password        String    // Generated password
+  host            String    @default("127.0.0.1")
+  port            Int       @default(3306)
+  connectionsFrom String    @default("%")
+  maxConnections  Int       @default(10)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  server          Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, name])
+  @@map("server_databases")
+}
+
+model DatabaseHost {
+  id              String    @id @default(uuid())
+  name            String    // e.g. "Primary MySQL Node"
+  host            String    @default("127.0.0.1")
+  port            Int       @default(3306)
+  username        String    @default("root")
+  password        String    // Root/Admin password
+  nodeId          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("database_hosts")
 }
 
 
