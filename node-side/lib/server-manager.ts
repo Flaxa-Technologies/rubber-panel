@@ -78,7 +78,7 @@ export function getServerDir(serverId: string): string {
 
 function resolveSecurePath(serverId: string, reqPath: string): string {
   const baseDir = getServerDir(serverId);
-  const normalizedPath = path.normalize(path.join(baseDir, reqPath || "/"));
+  const normalizedPath = path.normalize(path.join(/*turbopackIgnore: true*/ baseDir, reqPath || "/"));
   if (!normalizedPath.startsWith(baseDir)) {
     throw new Error("Directory traversal detected");
   }

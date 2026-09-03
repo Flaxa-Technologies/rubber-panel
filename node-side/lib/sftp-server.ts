@@ -173,7 +173,7 @@ export function startSftpServer() {
             if (!resolved) return sftpStream.status(reqid, SFTP_STATUS.PERMISSION_DENIED);
 
             try {
-              const stat = await fs.stat(resolved);
+              const stat = await fs.stat(/*turbopackIgnore: true*/ resolved);
               sftpStream.attrs(reqid, stat as any);
             } catch {
               sftpStream.status(reqid, SFTP_STATUS.NO_SUCH_FILE);
@@ -189,7 +189,7 @@ export function startSftpServer() {
             if (!resolved) return sftpStream.status(reqid, SFTP_STATUS.PERMISSION_DENIED);
 
             try {
-              const entries = await fs.readdir(resolved);
+              const entries = await fs.readdir(/*turbopackIgnore: true*/ resolved);
               const handleId = ++handleCounter;
               const handleBuf = Buffer.alloc(4);
               handleBuf.writeUInt32BE(handleId, 0);
@@ -230,8 +230,8 @@ export function startSftpServer() {
 
             for (const name of batch) {
               try {
-                const fullPath = path.join(resolvedDir, name);
-                const stat = await fs.stat(fullPath);
+                const fullPath = path.join(/*turbopackIgnore: true*/ resolvedDir, name);
+                const stat = await fs.stat(/*turbopackIgnore: true*/ fullPath);
                 const isDirectory = stat.isDirectory();
                 const perms = (isDirectory ? "d" : "-") + "rw-r--r--";
                 const size = stat.size;
@@ -271,7 +271,7 @@ export function startSftpServer() {
             if (flags & OPEN_MODE.APPEND) nodeFlags = "a";
             if ((flags & OPEN_MODE.CREAT) && (flags & OPEN_MODE.WRITE)) nodeFlags = "w+";
 
-            fsSync.open(resolved, nodeFlags, attrs.mode || 0o644, (err, fd) => {
+            fsSync.open(/*turbopackIgnore: true*/ resolved, nodeFlags, attrs.mode || 0o644, (err, fd) => {
               if (err) {
                 if (err.code === "ENOENT") return sftpStream.status(reqid, SFTP_STATUS.NO_SUCH_FILE);
                 if (err.code === "EACCES") return sftpStream.status(reqid, SFTP_STATUS.PERMISSION_DENIED);
