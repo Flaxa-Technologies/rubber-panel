@@ -30,6 +30,7 @@ const BODY = `## Rubber Panel ${TAG}
 - **Remote SFTP Pull (Import)**: Pull an existing server directly from any external SFTP host into the current instance with connection testing, custom preservation rules (keep world/plugins/config), exclusion filters, and detailed overwrite/deletion pre-flight warning modals.
 - **Remote SFTP Transfer (Export)**: Transfer and export server instances to external SFTP hosts or offsite backup locations with progress tracking and live streaming logs.
 - **Admin Permission Gating**: Added \`allowRemoteTransfer\` toggle in Server Creation Wizard and Edit Modal (Step 4 Permissions) to control access to remote SFTP operations.
+- **Node Setup Modal Upgrades**: Added direct GitHub installer command option (Cloudflare and Codespace safe) and modernized quick command flags.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal
