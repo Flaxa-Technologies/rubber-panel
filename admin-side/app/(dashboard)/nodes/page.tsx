@@ -88,8 +88,10 @@ function SetupCommandModal({
   if (!data) return null;
 
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-  const setupFile = data.setupToken ? `${data.setupToken}.sh` : `ncfg_${data.token}.sh`;
-  const quickCmd = `curl -sSL "${origin}/api/node/configure/${setupFile}" | sudo bash`;
+  const setupFile = data.setupToken || `ncfg_${data.token}`;
+  const quickCmd = `curl -fsSL "${origin}/api/node/configure/${setupFile}" | sudo bash`;
+  const directCmd = `curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash -s -- --admin-url="${origin}" --node-id="${data.nodeId}" --node-token="${data.token}" --port="${data.port || 3001}"`;
+  const [copiedDirect, setCopiedDirect] = useState(false);
 
   return (
     <Modal
@@ -129,12 +131,39 @@ function SetupCommandModal({
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
               style={{ backgroundColor: "var(--color-rp-accent)", color: "#000" }}>
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied 1-Line Command!" : "Copy Command"}
+              {copied ? "Copied Quick Command!" : "Copy Command"}
             </button>
           </div>
           <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
             <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#a3e635" }}>
               {quickCmd}
+            </code>
+          </div>
+        </div>
+
+        {/* Direct Installer Fallback (Codespaces & Cloudflare Safe) */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "#38bdf8" }}>
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Direct GitHub Installer (Codespaces &amp; Cloudflare Safe)</span>
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                await copyToClipboard(directCmd);
+                setCopiedDirect(true);
+                setTimeout(() => setCopiedDirect(false), 3000);
+              }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
+              style={{ backgroundColor: "rgba(56,189,248,0.15)", color: "#38bdf8", border: "1px solid rgba(56,189,248,0.3)" }}>
+              {copiedDirect ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedDirect ? "Copied Direct Command!" : "Copy Direct Command"}
+            </button>
+          </div>
+          <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
+            <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#38bdf8" }}>
+              {directCmd}
             </code>
           </div>
         </div>
