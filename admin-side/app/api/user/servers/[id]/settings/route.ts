@@ -23,6 +23,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const server = await db.server.findFirst({ where: { id, ownerId: userId } });
   if (!server) return NextResponse.json({ error: "Server not found or access denied" }, { status: 404 });
 
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. Settings are locked until migration completes." }, { status: 423 });
+  }
+
   const dataUpdate: Record<string, any> = {};
   if (body.name?.trim()) dataUpdate.name = body.name.trim();
 

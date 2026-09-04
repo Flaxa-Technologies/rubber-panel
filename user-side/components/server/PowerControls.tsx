@@ -57,6 +57,15 @@ export default function PowerControls({
     );
   }
 
+  if (status === "TRANSFERRING") {
+    return (
+      <span className="status-pill" style={{ color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)", background: "rgba(56,189,248,0.12)", display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px" }}>
+        <Loader2 size={13} className="spin" style={{ color: "#38bdf8" }} />
+        <span style={{ fontWeight: 600, fontSize: 12 }}>Migrating Node...</span>
+      </span>
+    );
+  }
+
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       {/* Start / Wake Button */}

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ShieldAlert, Loader2 } from "lucide-react";
 import type { UserServer } from "@/lib/types";
 import { ServerProvider } from "@/components/server/ServerContext";
 import ServerHeader from "@/components/server/ServerHeader";
@@ -125,7 +125,10 @@ export default function ServerLayout({ children }: { children: React.ReactNode }
 
   if (!server) return null;
 
-  const isLockedForUser = server.suspended && !isAdmin;
+  const pathname = usePathname();
+  const isTransferPage = pathname?.endsWith("/transfer");
+  const isTransferring = server.status === "TRANSFERRING";
+  const isLockedForUser = (server.suspended && !isAdmin) || (isTransferring && !isTransferPage);
 
   return (
     <ServerProvider server={server} refreshServer={loadServer}>
@@ -136,7 +139,43 @@ export default function ServerLayout({ children }: { children: React.ReactNode }
           onOptimisticStatus={handleOptimisticStatus}
         />
         {server.suspended && <SuspendedNotice />}
-        {!isLockedForUser ? (
+
+        {isTransferring && (
+          <div className="saas-card" style={{ padding: "14px 18px", marginBottom: 16, background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Loader2 size={18} className="spin" style={{ color: "#38bdf8" }} />
+              <div>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: "#38bdf8" }}>Server Migration in Progress</span>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+                  This server is currently transferring to another node. All controls and file edits are locked to protect data integrity.
+                </p>
+              </div>
+            </div>
+            {!isTransferPage && (
+              <Link href={`/servers/${id}/transfer`} className="btn-secondary-dark" style={{ padding: "6px 14px", fontSize: 12 }}>
+                View Migration
+              </Link>
+            )}
+          </div>
+        )}
+
+        {isTransferring && !isTransferPage ? (
+          <>
+            <ServerNavigation serverId={id} />
+            <div className="saas-card" style={{ padding: "48px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#38bdf8", marginBottom: 16 }}>
+                <Loader2 size={22} className="spin" />
+              </div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>Server Access Locked During Migration</h3>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6, maxWidth: 480, lineHeight: 1.5 }}>
+                Instance files and runtime configurations are transferring across nodes. Server controls, file access, and console inputs are temporarily locked until the destination node finishes setup.
+              </p>
+              <Link href={`/servers/${id}/transfer`} className="btn-primary" style={{ marginTop: 18, padding: "8px 20px", fontSize: 13 }}>
+                View Migration Progress
+              </Link>
+            </div>
+          </>
+        ) : !isLockedForUser ? (
           <>
             <ServerNavigation serverId={id} />
             <div>{children}</div>

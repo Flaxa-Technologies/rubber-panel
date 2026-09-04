@@ -220,12 +220,17 @@ export default function ServerTransferPage() {
 
   // Poll active cluster transfer
   useEffect(() => {
-    if (!activeClusterTransfer || activeClusterTransfer.status === "COMPLETED" || activeClusterTransfer.status === "FAILED") {
+    if (!activeClusterTransfer) return;
+    if (activeClusterTransfer.status === "COMPLETED" || activeClusterTransfer.status === "FAILED") {
+      refreshServer();
       return;
     }
-    const timer = setInterval(fetchClusterStatus, 2000);
+    const timer = setInterval(() => {
+      fetchClusterStatus();
+      refreshServer();
+    }, 2000);
     return () => clearInterval(timer);
-  }, [activeClusterTransfer, fetchClusterStatus]);
+  }, [activeClusterTransfer, fetchClusterStatus, refreshServer]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // POLLING FOR ACTIVE PULL JOB
@@ -1538,7 +1543,7 @@ export default function ServerTransferPage() {
               </div>
 
               <div style={{ padding: "12px 16px", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 10 }}>
-                <Zap size={15} style={{ color: "#38bdf8" }} />
+                <Zap size={15} style={{ color: "#38bdf8", flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>
                   {activeClusterTransfer.currentStep || "Processing transfer pipeline..."}
                 </span>
@@ -1547,6 +1552,54 @@ export default function ServerTransferPage() {
           ) : (
             /* Cluster Migration Setup */
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* If last transfer failed, show error banner */}
+              {activeClusterTransfer && activeClusterTransfer.status === "FAILED" && (
+                <div className="saas-card" style={{ padding: "16px 20px", background: "rgba(244, 63, 94, 0.08)", border: "1px solid rgba(244, 63, 94, 0.3)", borderRadius: 10, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <AlertCircle size={20} style={{ color: "#f43f5e", flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "#f43f5e" }}>
+                        Node Migration Failed
+                      </h4>
+                      <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 3 }}>
+                        {activeClusterTransfer.error || activeClusterTransfer.currentStep || "The transfer pipeline encountered an error. The server remains safely on its current node."}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveClusterTransfer(null)}
+                    className="btn-secondary-dark"
+                    style={{ padding: "6px 12px", fontSize: 12, flexShrink: 0 }}
+                  >
+                    Dismiss &amp; Retry
+                  </button>
+                </div>
+              )}
+
+              {/* If last transfer completed successfully, show success banner */}
+              {activeClusterTransfer && activeClusterTransfer.status === "COMPLETED" && (
+                <div className="saas-card" style={{ padding: "16px 20px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: 10, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <CheckCircle2 size={20} style={{ color: "#34d399", flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "#34d399" }}>
+                        Node Migration Complete!
+                      </h4>
+                      <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 3 }}>
+                        Server files, software, and configurations have been successfully cloned and mounted onto {activeClusterTransfer.targetNode?.name || "destination node"}.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveClusterTransfer(null)}
+                    className="btn-secondary-dark"
+                    style={{ padding: "6px 12px", fontSize: 12, flexShrink: 0 }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 12 }}>
                 {/* Current Node */}
                 <div className="saas-card" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1577,9 +1630,9 @@ export default function ServerTransferPage() {
                     className="input-field"
                     style={{ width: "100%", padding: "8px 12px", fontSize: 13 }}
                   >
-                    {availableNodes.map((node) => (
-                      <option key={node.id} value={node.id}>
-                        {node.name} {node.location ? `(${node.location})` : ""}
+                    {availableNodes.map((node: any) => (
+                      <option key={node.id} value={node.id} disabled={node.freeAllocations === 0}>
+                        {node.name} {node.location ? `(${node.location})` : ""} {node.freeAllocations === 0 ? "— (No free ports)" : node.freeAllocations ? `— (${node.freeAllocations} ports free)` : ""}
                       </option>
                     ))}
                   </select>

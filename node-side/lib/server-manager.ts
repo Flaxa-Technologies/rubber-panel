@@ -34,6 +34,7 @@ export interface ServerInfo {
   serverType?: string;
   startupCommand?: string;
   javaVersion?: string;
+  softwareVersion?: string;
   cryoSleepEnabled?: boolean;
   cryoSleepIdleMinutes?: number;
   cryoSleepMotd?: string;
@@ -276,9 +277,40 @@ function getContainerName(serverId: string) {
   return `rp-server-${serverId}`;
 }
 
+/**
+ * Safely parse and normalize environment variables.
+ * Prevents corrupted string character spreading (e.g. { "0": "{", "1": "\"", "472": "S" })
+ * which turns JSON strings into hundreds of malformed Docker environment arguments.
+ */
+export function parseEnvironment(envInput: any): Record<string, string> {
+  if (!envInput) return {};
+  let obj = envInput;
+  if (typeof envInput === "string") {
+    try {
+      obj = JSON.parse(envInput);
+    } catch {
+      return {};
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    // Crucial: Filter out corrupted numeric index keys (e.g. "0", "1", "472")
+    if (/^\d+$/.test(k)) continue;
+    if (v !== undefined && v !== null) {
+      result[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+  }
+  return result;
+}
+
 function buildEnvArgs(env: Record<string, string>): string[] {
+  const cleanEnv = parseEnvironment(env);
   const args: string[] = [];
-  for (const [k, v] of Object.entries(env)) {
+  for (const [k, v] of Object.entries(cleanEnv)) {
+    if (!k || /^\d+$/.test(k)) continue;
     args.push("-e", `${k}=${v}`);
   }
   return args;
@@ -365,6 +397,9 @@ function attachLogs(serverId: string) {
 // ─── PERSIST STATE TO DISK ────────────────────────────────────────────────
 
 async function saveState(serverId: string, info: ServerInfo) {
+  if (info.environment) {
+    info.environment = parseEnvironment(info.environment);
+  }
   const stateFile = getServerStateFile(serverId);
   await fs.mkdir(path.dirname(stateFile), { recursive: true });
   await fs.writeFile(stateFile, JSON.stringify(info, null, 2), "utf-8");
@@ -385,6 +420,7 @@ export async function getOrLoadServerState(serverId: string): Promise<ServerInfo
   try {
     const raw = await fs.readFile(stateFile, "utf-8");
     info = JSON.parse(raw) as ServerInfo;
+    info.environment = parseEnvironment(info.environment);
     serverStates.set(serverId, info);
     return info;
   } catch {}
@@ -394,6 +430,7 @@ export async function getOrLoadServerState(serverId: string): Promise<ServerInfo
   try {
     const raw = await fs.readFile(legacyFile, "utf-8");
     info = JSON.parse(raw) as ServerInfo;
+    info.environment = parseEnvironment(info.environment);
     serverStates.set(serverId, info);
     await saveState(serverId, info);
     return info;
@@ -421,6 +458,52 @@ export async function getOrLoadServerState(serverId: string): Promise<ServerInfo
   return undefined;
 }
 
+/**
+ * Register an imported/cloned server into memory state and persistent disk state.
+ * Preserves all software, Java version, and startup configurations from source node.
+ */
+export async function registerImportedServer(serverId: string, meta: any): Promise<void> {
+  const cleanEnv = parseEnvironment(meta?.environment);
+  const info: ServerInfo = {
+    id: serverId,
+    name: meta?.name || "Server Instance",
+    status: "STOPPED",
+    ram: Number(meta?.ram) || 1024,
+    cpu: Number(meta?.cpu) || 100,
+    disk: Number(meta?.disk) || 5120,
+    port: meta?.port !== undefined ? Number(meta.port) : 25565,
+    internalPort: meta?.internalPort ? Number(meta.internalPort) : undefined,
+    startupCommand: meta?.startupCommand?.trim() || undefined,
+    environment: cleanEnv,
+    javaVersion: meta?.javaVersion || undefined,
+    serverType: meta?.serverType || undefined,
+    softwareVersion: meta?.softwareVersion || undefined,
+    cryoSleepEnabled: Boolean(meta?.cryoSleepEnabled),
+    cryoSleepIdleMinutes: meta?.cryoSleepIdleMinutes ? Number(meta.cryoSleepIdleMinutes) : 10,
+    cryoSleepMotd: meta?.cryoSleepMotd || undefined,
+  };
+
+  serverStates.set(serverId, info);
+  await saveState(serverId, info);
+
+  // Sync server.jar if present
+  await syncServerJar(serverId).catch(() => {});
+
+  // Register in Cryo-Sleep Engine if applicable
+  try {
+    const { registerCryoServer } = await import("./cryo-sleep-engine");
+    registerCryoServer({
+      serverId,
+      serverName: info.name,
+      port: info.port ?? 25565,
+      serverType: cleanEnv.SERVER_TYPE === "NODEJS" ? "NODEJS" : "MINECRAFT",
+      enabled: info.cryoSleepEnabled === true,
+      idleMinutes: info.cryoSleepIdleMinutes || 10,
+      motd: info.cryoSleepMotd,
+    });
+  } catch {}
+}
+
 
 export async function reloadStatesFromDisk() {
   const stateDir = path.join(process.cwd(), ".data", "server-states");
@@ -434,6 +517,7 @@ export async function reloadStatesFromDisk() {
       try {
         const raw = await fs.readFile(path.join(stateDir, f), "utf-8");
         const info: ServerInfo = JSON.parse(raw);
+        info.environment = parseEnvironment(info.environment);
         const running = await containerRunning(getContainerName(info.id));
         const { isWakeProxyRunning } = await import("./cryo-sleep-proxy");
         const isSleeping = isWakeProxyRunning(info.id);
@@ -475,6 +559,7 @@ export async function reloadStatesFromDisk() {
       try {
         const raw = await fs.readFile(legacyStateFile, "utf-8");
         const info: ServerInfo = JSON.parse(raw);
+        info.environment = parseEnvironment(info.environment);
         // Skip if already loaded from new state dir
         if (serverStates.has(info.id)) {
           await fs.unlink(legacyStateFile).catch(() => {});
@@ -650,7 +735,7 @@ export async function createServer(params: CreateServerParams): Promise<{ succes
   await fs.mkdir(dir, { recursive: true });
 
   const assignedPort = params.port ?? 25566;
-  const env = { ...(params.environment || {}) };
+  const env = parseEnvironment(params.environment);
   const sType = env.SERVER_TYPE || env.TYPE || "MINECRAFT";
   const dImage = env.DOCKER_IMAGE || "";
 
@@ -955,7 +1040,7 @@ export async function updateServerInfo(serverId: string, patch: Partial<ServerIn
   if (patch.disk !== undefined) info.disk = patch.disk;
   if (patch.startupCommand !== undefined) info.startupCommand = patch.startupCommand;
   if (patch.environment) {
-    info.environment = { ...info.environment, ...patch.environment };
+    info.environment = parseEnvironment({ ...(info.environment || {}), ...parseEnvironment(patch.environment) });
   }
 
   serverStates.set(serverId, info);
@@ -987,7 +1072,8 @@ export async function startServer(serverId: string): Promise<{ success: boolean;
   }
 
   // ─── 2. RUN SECURITY SCAN (IF PROTECTION LAYER ENABLED) ─────────────────
-  const env = { ...(info.environment || {}) };
+  info.environment = parseEnvironment(info.environment);
+  const env = { ...info.environment };
   const customInternalPort = env.INTERNAL_PORT || env.PORT || (info.internalPort ? String(info.internalPort) : undefined);
   const sType = env.SERVER_TYPE || env.TYPE || "MINECRAFT";
   const dImageRaw = env.DOCKER_IMAGE || "";
@@ -1672,9 +1758,9 @@ export async function reinstallServer(serverId: string, options: ReinstallOption
 
   // Merge updated environment if provided
   if (options.environment) {
-    info.environment = { ...(info.environment || {}), ...options.environment };
+    info.environment = parseEnvironment({ ...(info.environment || {}), ...parseEnvironment(options.environment) });
   }
-  const env = { ...(info.environment || {}) };
+  const env = parseEnvironment(info.environment);
   const sType = options.softwareType || env.SERVER_TYPE || env.TYPE || info.serverType || "MINECRAFT";
   const dImage = env.DOCKER_IMAGE || "";
   const runtime = detectRuntime(sType, dImage, env);

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Server, MemoryStick, Cpu, HardDrive, ArrowRight, Copy, Check, Moon, Zap, Code2, ExternalLink, Clock } from "lucide-react";
+import { Server, MemoryStick, Cpu, HardDrive, ArrowRight, Copy, Check, Moon, Zap, Code2, ExternalLink, Clock, Loader2 } from "lucide-react";
 import type { UserServer } from "@/lib/types";
 import { formatDisk, formatRam, getServerAddress } from "@/lib/server-utils";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -24,6 +24,13 @@ export function StatusPill({ status, suspended }: { status: string; suspended: b
   }
 
   switch (status) {
+    case "TRANSFERRING":
+      return (
+        <span className="status-pill" style={{ color: "#38bdf8", borderColor: "rgba(56, 189, 248, 0.4)", background: "rgba(56, 189, 248, 0.12)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <Loader2 size={11} className="spin" style={{ color: "#38bdf8" }} />
+          <span>Transferring</span>
+        </span>
+      );
     case "RUNNING":
       return (
         <span className="status-pill" style={{ color: "#ffffff", borderColor: "var(--border-medium)" }}>

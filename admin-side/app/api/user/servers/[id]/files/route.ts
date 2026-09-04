@@ -71,9 +71,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const server = await db.server.findUnique({
     where: { id },
-    select: { id: true, nodeId: true, suspended: true, allowedPaths: true, protectedPaths: true },
+    select: { id: true, nodeId: true, suspended: true, status: true, allowedPaths: true, protectedPaths: true },
   });
   if (!server) return NextResponse.json({ error: "Server not found" }, { status: 404 });
+
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. File access is locked." }, { status: 423 });
+  }
 
   if (server.suspended && !access.isAdmin) {
     return NextResponse.json({ error: "This instance is suspended. File access is locked." }, { status: 403 });
@@ -122,9 +126,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const server = await db.server.findUnique({
     where: { id },
-    select: { id: true, nodeId: true, suspended: true, allowedPaths: true, protectedPaths: true, blockedUploadPaths: true },
+    select: { id: true, nodeId: true, suspended: true, status: true, allowedPaths: true, protectedPaths: true, blockedUploadPaths: true },
   });
   if (!server) return NextResponse.json({ error: "Server not found" }, { status: 404 });
+
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. File modification is locked." }, { status: 423 });
+  }
 
   if (server.suspended && !access.isAdmin) {
     return NextResponse.json({ error: "This instance is suspended. File modification is locked." }, { status: 403 });
@@ -176,9 +184,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   const server = await db.server.findUnique({
     where: { id },
-    select: { id: true, nodeId: true, suspended: true, allowedPaths: true, protectedPaths: true },
+    select: { id: true, nodeId: true, suspended: true, status: true, allowedPaths: true, protectedPaths: true },
   });
   if (!server) return NextResponse.json({ error: "Server not found" }, { status: 404 });
+
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. File deletion is locked." }, { status: 423 });
+  }
 
   if (server.suspended && !access.isAdmin) {
     return NextResponse.json({ error: "This instance is suspended. File deletion is locked." }, { status: 403 });

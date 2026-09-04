@@ -119,6 +119,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Server not found" }, { status: 404 });
   }
 
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. Power controls are locked until migration completes." }, { status: 423 });
+  }
+
   if (server.suspended && !access.isAdmin) {
     return NextResponse.json({ error: "Server is suspended. Contact support." }, { status: 403 });
   }
@@ -187,6 +191,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const server = await db.server.findUnique({ where: { id } });
   if (!server) return NextResponse.json({ error: "Server not found" }, { status: 404 });
+
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. Configuration is locked until migration completes." }, { status: 423 });
+  }
 
   const body = await request.json();
   const updateData: Record<string, unknown> = {};

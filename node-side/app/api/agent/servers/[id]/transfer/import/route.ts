@@ -4,10 +4,7 @@ import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
 import AdmZip from "adm-zip";
-
-function getServerDir(serverId: string): string {
-  return path.join(process.cwd(), ".data", "servers", serverId);
-}
+import { getServerDir, registerImportedServer } from "@/lib/server-manager";
 
 export async function POST(
   request: NextRequest,
@@ -33,15 +30,35 @@ export async function POST(
 
     await fsp.mkdir(targetDir, { recursive: true });
 
+    // Check for server metadata from header (for binary stream uploads)
+    let serverMeta: any = null;
+    const metaHeader = request.headers.get("x-server-meta");
+    if (metaHeader) {
+      try {
+        serverMeta = JSON.parse(Buffer.from(metaHeader, "base64").toString("utf-8"));
+      } catch {}
+    }
+
     const contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("application/json")) {
-      // Direct Node-to-Node Pull via URL
+      // JSON body with metadata and/or direct pull URL
       const body = await request.json();
-      const { sourceUrl, sourceToken, excludePaths, serverMeta } = body;
+      const { sourceUrl, sourceToken, excludePaths } = body;
+      if (body.serverMeta) {
+        serverMeta = body.serverMeta;
+      }
 
       if (!sourceUrl) {
-        return NextResponse.json({ error: "Missing sourceUrl for node transfer import" }, { status: 400 });
+        // If no sourceUrl, check if archive was supplied or just registering state
+        if (serverMeta) {
+          await registerImportedServer(id, serverMeta);
+        }
+        return NextResponse.json({
+          success: true,
+          message: "Server instance metadata registered",
+          targetDir,
+        });
       }
 
       console.log(`[NodeTransfer:Import] Pulling server ${id} stream from source node: ${sourceUrl}`);
@@ -67,10 +84,9 @@ export async function POST(
       const zip = new AdmZip(Buffer.from(arrayBuffer));
       zip.extractAllTo(targetDir, true);
 
-      // Write / update server state
+      // Register server state cleanly into memory & disk
       if (serverMeta) {
-        const stateFile = path.join(targetDir, ".rp-state.json");
-        await fsp.writeFile(stateFile, JSON.stringify(serverMeta, null, 2), "utf-8");
+        await registerImportedServer(id, serverMeta);
       }
 
       console.log(`[NodeTransfer:Import] Successfully unpacked server ${id} onto target node`);
@@ -80,7 +96,7 @@ export async function POST(
         targetDir,
       });
     } else {
-      // Direct binary stream upload
+      // Direct binary stream upload (streamed via Admin panel or direct push)
       const arrayBuffer = await request.arrayBuffer();
       if (!arrayBuffer || arrayBuffer.byteLength === 0) {
         return NextResponse.json({ error: "Empty archive payload" }, { status: 400 });
@@ -89,9 +105,15 @@ export async function POST(
       const zip = new AdmZip(Buffer.from(arrayBuffer));
       zip.extractAllTo(targetDir, true);
 
+      // Register server state cleanly into memory & disk
+      if (serverMeta) {
+        await registerImportedServer(id, serverMeta);
+      }
+
+      console.log(`[NodeTransfer:Import] Direct binary unpack complete for server ${id}`);
       return NextResponse.json({
         success: true,
-        message: "Server instance archive unpacked successfully",
+        message: "Server instance archive unpacked and registered successfully",
         targetDir,
       });
     }

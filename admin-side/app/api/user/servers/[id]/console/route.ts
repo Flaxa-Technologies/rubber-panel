@@ -28,9 +28,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const server = await db.server.findUnique({
     where: { id },
-    select: { id: true, nodeId: true, suspended: true },
+    select: { id: true, nodeId: true, suspended: true, status: true },
   });
   if (!server) return NextResponse.json({ error: "Server not found" }, { status: 404 });
+
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ lines: ["[System] Server is actively migrating to another node. Console output is paused."], total: 1 });
+  }
 
   if (server.suspended && !access.isAdmin) {
     return NextResponse.json({ error: "This instance is suspended. Console access is locked." }, { status: 403 });
@@ -60,6 +64,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     select: { id: true, nodeId: true, suspended: true, status: true },
   });
   if (!server) return NextResponse.json({ error: "Server not found" }, { status: 404 });
+
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. Command execution is locked until migration completes." }, { status: 423 });
+  }
 
   if (server.suspended && !access.isAdmin) {
     return NextResponse.json({ error: "This instance is suspended. Command execution is locked." }, { status: 403 });

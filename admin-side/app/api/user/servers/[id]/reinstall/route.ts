@@ -36,6 +36,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   });
   if (!server) return NextResponse.json({ error: "Server not found or access denied" }, { status: 404 });
 
+  if (server.status === "TRANSFERRING") {
+    return NextResponse.json({ error: "Server is currently transferring to another node. Reinstallation is locked until migration completes." }, { status: 423 });
+  }
+
   const isPumpkin = server.software?.type === "PUMPKIN" || server.serverType === "PUMPKIN" || server.software?.name?.toLowerCase().includes("pumpkin");
   const softwareType = isPumpkin ? "PUMPKIN" : (server.software?.type || "PAPER");
   const softwareVersion = server.softwareVersion?.version || (isPumpkin ? "nightly" : "1.21.1");

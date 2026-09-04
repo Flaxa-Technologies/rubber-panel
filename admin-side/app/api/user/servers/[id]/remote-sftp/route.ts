@@ -97,6 +97,12 @@ export async function POST(
       return NextResponse.json({ error: "Server not found" }, { status: 404 });
     }
 
+    if (server.status === "TRANSFERRING") {
+      return NextResponse.json({
+        error: "Server is currently transferring to another node. Remote SFTP operations are locked.",
+      }, { status: 423 });
+    }
+
     if (server.allowRemoteTransfer === false) {
       return NextResponse.json({
         error: "Remote SFTP pull and transfer is disabled for this server by panel administration.",

@@ -69,6 +69,7 @@ export async function GET(
         ram: server.ram,
         disk: server.disk,
         allowNodeTransfer: server.allowNodeTransfer,
+        allocations: server.allocations,
       },
       activeTransfer,
       availableNodes: allNodes,
@@ -97,7 +98,6 @@ export async function POST(
     preTransferStop = true,
     autoStartAfter = true,
     deleteSourceFiles = true,
-    throttleSpeedMbps = 0,
   } = body;
 
   if (!targetNodeId) {
@@ -114,17 +114,44 @@ export async function POST(
       return NextResponse.json({ error: "Server not found" }, { status: 404 });
     }
 
+    if (server.status === "TRANSFERRING") {
+      return NextResponse.json({ error: "A transfer is already actively in progress for this server instance." }, { status: 400 });
+    }
+
     if (server.nodeId === targetNodeId) {
       return NextResponse.json({ error: "Target node must be different from current source node" }, { status: 400 });
     }
 
     const targetNode = await db.node.findUnique({
       where: { id: targetNodeId },
+      include: {
+        allocations: {
+          where: { assigned: false, disabled: false },
+          orderBy: { port: "asc" },
+        },
+      },
     });
 
     if (!targetNode) {
       return NextResponse.json({ error: "Target node not found" }, { status: 404 });
     }
+
+    let finalAllocation = targetNode.allocations.find((a) => a.id === targetAllocationId);
+    if (!finalAllocation && targetNode.allocations.length > 0) {
+      finalAllocation = targetNode.allocations[0];
+    }
+
+    if (!finalAllocation) {
+      return NextResponse.json({
+        error: `Target node "${targetNode.name}" has no available port allocations. Please create allocations on the node first.`,
+      }, { status: 400 });
+    }
+
+    // Immediately LOCK the server in the database
+    await db.server.update({
+      where: { id },
+      data: { status: "TRANSFERRING" },
+    });
 
     // Create Transfer tracking record
     const transferRecord = await db.serverTransfer.create({
@@ -132,16 +159,15 @@ export async function POST(
         serverId: id,
         sourceNodeId: server.nodeId,
         targetNodeId: targetNode.id,
-        targetAllocationId,
+        targetAllocationId: finalAllocation.id,
         status: "PREPARING",
-        progress: 5,
-        currentStep: "Initializing node transfer orchestrator",
+        progress: 10,
+        currentStep: "Server locked. Preparing transfer pipeline...",
         options: JSON.stringify({
           excludePaths,
           preTransferStop,
           autoStartAfter,
           deleteSourceFiles,
-          throttleSpeedMbps,
         }),
         initiatedBy: user.id || "ADMIN",
       },
@@ -158,138 +184,241 @@ export async function POST(
           await db.serverTransfer.update({
             where: { id: transferRecord.id },
             data: {
-              status: "PREPARING",
               progress: 15,
-              currentStep: "Gracefully stopping server on source node",
+              currentStep: "Gracefully stopping server on source node...",
             },
           });
-          await sendNodeCommand(server.nodeId, `/api/agent/servers/${id}/power`, "POST", { action: "stop", waitSeconds: 5 });
+          await sendNodeCommand(server.nodeId, `/api/agent/servers/${id}/power`, "POST", { action: "stop", waitSeconds: 5 }).catch(() => {});
         }
 
-        // Step 2: Streaming Archive Export & Import
+        // Step 2: Packaging Archive on Source Node
         await db.serverTransfer.update({
           where: { id: transferRecord.id },
           data: {
             status: "TRANSFERRING",
-            progress: 35,
-            currentStep: "Streaming server files and world archives between nodes",
+            progress: 30,
+            currentStep: "Packaging files, world, and configuration on source node...",
           },
         });
 
-        const importPayload = {
-          sourceUrl: `${sourceBaseUrl}/api/agent/servers/${id}/transfer/export`,
-          sourceToken: server.node.authToken,
-          excludePaths,
-          serverMeta: {
-            id: server.id,
-            name: server.name,
-            ram: server.ram,
-            cpu: server.cpu,
-            disk: server.disk,
-            startupCommand: server.startupCommand,
-            environment: server.environment,
-          },
-        };
+        const candidateExportUrls = Array.from(new Set([
+          `${sourceBaseUrl}/api/agent/servers/${id}/transfer/export`,
+          `http://127.0.0.1:${server.node.port}/api/agent/servers/${id}/transfer/export`,
+          `http://localhost:${server.node.port}/api/agent/servers/${id}/transfer/export`,
+        ]));
 
-        const importRes = await fetch(`${targetBaseUrl}/api/agent/servers/${id}/transfer/import`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${targetNode.authToken}`,
-            "X-Rubber-Panel": "admin",
-          },
-          body: JSON.stringify(importPayload),
-        });
-
-        if (!importRes.ok) {
-          const errData = await importRes.json().catch(() => ({}));
-          throw new Error(errData.error || `Target node import failed with HTTP ${importRes.status}`);
+        let exportRes: Response | null = null;
+        for (const url of candidateExportUrls) {
+          try {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${server.node.authToken}`,
+                "X-Rubber-Panel": "admin",
+              },
+              body: JSON.stringify({ excludePaths }),
+            });
+            if (res.ok) {
+              exportRes = res;
+              break;
+            }
+          } catch (err) {
+            console.warn(`[AdminTransfer] Export attempt via ${url} failed:`, err);
+          }
         }
 
-        // Step 3: Update Server Node and Allocations in Database
+        if (!exportRes || !exportRes.ok) {
+          throw new Error("Failed to export server archive from source node");
+        }
+
+        const fileCount = exportRes.headers.get("X-Transfer-Total-Files") || "0";
+        const totalBytes = Number(exportRes.headers.get("X-Transfer-Total-Bytes") || 0);
+        const mbStr = (totalBytes / (1024 * 1024)).toFixed(1);
+
+        await db.serverTransfer.update({
+          where: { id: transferRecord.id },
+          data: {
+            progress: 55,
+            currentStep: `Packaged ${fileCount} files (${mbStr} MB). Streaming archive to target node (${targetNode.name})...`,
+          },
+        });
+
+        const zipBuffer = await exportRes.arrayBuffer();
+
+        // Step 3: Prepare exact clone metadata with target allocation port
+        let cleanEnv: Record<string, string> = {};
+        if (typeof server.environment === "string") {
+          try { cleanEnv = JSON.parse(server.environment); } catch {}
+        } else if (server.environment && typeof server.environment === "object") {
+          cleanEnv = { ...(server.environment as any) };
+        }
+        for (const k of Object.keys(cleanEnv)) {
+          if (/^\d+$/.test(k)) delete cleanEnv[k];
+        }
+        cleanEnv.SERVER_PORT = String(finalAllocation.port);
+        cleanEnv.PORT = String(finalAllocation.port);
+
+        const serverMeta = {
+          id: server.id,
+          name: server.name,
+          ram: server.ram,
+          cpu: server.cpu,
+          disk: server.disk,
+          port: finalAllocation.port,
+          internalPort: server.internalPort,
+          startupCommand: server.startupCommand,
+          environment: cleanEnv,
+          serverType: server.serverType,
+          javaVersion: server.javaVersion,
+          softwareVersion: server.softwareVersionId,
+          cryoSleepEnabled: server.cryoSleepEnabled,
+          cryoSleepIdleMinutes: server.cryoSleepIdleMinutes,
+          cryoSleepMotd: server.cryoSleepMotd,
+        };
+
+        const metaBase64 = Buffer.from(JSON.stringify(serverMeta)).toString("base64");
+
+        await db.serverTransfer.update({
+          where: { id: transferRecord.id },
+          data: {
+            progress: 75,
+            currentStep: `Unpacking ${fileCount} files onto destination node (${targetNode.name})...`,
+          },
+        });
+
+        // Step 4: Upload & Unpack onto target node
+        const candidateImportUrls = Array.from(new Set([
+          `${targetBaseUrl}/api/agent/servers/${id}/transfer/import?wipe=true`,
+          `http://127.0.0.1:${targetNode.port}/api/agent/servers/${id}/transfer/import?wipe=true`,
+          `http://localhost:${targetNode.port}/api/agent/servers/${id}/transfer/import?wipe=true`,
+        ]));
+
+        let importRes: Response | null = null;
+        let importErr = "";
+        for (const url of candidateImportUrls) {
+          try {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/zip",
+                "X-Server-Meta": metaBase64,
+                Authorization: `Bearer ${targetNode.authToken}`,
+                "X-Rubber-Panel": "admin",
+              },
+              body: Buffer.from(zipBuffer),
+            });
+            if (res.ok) {
+              importRes = res;
+              break;
+            } else {
+              const errJson = await res.json().catch(() => ({}));
+              importErr = errJson.error || `HTTP ${res.status}`;
+            }
+          } catch (err: any) {
+            importErr = err.message || "Connection failed";
+          }
+        }
+
+        if (!importRes || !importRes.ok) {
+          throw new Error(`Target node import failed: ${importErr || "Could not reach target node"}`);
+        }
+
+        // Step 5: Update Server Node and Allocations in Database
         await db.serverTransfer.update({
           where: { id: transferRecord.id },
           data: {
             status: "CONFIGURING",
-            progress: 75,
-            currentStep: "Re-assigning node allocations and network routing",
+            progress: 85,
+            currentStep: "Updating server allocations and network database records...",
           },
         });
 
         await db.$transaction(async (tx) => {
-          // If target allocation provided, reassign
-          if (targetAllocationId) {
-            // Free current allocations
-            await tx.allocation.updateMany({
-              where: { serverId: server.id },
-              data: { assigned: false, serverId: null },
-            });
-            // Assign target allocation
-            await tx.allocation.update({
-              where: { id: targetAllocationId },
-              data: { assigned: true, serverId: server.id },
-            });
-          }
-
+          // Free current allocations
+          await tx.allocation.updateMany({
+            where: { serverId: server.id },
+            data: { assigned: false, serverId: null },
+          });
+          // Assign target allocation
+          await tx.allocation.update({
+            where: { id: finalAllocation.id },
+            data: { assigned: true, serverId: server.id },
+          });
           // Update server nodeId
           await tx.server.update({
             where: { id: server.id },
             data: {
               nodeId: targetNode.id,
               status: "STOPPED",
+              environment: JSON.stringify(cleanEnv),
             },
           });
         });
 
-        // Step 4: Source files cleanup
+        // Step 6: Source files cleanup
         if (deleteSourceFiles) {
           await db.serverTransfer.update({
             where: { id: transferRecord.id },
             data: {
-              progress: 85,
-              currentStep: "Cleaning up source node container and archive",
+              progress: 90,
+              currentStep: "Cleaning up source node cache...",
             },
           });
-          try {
-            await fetch(`${sourceBaseUrl}/api/agent/servers/${id}/transfer/cleanup`, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${server.node.authToken}`,
-                "X-Rubber-Panel": "admin",
-              },
-            });
-          } catch (cleanErr) {
-            console.warn("[AdminTransfer] Source cleanup warning:", cleanErr);
+          for (const url of candidateExportUrls) {
+            const cleanupUrl = url.replace("/transfer/export", "/transfer/cleanup");
+            try {
+              await fetch(cleanupUrl, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${server.node.authToken}`,
+                  "X-Rubber-Panel": "admin",
+                },
+              });
+              break;
+            } catch (cleanErr) {
+              console.warn("[AdminTransfer] Source cleanup note:", cleanErr);
+            }
           }
         }
 
-        // Step 5: Auto-start on target node if requested
+        // Step 7: Auto-start on target node if requested
         if (autoStartAfter) {
           await db.serverTransfer.update({
             where: { id: transferRecord.id },
             data: {
               progress: 95,
-              currentStep: "Booting container on destination node",
+              currentStep: "Booting container on destination node...",
             },
           });
           try {
             await sendNodeCommand(targetNode.id, `/api/agent/servers/${id}/power`, "POST", { action: "start" });
+            await db.server.update({
+              where: { id: server.id },
+              data: { status: "RUNNING" },
+            });
           } catch (startErr) {
-            console.warn("[AdminTransfer] Target start warning:", startErr);
+            console.warn("[AdminTransfer] Target start note:", startErr);
           }
         }
 
-        // Step 6: Mark Completed
+        // Step 8: Mark Completed
         await db.serverTransfer.update({
           where: { id: transferRecord.id },
           data: {
             status: "COMPLETED",
             progress: 100,
-            currentStep: "Migration completed successfully!",
+            currentStep: "Migration completed successfully! Server is ready on new node.",
           },
         });
       } catch (err: any) {
         console.error("[AdminTransfer] Pipeline failed:", err);
+        // Reset server status so it is not permanently locked
+        await db.server.update({
+          where: { id: server.id },
+          data: { status: "STOPPED" },
+        }).catch(() => {});
+
         await db.serverTransfer.update({
           where: { id: transferRecord.id },
           data: {
@@ -297,14 +426,14 @@ export async function POST(
             error: err.message || "Transfer pipeline failed",
             currentStep: `Failed: ${err.message || "Unknown error"}`,
           },
-        });
+        }).catch(() => {});
       }
     })();
 
     return NextResponse.json({
       success: true,
       transferId: transferRecord.id,
-      message: "Node transfer pipeline initiated successfully",
+      message: "Node transfer pipeline initiated successfully. Server is locked until completion.",
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to initiate transfer" }, { status: 500 });

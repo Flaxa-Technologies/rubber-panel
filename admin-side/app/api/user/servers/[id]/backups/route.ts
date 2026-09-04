@@ -115,6 +115,10 @@ export async function POST(
       return NextResponse.json({ error: "Server not found" }, { status: 404 });
     }
 
+    if (server.status === "TRANSFERRING") {
+      return NextResponse.json({ error: "Server is currently transferring to another node. Backups are locked until migration completes." }, { status: 423 });
+    }
+
     const targetUserId = userId || server.ownerId;
     const storageType = body.storageType || "GOOGLE_DRIVE"; // GOOGLE_DRIVE | LOCAL | BOTH
     const name = body.name?.trim() || `backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
