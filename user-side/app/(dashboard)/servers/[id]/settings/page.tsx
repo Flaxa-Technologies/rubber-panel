@@ -6,10 +6,14 @@ import { formatDisk, formatRam } from "@/lib/server-utils";
 import {
   Settings, Shield, Zap, Box, Globe, Save, AlertTriangle, Loader2, Check,
   Coffee, Sparkles, Cpu, HardDrive, Terminal, RefreshCw, CheckCircle2,
-  ShieldCheck, ShieldAlert, Code2, Play, Moon, FolderOpen, Copy, ExternalLink
+  ShieldCheck, ShieldAlert, Code2, Play, Moon, FolderOpen, Copy, ExternalLink,
+  Package, Layers, Lock, Flame
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { getSoftwareLogo } from "@/lib/software-catalog";
+import ChangeSoftwareModal from "@/components/server/ChangeSoftwareModal";
+import ReinstallServerModal from "@/components/server/ReinstallServerModal";
 
 interface JavaVersionItem {
   id: string;
@@ -126,6 +130,7 @@ function Section({
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
+        flexWrap: "wrap",
       }}>
         <div>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-pure)" }}>{title}</h3>
@@ -154,7 +159,13 @@ export default function SettingsPage() {
   const isNodeJs = server.serverType === "NODEJS" || server.software?.type === "NODEJS";
   const isDatabase = server.serverType === "DATABASE" || server.software?.type === "DATABASE";
   const isCustom = server.serverType === "CUSTOM";
-  const isMinecraft = !isNodeJs && !isDatabase && !isCustom && (server.serverType === "MINECRAFT" || !server.serverType || !!server.software);
+  const isPumpkin = server.serverType === "PUMPKIN" || server.software?.type === "PUMPKIN" || server.software?.name?.toLowerCase().includes("pumpkin");
+  const isMinecraft = !isNodeJs && !isDatabase && !isCustom && (server.serverType === "MINECRAFT" || isPumpkin || !server.serverType || !!server.software);
+
+  // Admin Permissions
+  const canChangeSoftware = server.allowChangeSoftware !== false;
+  const canChangeVersion = server.allowChangeVersion !== false;
+  const canEditStartup = server.allowEditStartup !== false;
 
   const [name, setName] = useState(server.name);
   const [startupCmd, setStartupCmd] = useState(server.startupCommand ?? (isNodeJs ? "node server.js" : ""));
@@ -166,7 +177,7 @@ export default function SettingsPage() {
   const [internalPort, setInternalPort] = useState(server.internalPort ? String(server.internalPort) : "");
 
   const [javaVersions, setJavaVersions] = useState<JavaVersionItem[]>([]);
-  const [loadingJava, setLoadingJava] = useState(isMinecraft);
+  const [loadingJava, setLoadingJava] = useState(isMinecraft && !isPumpkin);
 
   const { data: session } = useSession();
   const [copiedSftp, setCopiedSftp] = useState<string | null>(null);
@@ -181,13 +192,14 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const [showReinstall, setShowReinstall] = useState(false);
-  const [reinstallConfirm, setReinstallConfirm] = useState("");
-  const [reinstalling, setReinstalling] = useState(false);
-  const [reinstallError, setReinstallError] = useState("");
+  // Modals state
+  const [showSoftwareModal, setShowSoftwareModal] = useState(false);
+  const [showReinstallModal, setShowReinstallModal] = useState(false);
+  const [customReinstallTarget, setCustomReinstallTarget] = useState<{ softwareType?: string; version?: string } | null>(null);
+
   const [savingJavaId, setSavingJavaId] = useState<string | null>(null);
 
-  // Sync state if server context updates (only if not actively selecting/saving)
+  // Sync state if server context updates
   useEffect(() => {
     setName(server.name);
     setStartupCmd(server.startupCommand ?? (isNodeJs ? "node server.js" : ""));
@@ -197,9 +209,9 @@ export default function SettingsPage() {
     setInternalPort(server.internalPort ? String(server.internalPort) : "");
   }, [server.name, server.startupCommand, server.nodeVersion, server.securityProtection, server.cryoSleepMotd, server.internalPort, isNodeJs]);
 
-  // Load available Java versions for Minecraft server
+  // Load available Java versions for Minecraft server (non-pumpkin)
   const loadJavaVersions = useCallback(async () => {
-    if (!isMinecraft) return;
+    if (!isMinecraft || isPumpkin) return;
     setLoadingJava(true);
     try {
       const res = await fetch(`/api/user/servers/${server.id}/java-versions`);
@@ -218,20 +230,22 @@ export default function SettingsPage() {
     } finally {
       setLoadingJava(false);
     }
-  }, [server.id, isMinecraft, selectedJavaVersion, selectedJavaVersionId]);
+  }, [server.id, isMinecraft, isPumpkin, selectedJavaVersion, selectedJavaVersionId]);
 
   useEffect(() => {
-    if (isMinecraft) {
+    if (isMinecraft && !isPumpkin) {
       loadJavaVersions();
     }
-  }, [loadJavaVersions, isMinecraft]);
+  }, [loadJavaVersions, isMinecraft, isPumpkin]);
 
   // Instant auto-save when clicking a Java version
   async function handleSelectJavaVersion(jv: JavaVersionItem) {
+    if (selectedJavaVersionId === jv.id || savingJavaId) return;
     setSelectedJavaVersion(jv.version);
     setSelectedJavaVersionId(jv.id);
     setSavingJavaId(jv.id);
     setSaveError("");
+
     try {
       const res = await fetch(`/api/user/servers/${server.id}/settings`, {
         method: "PATCH",
@@ -264,7 +278,7 @@ export default function SettingsPage() {
     try {
       const payload: any = {
         name: name.trim(),
-        startupCommand: startupCmd.trim() || (isNodeJs ? "node server.js" : undefined),
+        startupCommand: canEditStartup ? (startupCmd.trim() || (isNodeJs ? "node server.js" : undefined)) : undefined,
         cryoSleepMotd: cryoSleepMotd.trim() || undefined,
         internalPort: internalPort.trim() ? parseInt(internalPort.trim(), 10) : null,
       };
@@ -272,7 +286,7 @@ export default function SettingsPage() {
       if (isNodeJs) {
         payload.nodeVersion = selectedNodeVersion;
         payload.securityProtection = securityProtection;
-      } else {
+      } else if (!isPumpkin) {
         payload.javaVersion = selectedJavaVersion;
         payload.javaVersionId = selectedJavaVersionId || undefined;
       }
@@ -297,26 +311,17 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleReinstall() {
-    if (reinstallConfirm !== server.name) return;
-    setReinstalling(true);
-    setReinstallError("");
-    try {
-      const res = await fetch(`/api/user/servers/${server.id}/reinstall`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setReinstallError(data.error ?? "Reinstall failed");
-        return;
-      }
-      setShowReinstall(false);
-      setReinstallConfirm("");
-      await refreshServer?.();
-    } catch {
-      setReinstallError("Network error");
-    } finally {
-      setReinstalling(false);
-    }
-  }
+  const activeSoftwareName = isPumpkin
+    ? "Pumpkin MC (Rust)"
+    : (server.software?.name ?? (isNodeJs ? "Node.js" : isDatabase ? "Database" : "Minecraft Paper"));
+
+  const activeSoftwareLogo = isPumpkin
+    ? "https://raw.githubusercontent.com/Pumpkin-MC/Pumpkin/master/assets/logo.png"
+    : getSoftwareLogo(server.software?.type || server.serverType);
+
+  const activeVersionName = isPumpkin
+    ? "Nightly"
+    : (server.softwareVersion?.version ?? (isNodeJs ? `Node.js v${server.nodeVersion || "20"}` : "1.21.1"));
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -354,568 +359,550 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Main Settings Responsive Grid (Desktop: 2 Columns, Mobile: 1 Column) */}
       <form onSubmit={handleSave} style={{ width: "100%" }}>
-        
-        {/* Node.js Runtime vs Java Runtime Environment */}
-        {isNodeJs ? (
-          <Section
-            title="Node.js Runtime Environment"
-            description="Select the Node.js execution runtime version for your server instance."
-            action={
-              <span style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "3px 8px",
-                borderRadius: 6,
-                background: "rgba(34, 197, 94, 0.12)",
-                color: "#4ade80",
-                border: "1px solid rgba(34, 197, 94, 0.25)",
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-              }}>
-                <Code2 size={12} />
-                Active: Node.js v{selectedNodeVersion}
-              </span>
-            }
-          >
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-              {NODEJS_VERSIONS.map((nv) => {
-                const isSelected = selectedNodeVersion === nv.version;
-                return (
-                  <div
-                    key={nv.version}
-                    onClick={() => setSelectedNodeVersion(nv.version)}
-                    style={{
-                      padding: "14px 16px",
-                      borderRadius: 10,
-                      border: isSelected ? "1.5px solid #22c55e" : "1px solid var(--border-subtle)",
-                      background: isSelected ? "rgba(34, 197, 94, 0.08)" : "var(--bg-surface)",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 8,
-                          background: isSelected ? "rgba(34, 197, 94, 0.2)" : "#1c1c20",
-                          border: isSelected ? "1px solid rgba(34, 197, 94, 0.4)" : "1px solid #2a2a30",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: isSelected ? "#4ade80" : "var(--text-primary)",
-                          fontWeight: 700,
-                          fontSize: 13,
-                          fontFamily: "monospace",
-                        }}>
-                          {nv.version}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-pure)" }}>
-                            {nv.name}
-                          </div>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "monospace" }}>
-                            node:{nv.version}-alpine
-                          </span>
-                        </div>
-                      </div>
-
-                      {isSelected ? (
-                        <CheckCircle2 size={16} style={{ color: "#22c55e", flexShrink: 0, marginTop: 2 }} />
-                      ) : (
-                        <div style={{ width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--border-subtle)", flexShrink: 0, marginTop: 2 }} />
-                      )}
-                    </div>
-
-                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: 0, lineHeight: 1.4 }}>
-                      {nv.description}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </Section>
-        ) : isMinecraft ? (
-          <Section
-            title="Java Runtime Environment"
-            description="Select the JDK runtime version available on your server node."
-            action={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  background: "rgba(245, 158, 11, 0.12)",
-                  color: "#fbbf24",
-                  border: "1px solid rgba(245, 158, 11, 0.25)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                }}>
-                  <Coffee size={12} />
-                  Active: Java {selectedJavaVersion}
-                </span>
-                <button
-                  type="button"
-                  onClick={loadJavaVersions}
-                  disabled={loadingJava}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    color: "var(--text-muted)",
-                    fontSize: 11,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    cursor: "pointer",
-                  }}
-                >
-                  <RefreshCw size={11} className={loadingJava ? "spin" : ""} />
-                  Sync
-                </button>
-              </div>
-            }
-          >
-            {loadingJava ? (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
-                <Loader2 size={18} className="spin" style={{ margin: "0 auto 8px" }} />
-                Loading available Java runtimes...
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                {javaVersions.map((jv) => {
-                  const isSelected = selectedJavaVersion === jv.version;
-                  const isSavingThis = savingJavaId === jv.id;
-                  return (
-                    <div
-                      key={jv.id}
-                      onClick={() => handleSelectJavaVersion(jv)}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))",
+            gap: 16,
+            width: "100%",
+            alignItems: "start",
+          }}
+        >
+          {/* ======================= LEFT COLUMN ======================= */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
+            
+            {/* 1. Server Software & Version Management Card */}
+            <Section
+              title="Server Software & Engine"
+              description="Current server runtime, platform distribution, and version"
+              action={
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {canChangeSoftware || canChangeVersion ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowSoftwareModal(true)}
+                      className="btn btn-primary"
                       style={{
-                        padding: "14px 16px",
-                        borderRadius: 10,
-                        border: isSelected ? "1.5px solid #38bdf8" : "1px solid var(--border-subtle)",
-                        background: isSelected ? "rgba(56, 189, 248, 0.08)" : "var(--bg-surface)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
+                        padding: "5px 12px",
+                        fontSize: 11.5,
                         display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        position: "relative",
+                        alignItems: "center",
+                        gap: 5,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-                          <div style={{
-                            minWidth: 36,
-                            height: 32,
-                            padding: "0 8px",
-                            borderRadius: 8,
-                            background: isSelected ? "rgba(56, 189, 248, 0.2)" : "#1c1c20",
-                            border: isSelected ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid #2a2a30",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: isSelected ? "#38bdf8" : "var(--text-primary)",
-                            fontWeight: 700,
-                            fontSize: jv.version.length > 3 ? 11 : 13,
-                            fontFamily: "monospace",
-                            whiteSpace: "nowrap",
-                            flexShrink: 0,
-                          }}>
-                            {jv.version}
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-pure)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ wordBreak: "break-word" }}>{jv.name}</span>
-                              {jv.isDefault && (
-                                <span style={{
-                                  fontSize: 9.5,
-                                  fontWeight: 700,
-                                  textTransform: "uppercase",
-                                  padding: "1px 5px",
-                                  borderRadius: 4,
-                                  background: "rgba(245, 158, 11, 0.15)",
-                                  color: "#fbbf24",
-                                  border: "1px solid rgba(245, 158, 11, 0.3)",
-                                  flexShrink: 0,
-                                }}>
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "monospace" }}>
-                              JDK {jv.version}
-                            </span>
-                          </div>
-                        </div>
-
-                        {isSavingThis ? (
-                          <Loader2 size={16} className="spin" style={{ color: "#38bdf8", flexShrink: 0, marginTop: 2 }} />
-                        ) : isSelected ? (
-                          <CheckCircle2 size={16} style={{ color: "#38bdf8", flexShrink: 0, marginTop: 2 }} />
-                        ) : (
-                          <div style={{ width: 16, height: 16, borderRadius: "50%", border: "1px solid var(--border-subtle)", flexShrink: 0, marginTop: 2 }} />
-                        )}
-                      </div>
-
-                      <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: 0, lineHeight: 1.4 }}>
-                        {jv.description || `Java ${jv.version} execution environment.`}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Section>
-        ) : null}
-
-        {/* Node.js Security Protection Shield Card */}
-        {isNodeJs && (
-          <Section
-            title="Security Shield & Threat Protection"
-            description="Automatic AST code scan that detects and neutralizes malicious Node.js scripts."
-            action={
-              <span style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "3px 8px",
-                borderRadius: 6,
-                background: securityProtection ? "rgba(34, 197, 94, 0.12)" : "rgba(239, 68, 68, 0.12)",
-                color: securityProtection ? "#4ade80" : "#f87171",
-                border: `1px solid ${securityProtection ? "rgba(34, 197, 94, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}>
-                {securityProtection ? (
-                  <>
-                    <Shield size={12} />
-                    <span>Shield Active</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={12} />
-                    <span>Shield Disabled</span>
-                  </>
-                )}
-              </span>
-            }
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-subtle)" }}>
-                <ShieldCheck size={20} style={{ color: "#4ade80", flexShrink: 0, marginTop: 2 }} />
-                <div style={{ fontSize: 12.5, color: "var(--text-primary)", lineHeight: 1.5 }}>
-                  <strong>Real-Time Threat Scanner:</strong> Analyzes application source code before launch. Detects unauthorized <code>child_process</code> spawning, remote binary download pipes (e.g. <code>curl | sh</code>), and reverse shells.
-                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
-                    *Files inside <code>node_modules/</code> and vendor dependencies are excluded to avoid false positives.
-                  </p>
+                      <Sparkles size={12} />
+                      <span>Change Software / Version</span>
+                    </button>
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        backgroundColor: "rgba(239, 68, 68, 0.12)",
+                        color: "#f87171",
+                        border: "1px solid rgba(239, 68, 68, 0.25)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                      title="Admin has disabled software changes for this instance"
+                    >
+                      <Lock size={10} />
+                      <span>Locked by Admin</span>
+                    </span>
+                  )}
                 </div>
-              </div>
-            </div>
-          </Section>
-        )}
-
-        {/* General Identity */}
-        <Section title="General" description="Basic server identity and display configuration">
-          <Field label="Server Name" hint="Friendly display name for this instance.">
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              maxLength={64}
-              required
-              className="saas-input"
-            />
-          </Field>
-        </Section>
-
-        {/* Hardware Limits */}
-        <Section title="Hardware Limits" description="Resource limits allocated to this server instance">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-            <Field label="RAM Limit">
-              <input value={formatRam(server.ram)} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
-            </Field>
-            <Field label="CPU Core">
-              <input value={`${server.cpu}%`} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
-            </Field>
-            <Field label="Storage">
-              <input value={formatDisk(server.disk)} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
-            </Field>
-          </div>
-        </Section>
-
-        {/* Cryo-Sleep (0-RAM Hibernation & Wake Proxy for Minecraft) */}
-        {isMinecraft && (
-          <Section
-            title="Cryo-Sleep (0-RAM Hibernation & Auto-Wake)"
-            description="Automatic memory-saving hibernation that sleeps empty instances and auto-boots on connection."
-            action={
-              <span style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "3px 8px",
-                borderRadius: 6,
-                background: server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.05)",
-                color: server.cryoSleepEnabled ? "#38bdf8" : "var(--text-dim)",
-                border: `1px solid ${server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.3)" : "var(--border-subtle)"}`,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}>
-                <Moon size={11} />
-                <span>{server.cryoSleepEnabled ? `Active (${server.cryoSleepIdleMinutes || 10}m Timeout)` : "Disabled"}</span>
-              </span>
-            }
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{
-                padding: "12px 14px",
-                background: "rgba(56, 189, 248, 0.05)",
-                border: "1px solid rgba(56, 189, 248, 0.2)",
-                borderRadius: 8,
-                fontSize: 12.5,
-                color: "var(--text-primary)",
-                lineHeight: 1.5,
-              }}>
-                <strong>0-RAM Technology:</strong> When 0 players are connected for {server.cryoSleepIdleMinutes || 10} consecutive minutes, your server process enters Cryo-Sleep. A lightweight wake proxy takes over your server port to listen for connections. Joining the server instantly wakes and starts your Minecraft world.
-              </div>
-
-              {server.cryoSleepCustomMotdAllowed !== false ? (
-                <Field
-                  label="Custom Cryo-Sleep Wake MOTD"
-                  hint="Displayed in player server lists when sleeping. Use § color codes for custom formatting."
-                >
-                  <textarea
-                    value={cryoSleepMotd}
-                    onChange={e => setCryoSleepMotd(e.target.value)}
-                    placeholder="§bRubber Panel §8| §3Server is in Cryo-Sleep\n§e§lClick to Connect & Auto-Wake Instance!"
-                    rows={3}
-                    className="saas-input"
+              }
+            >
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: "rgba(255, 255, 255, 0.02)",
+                  border: "1px solid var(--border-subtle)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 14,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <img
+                    src={activeSoftwareLogo}
+                    alt={activeSoftwareName}
                     style={{
-                      fontFamily: "monospace",
-                      fontSize: 12.5,
-                      resize: "vertical",
-                      minHeight: 70,
-                      lineHeight: 1.4,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 10,
+                      objectFit: "contain",
+                      backgroundColor: "rgba(0,0,0,0.3)",
+                      padding: 4,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      flexShrink: 0,
+                    }}
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
                     }}
                   />
-
-                  {/* Live Minecraft Color Code Preview */}
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
-                      Multiplayer List Live Preview:
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff" }}>
+                        {activeSoftwareName}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "1px 7px",
+                          borderRadius: 4,
+                          backgroundColor: isPumpkin ? "rgba(249, 115, 22, 0.15)" : "rgba(56, 189, 248, 0.15)",
+                          color: isPumpkin ? "#f97316" : "#38bdf8",
+                          border: `1px solid ${isPumpkin ? "rgba(249, 115, 22, 0.3)" : "rgba(56, 189, 248, 0.3)"}`,
+                        }}
+                      >
+                        v{activeVersionName}
+                      </span>
                     </div>
-                    <MinecraftMotdPreview text={cryoSleepMotd} />
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+                      {isPumpkin
+                        ? "Multithreaded Rust architecture. Native Java & Bedrock support."
+                        : `Standard Minecraft instance managed via Rubber Panel.`}
+                    </p>
                   </div>
-                </Field>
-              ) : (
-                <div style={{
-                  padding: "12px 14px",
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 8,
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
-                    Default Rubber Panel Wake MOTD (Locked by Admin):
-                  </div>
-                  <MinecraftMotdPreview text={server.cryoSleepMotd || ""} />
-                  <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6, margin: 0 }}>
-                    *Custom MOTD customization is disabled by administrators for this tier.
-                  </p>
                 </div>
-              )}
+
+                {(canChangeSoftware || canChangeVersion) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSoftwareModal(true)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: "6px 12px" }}
+                  >
+                    Switch Software...
+                  </button>
+                )}
+              </div>
+            </Section>
+
+            {/* 2. General Identity */}
+            <Section title="General Identity" description="Display identification for this server instance">
+              <Field label="Server Name" hint="Friendly display name for this instance.">
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  maxLength={64}
+                  required
+                  className="saas-input"
+                />
+              </Field>
+
+              <Field
+                label="Internal Container Port (Manual Override)"
+                hint="Port the container listens on internally (e.g. 25565 for Minecraft, 3306 for MySQL, 3000 for Web). Leave blank for auto-detection."
+              >
+                <input
+                  type="number"
+                  value={internalPort}
+                  onChange={e => setInternalPort(e.target.value)}
+                  placeholder="Auto-detected (e.g. 25565, 3306, 3000)"
+                  className="saas-input"
+                  style={{ fontFamily: "monospace", fontSize: 12.5 }}
+                />
+              </Field>
+            </Section>
+
+            {/* 3. Startup & Launch Command */}
+            <Section
+              title="Startup Command"
+              description="Custom execution command, flags, and entrypoint options"
+              action={
+                !canEditStartup && (
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      backgroundColor: "rgba(239, 68, 68, 0.12)",
+                      color: "#f87171",
+                      border: "1px solid rgba(239, 68, 68, 0.25)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Lock size={10} />
+                    <span>Locked by Admin</span>
+                  </span>
+                )
+              }
+            >
+              <Field
+                label="Startup Command"
+                hint={
+                  !canEditStartup
+                    ? "Administrator has restricted startup script modification for this instance."
+                    : isNodeJs
+                    ? "Default: node server.js (or 'npm start', 'node index.js')"
+                    : isDatabase
+                    ? "Default entrypoint / startup flags for database container."
+                    : "Leave blank to use default. {{SERVER_MEMORY}} expands to allocated RAM."
+                }
+              >
+                <input
+                  value={startupCmd}
+                  onChange={e => setStartupCmd(e.target.value)}
+                  placeholder={isNodeJs ? "node server.js" : isDatabase ? "docker-entrypoint.sh mysqld" : "java -Xms256M -Xmx{{SERVER_MEMORY}}M -jar server.jar --nogui"}
+                  className="saas-input"
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 12.5,
+                    opacity: canEditStartup ? 1 : 0.65,
+                    cursor: canEditStartup ? "text" : "not-allowed",
+                  }}
+                  readOnly={!canEditStartup}
+                  disabled={!canEditStartup}
+                />
+              </Field>
+            </Section>
+
+            {/* 4. Cryo-Sleep (0-RAM Hibernation & Wake Proxy for Minecraft) */}
+            {isMinecraft && !isPumpkin && (
+              <Section
+                title="Cryo-Sleep (0-RAM Hibernation & Auto-Wake)"
+                description="Automatic memory-saving hibernation that sleeps empty instances and auto-boots on connection."
+                action={
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    background: server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.05)",
+                    color: server.cryoSleepEnabled ? "#38bdf8" : "var(--text-dim)",
+                    border: `1px solid ${server.cryoSleepEnabled ? "rgba(56, 189, 248, 0.3)" : "var(--border-subtle)"}`,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}>
+                    <Moon size={11} />
+                    <span>{server.cryoSleepEnabled ? `Active (${server.cryoSleepIdleMinutes || 10}m Timeout)` : "Disabled"}</span>
+                  </span>
+                }
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{
+                    padding: "12px 14px",
+                    background: "rgba(56, 189, 248, 0.05)",
+                    border: "1px solid rgba(56, 189, 248, 0.2)",
+                    borderRadius: 8,
+                    fontSize: 12.5,
+                    color: "var(--text-primary)",
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>0-RAM Technology:</strong> When 0 players are connected for {server.cryoSleepIdleMinutes || 10} consecutive minutes, your server process enters Cryo-Sleep. A lightweight wake proxy takes over your server port to listen for connections. Joining the server instantly wakes and starts your Minecraft world.
+                  </div>
+
+                  {server.cryoSleepCustomMotdAllowed !== false ? (
+                    <Field
+                      label="Custom Cryo-Sleep Wake MOTD"
+                      hint="Displayed in player server lists when sleeping. Use § color codes for custom formatting."
+                    >
+                      <textarea
+                        value={cryoSleepMotd}
+                        onChange={e => setCryoSleepMotd(e.target.value)}
+                        placeholder="§bRubber Panel §8| §3Server is in Cryo-Sleep\n§e§lClick to Connect & Auto-Wake Instance!"
+                        rows={3}
+                        className="saas-input"
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 12.5,
+                          resize: "vertical",
+                          minHeight: 70,
+                          lineHeight: 1.4,
+                        }}
+                      />
+
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
+                          Multiplayer List Live Preview:
+                        </div>
+                        <MinecraftMotdPreview text={cryoSleepMotd} />
+                      </div>
+                    </Field>
+                  ) : (
+                    <div style={{
+                      padding: "12px 14px",
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 8,
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
+                        Default Rubber Panel Wake MOTD (Locked by Admin):
+                      </div>
+                      <MinecraftMotdPreview text={server.cryoSleepMotd || ""} />
+                      <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6, margin: 0 }}>
+                        *Custom MOTD customization is disabled by administrators for this tier.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {/* Save Buttons */}
+            {saveError && (
+              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, color: "#f87171", fontSize: 13 }}>
+                {saveError}
+              </div>
+            )}
+
+            <div>
+              <button type="submit" disabled={saving} className="btn-solid-white" style={{ padding: "10px 24px", fontSize: 13, fontWeight: 600 }}>
+                {saving ? <Loader2 size={14} className="spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
+                <span>{saving ? "Saving Changes..." : saved ? "Changes Saved!" : "Save All Changes"}</span>
+              </button>
             </div>
-          </Section>
-        )}
-
-        {/* Startup & Launch Command */}
-        <Section title="Startup Command" description="Execution parameters, flags, and entrypoint options">
-          <Field
-            label="Startup Command"
-            hint={isNodeJs ? "Default: node server.js (or 'npm start', 'node index.js')" : isDatabase ? "Default entrypoint / startup flags for database container." : "Leave blank to use default. {{SERVER_MEMORY}} expands to allocated RAM."}
-          >
-            <input
-              value={startupCmd}
-              onChange={e => setStartupCmd(e.target.value)}
-              placeholder={isNodeJs ? "node server.js" : isDatabase ? "docker-entrypoint.sh mysqld" : "java -Xms256M -Xmx{{SERVER_MEMORY}}M -jar server.jar --nogui"}
-              className="saas-input"
-              style={{ fontFamily: "monospace", fontSize: 12.5 }}
-            />
-          </Field>
-        </Section>
-
-        {/* Software / Engine Details */}
-        <Section title="Environment & Runtime" description="Operating runtime, container entrypoints, and port routing">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 14 }}>
-            <Field label="Platform Type">
-              <input value={isNodeJs ? "Node.js JavaScript Runtime" : isDatabase ? "Database Container" : isCustom ? "Custom Container" : (server.software?.name ?? "Minecraft")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
-            </Field>
-            <Field label="Runtime Version">
-              <input value={isNodeJs ? `Node.js v${server.nodeVersion || "20"}` : (server.softwareVersion?.version ?? "Container Default")} readOnly disabled className="saas-input" style={{ opacity: 0.6, cursor: "not-allowed" }} />
-            </Field>
           </div>
 
-          <Field
-            label="Internal Container Port (Manual Override)"
-            hint="Port the container listens on internally (e.g. 3306 for MySQL, 5432 for Postgres, 80 for Nginx, 3000 for Node/Web, 6379 for Redis). Leave blank for auto-detection via Docker inspect."
-          >
-            <input
-              type="number"
-              value={internalPort}
-              onChange={e => setInternalPort(e.target.value)}
-              placeholder="Auto-detected from image (e.g. 3306, 80, 5432, 6379)"
-              className="saas-input"
-              style={{ fontFamily: "monospace", fontSize: 12.5 }}
-            />
-          </Field>
-        </Section>
+          {/* ======================= RIGHT COLUMN ======================= */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
 
-        {saveError && (
-          <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, color: "#f87171", fontSize: 13, marginBottom: 16 }}>
-            {saveError}
+            {/* 1. Hardware Limits Card */}
+            <Section title="Hardware Limits" description="Resource limits allocated to this server instance">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+                <Field label="RAM Limit">
+                  <input value={formatRam(server.ram)} readOnly disabled className="saas-input" style={{ opacity: 0.65, cursor: "not-allowed", fontWeight: 700 }} />
+                </Field>
+                <Field label="CPU Core">
+                  <input value={`${server.cpu}%`} readOnly disabled className="saas-input" style={{ opacity: 0.65, cursor: "not-allowed", fontWeight: 700 }} />
+                </Field>
+                <Field label="Storage">
+                  <input value={formatDisk(server.disk)} readOnly disabled className="saas-input" style={{ opacity: 0.65, cursor: "not-allowed", fontWeight: 700 }} />
+                </Field>
+              </div>
+            </Section>
+
+            {/* 2. Java Runtime Environment (for Java Minecraft) */}
+            {isMinecraft && !isPumpkin && (
+              <Section
+                title="Java Runtime Environment"
+                description="Select the JDK runtime version available on your server node."
+                action={
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      background: "rgba(56, 189, 248, 0.12)",
+                      color: "#38bdf8",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}>
+                      <Coffee size={11} />
+                      Active: Java {selectedJavaVersion}
+                    </span>
+                  </div>
+                }
+              >
+                {loadingJava ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "30px 0", gap: 10, color: "var(--text-muted)", fontSize: 13 }}>
+                    <Loader2 size={16} className="spin" />
+                    <span>Scanning node Java runtimes...</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+                    {javaVersions.map((jv) => {
+                      const isSelected = selectedJavaVersionId === jv.id || (!selectedJavaVersionId && selectedJavaVersion === jv.version);
+                      const isSavingThis = savingJavaId === jv.id;
+                      return (
+                        <div
+                          key={jv.id}
+                          onClick={() => handleSelectJavaVersion(jv)}
+                          style={{
+                            padding: "12px 14px",
+                            borderRadius: 10,
+                            border: isSelected ? "1.5px solid #38bdf8" : "1px solid var(--border-subtle)",
+                            background: isSelected ? "rgba(56, 189, 248, 0.08)" : "var(--bg-surface)",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                padding: "2px 6px",
+                                borderRadius: 5,
+                                background: isSelected ? "rgba(56, 189, 248, 0.2)" : "#1f1f26",
+                                color: isSelected ? "#38bdf8" : "#ffffff",
+                              }}>
+                                JDK {jv.version}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                                {jv.name}
+                              </span>
+                            </div>
+                            {isSavingThis ? (
+                              <Loader2 size={14} className="spin" style={{ color: "#38bdf8" }} />
+                            ) : isSelected ? (
+                              <CheckCircle2 size={15} style={{ color: "#38bdf8" }} />
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Section>
+            )}
+
+            {/* 3. SFTP Connection Details Card (Pterodactyl-Style) */}
+            <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#10b981" }}>
+                    <FolderOpen size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 14.5, fontWeight: 700, color: "#ffffff", display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
+                      SFTP Remote Access Details
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: isSftpEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isSftpEnabled ? "#10b981" : "#ef4444", border: `1px solid ${isSftpEnabled ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}` }}>
+                        {isSftpEnabled ? "PORT 2022 ACTIVE" : "DISABLED"}
+                      </span>
+                    </h3>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, margin: 0 }}>
+                      Direct file management with FileZilla, WinSCP, or Cyberduck
+                    </p>
+                  </div>
+                </div>
+
+                {isSftpEnabled && (
+                  <a
+                    href={sftpAddress}
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, padding: "7px 14px", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <ExternalLink size={13} />
+                    <span>Launch SFTP</span>
+                  </a>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, backgroundColor: "rgba(0, 0, 0, 0.2)", padding: 12, borderRadius: 8, border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Host / Address</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpHost}</span>
+                    <button type="button" onClick={() => { copyToClipboard(sftpHost); setCopiedSftp("sftp-host"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                      {copiedSftp === "sftp-host" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Port</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>2022</span>
+                    <button type="button" onClick={() => { copyToClipboard("2022"); setCopiedSftp("sftp-port"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                      {copiedSftp === "sftp-port" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Username</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpUsername}</span>
+                    <button type="button" onClick={() => { copyToClipboard(sftpUsername); setCopiedSftp("sftp-user"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
+                      {copiedSftp === "sftp-user" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Password</div>
+                  <div style={{ fontSize: 12.5, color: "var(--text-secondary)", fontStyle: "italic" }}>
+                    Your Account Password
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Danger Zone — Reinstall Instance with File Preservation */}
+            <div className="saas-card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(239, 68, 68, 0.3)", width: "100%" }}>
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(239, 68, 68, 0.25)", background: "rgba(239, 68, 68, 0.08)" }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: "#f87171", margin: 0 }}>Danger Zone</h3>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, margin: 0 }}>Irreversible server maintenance operations</p>
+              </div>
+
+              <div style={{ padding: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Reinstall Server Instance</h4>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, margin: 0 }}>
+                      Reinstalls the server engine. Allows you to choose which files and folders (e.g. <code>world</code>, <code>plugins</code>, <code>config</code>) to keep safe.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomReinstallTarget(null);
+                      setShowReinstallModal(true);
+                    }}
+                    className="btn-danger-dark"
+                    style={{ fontSize: 12.5, padding: "8px 18px", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <RefreshCw size={13} />
+                    <span>Reinstall Server...</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
-        )}
-
-        <div style={{ marginBottom: 20 }}>
-          <button type="submit" disabled={saving} className="btn-solid-white" style={{ padding: "9px 20px", fontSize: 13, fontWeight: 600 }}>
-            {saving ? <Loader2 size={14} className="spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
-            <span>{saving ? "Saving..." : saved ? "Changes Saved!" : "Save All Changes"}</span>
-          </button>
         </div>
       </form>
 
-      {/* SFTP Connection Details Card (Pterodactyl-Style) */}
-      <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#10b981" }}>
-              <FolderOpen size={20} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "flex", alignItems: "center", gap: 8 }}>
-                SFTP Remote Access Details
-                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: isSftpEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", color: isSftpEnabled ? "#10b981" : "#ef4444", border: `1px solid ${isSftpEnabled ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}` }}>
-                  {isSftpEnabled ? "PORT 2022 ACTIVE" : "DISABLED"}
-                </span>
-              </h3>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                Upload or manage files directly with FileZilla, WinSCP, or Cyberduck
-              </p>
-            </div>
-          </div>
+      {/* Change Software Modal */}
+      <ChangeSoftwareModal
+        isOpen={showSoftwareModal}
+        onClose={() => setShowSoftwareModal(false)}
+        server={server}
+        onSuccess={async () => {
+          await refreshServer?.();
+        }}
+        onTriggerReinstallWithSoftware={(softwareType, version) => {
+          setCustomReinstallTarget({ softwareType, version });
+          setShowReinstallModal(true);
+        }}
+      />
 
-          {isSftpEnabled && (
-            <a
-              href={sftpAddress}
-              className="btn btn-primary"
-              style={{ fontSize: 12, padding: "7px 14px", display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <ExternalLink size={13} />
-              <span>Launch SFTP Client</span>
-            </a>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, backgroundColor: "rgba(0, 0, 0, 0.2)", padding: 12, borderRadius: 8, border: "1px solid rgba(255, 255, 255, 0.05)" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Host / Server Address</div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpHost}</span>
-              <button onClick={() => { copyToClipboard(sftpHost); setCopiedSftp("sftp-host"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
-                {copiedSftp === "sftp-host" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>SFTP Port</div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>2022</span>
-              <button onClick={() => { copyToClipboard("2022"); setCopiedSftp("sftp-port"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
-                {copiedSftp === "sftp-port" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Username</div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "monospace", fontSize: 12.5, color: "#ffffff" }}>{sftpUsername}</span>
-              <button onClick={() => { copyToClipboard(sftpUsername); setCopiedSftp("sftp-user"); setTimeout(() => setCopiedSftp(null), 2000); }} className="btn btn-ghost" style={{ padding: 2 }}>
-                {copiedSftp === "sftp-user" ? <Check size={12} style={{ color: "#10b981" }} /> : <Copy size={12} />}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>Password</div>
-            <div style={{ fontSize: 12.5, color: "var(--text-secondary)", fontStyle: "italic" }}>
-              Your Account Password
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Danger Zone */}
-      <div className="saas-card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(239, 68, 68, 0.25)", width: "100%" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(239, 68, 68, 0.25)", background: "rgba(239, 68, 68, 0.06)" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#f87171" }}>Danger Zone</h3>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Irreversible and destructive server actions</p>
-        </div>
-
-        <div style={{ padding: 20 }}>
-          {!showReinstall ? (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-              <div>
-                <h4 style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-primary)" }}>Reinstall Instance</h4>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  Wipes server storage and downloads a clean copy of the initial software and starter templates.
-                </p>
-              </div>
-              <button onClick={() => setShowReinstall(true)} className="btn-danger-dark">
-                Reinstall Instance
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <p style={{ fontSize: 13, color: "var(--text-primary)" }}>
-                Type <strong style={{ color: "#ffffff" }}>{server.name}</strong> to confirm reinstall:
-              </p>
-              <input
-                value={reinstallConfirm}
-                onChange={e => setReinstallConfirm(e.target.value)}
-                placeholder={server.name}
-                className="saas-input"
-                style={{ borderColor: "rgba(239,68,68,0.3)" }}
-              />
-              {reinstallError && <p style={{ fontSize: 12, color: "#f87171" }}>{reinstallError}</p>}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { setShowReinstall(false); setReinstallConfirm(""); setReinstallError(""); }} className="btn-secondary-dark">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleReinstall}
-                  disabled={reinstallConfirm !== server.name || reinstalling}
-                  className="btn-danger-dark"
-                >
-                  {reinstalling && <Loader2 size={13} className="spin" />}
-                  <span>{reinstalling ? "Reinstalling..." : "Confirm Reinstall"}</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Reinstall Modal with File Preservation */}
+      <ReinstallServerModal
+        isOpen={showReinstallModal}
+        onClose={() => {
+          setShowReinstallModal(false);
+          setCustomReinstallTarget(null);
+        }}
+        server={server}
+        onSuccess={async () => {
+          await refreshServer?.();
+        }}
+        customSoftwareType={customReinstallTarget?.softwareType}
+        customVersion={customReinstallTarget?.version}
+      />
     </div>
   );
 }

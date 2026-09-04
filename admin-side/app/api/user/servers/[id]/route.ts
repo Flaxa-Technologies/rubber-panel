@@ -35,6 +35,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       ram: true, cpu: true, disk: true, swap: true, createdAt: true,
       ownerId: true,
       startupCommand: true, allowedPaths: true, protectedPaths: true, blockedUploadPaths: true, allowNodeTransfer: true,
+      allowChangeSoftware: true, allowChangeVersion: true, allowEditStartup: true,
       serverType: true, nodeVersion: true, securityProtection: true, securitySuspendedUntil: true, securityQuarantineReason: true,
       javaVersion: true, javaVersionId: true, internalPort: true,
       cryoSleepEnabled: true, cryoSleepIdleMinutes: true, cryoSleepCustomMotdAllowed: true, cryoSleepMotd: true,

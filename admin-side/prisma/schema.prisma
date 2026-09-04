@@ -158,6 +158,9 @@ model Server {
   protectedPaths      String    @default("[\"/server.jar\",\"/start.sh\",\"/rubber-panel\"]")
   blockedUploadPaths  String    @default("[]")
   allowNodeTransfer   Boolean   @default(false)
+  allowChangeSoftware Boolean   @default(true)
+  allowChangeVersion  Boolean   @default(true)
+  allowEditStartup    Boolean   @default(true)
 
   // Billing, Lifecycle & Suspension
   expiresAt                DateTime?

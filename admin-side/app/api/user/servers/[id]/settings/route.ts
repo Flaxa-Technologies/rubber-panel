@@ -25,7 +25,53 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const dataUpdate: Record<string, any> = {};
   if (body.name?.trim()) dataUpdate.name = body.name.trim();
-  if (body.startupCommand !== undefined) dataUpdate.startupCommand = body.startupCommand || null;
+
+  if (body.startupCommand !== undefined) {
+    if (server.allowEditStartup === false && body.startupCommand !== server.startupCommand) {
+      return NextResponse.json({ error: "Editing startup command is restricted by administration for this instance." }, { status: 403 });
+    }
+    dataUpdate.startupCommand = body.startupCommand || null;
+  }
+
+  if (body.softwareId !== undefined) {
+    if (server.allowChangeSoftware === false && body.softwareId !== server.softwareId) {
+      return NextResponse.json({ error: "Changing server software is restricted by administration for this instance." }, { status: 403 });
+    }
+    const sw = await db.software.findUnique({ where: { id: body.softwareId } });
+    if (sw) {
+      dataUpdate.softwareId = sw.id;
+      if (sw.type === "PUMPKIN") {
+        dataUpdate.serverType = "PUMPKIN";
+      } else if (sw.type === "NODEJS") {
+        dataUpdate.serverType = "NODEJS";
+      } else if (sw.type === "DATABASE") {
+        dataUpdate.serverType = "DATABASE";
+      } else {
+        dataUpdate.serverType = "MINECRAFT";
+      }
+      try {
+        const currentEnv = JSON.parse(server.environment || "{}");
+        currentEnv.TYPE = sw.type;
+        currentEnv.SERVER_TYPE = dataUpdate.serverType;
+        dataUpdate.environment = JSON.stringify(currentEnv);
+      } catch {}
+    }
+  }
+
+  if (body.softwareVersionId !== undefined) {
+    if (server.allowChangeVersion === false && body.softwareVersionId !== server.softwareVersionId) {
+      return NextResponse.json({ error: "Changing server version is restricted by administration for this instance." }, { status: 403 });
+    }
+    const ver = await db.softwareVersion.findUnique({ where: { id: body.softwareVersionId } });
+    if (ver) {
+      dataUpdate.softwareVersionId = ver.id;
+      try {
+        const currentEnv = JSON.parse(dataUpdate.environment || server.environment || "{}");
+        currentEnv.VERSION = ver.version;
+        dataUpdate.environment = JSON.stringify(currentEnv);
+      } catch {}
+    }
+  }
 
   if (body.javaVersion !== undefined) {
     const cleanJava = String(body.javaVersion).trim();
@@ -85,7 +131,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const updated = await db.server.update({
     where: { id },
     data: dataUpdate,
-    select: { id: true, name: true, startupCommand: true, javaVersion: true, javaVersionId: true, cryoSleepMotd: true, internalPort: true, environment: true },
+    select: {
+      id: true, name: true, startupCommand: true, javaVersion: true, javaVersionId: true,
+      cryoSleepMotd: true, internalPort: true, environment: true,
+      software: { select: { name: true, type: true } },
+      softwareVersion: { select: { version: true } },
+    },
   });
 
   if (server.nodeId) {

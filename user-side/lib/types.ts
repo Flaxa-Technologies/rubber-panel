@@ -40,6 +40,9 @@ export interface UserServer {
   protectedPaths?: string;      // JSON-encoded string array e.g. '["/server.jar"]'
   blockedUploadPaths?: string;  // JSON-encoded string array e.g. '["/config","/world"]'
   allowNodeTransfer?: boolean;
+  allowChangeSoftware?: boolean;
+  allowChangeVersion?: boolean;
+  allowEditStartup?: boolean;
   serverType?: string;
   nodeVersion?: string | null;
   securityProtection?: boolean;

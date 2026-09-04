@@ -29,9 +29,15 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
   const isSandbox = (server?.isSandbox || server?.serverType === "CODESANDBOX") && server?.serverType !== "MINECRAFT";
   const isNodeJs = server?.serverType === "NODEJS" || server?.software?.type === "NODEJS";
   const isDatabase = server?.serverType === "DATABASE" || server?.software?.type === "DATABASE";
+  const isPumpkin = server?.serverType === "PUMPKIN" || server?.software?.type === "PUMPKIN" || server?.software?.name?.toLowerCase().includes("pumpkin");
   
-  // Filter tabs for Code Sandbox / Node.js / Database vs Minecraft
-  let tabs = baseTabs.filter(tab => {
+  // Filter and adapt tabs for runtimes
+  let tabs = baseTabs.map(tab => {
+    if (tab.path === "properties" && isPumpkin) {
+      return { ...tab, name: "Pumpkin Config" };
+    }
+    return tab;
+  }).filter(tab => {
     if ((isSandbox || isNodeJs || isDatabase) && (tab.path === "addons" || tab.path === "properties")) {
       return false;
     }

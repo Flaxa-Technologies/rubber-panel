@@ -146,6 +146,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.allowNodeTransfer !== undefined) {
     data.allowNodeTransfer = Boolean(body.allowNodeTransfer);
   }
+  if (body.allowChangeSoftware !== undefined) {
+    data.allowChangeSoftware = Boolean(body.allowChangeSoftware);
+  }
+  if (body.allowChangeVersion !== undefined) {
+    data.allowChangeVersion = Boolean(body.allowChangeVersion);
+  }
+  if (body.allowEditStartup !== undefined) {
+    data.allowEditStartup = Boolean(body.allowEditStartup);
+  }
   if (body.expiresAt !== undefined) {
     data.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
   }
@@ -309,6 +318,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       protectedPaths: true,
       blockedUploadPaths: true,
       allowNodeTransfer: true,
+      allowChangeSoftware: true,
+      allowChangeVersion: true,
+      allowEditStartup: true,
       expiresAt: true,
       gracePeriodDays: true,
       autoSuspendOnExpiry: true,

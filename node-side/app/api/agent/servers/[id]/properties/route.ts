@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 
 function getServerDir(serverId: string): string {
@@ -28,8 +29,21 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const propPath = path.join(getServerDir(id), "server.properties");
+    const sDir = getServerDir(id);
+    const pumpkinPath = path.join(sDir, "pumpkin.toml");
+    const hasPumpkin = fsSync.existsSync(pumpkinPath);
 
+    if (hasPumpkin) {
+      const raw = await fs.readFile(pumpkinPath, "utf8");
+      return NextResponse.json({
+        isPumpkin: true,
+        configFile: "pumpkin.toml",
+        raw,
+        properties: parseProperties(raw),
+      });
+    }
+
+    const propPath = path.join(sDir, "server.properties");
     let raw = "";
     try {
       raw = await fs.readFile(propPath, "utf8");
@@ -38,13 +52,14 @@ export async function GET(
     }
 
     const parsed = parseProperties(raw);
-
     return NextResponse.json({
+      isPumpkin: false,
+      configFile: "server.properties",
       properties: parsed,
       raw,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to read server.properties" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to read properties" }, { status: 500 });
   }
 }
 
@@ -55,25 +70,38 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { properties, raw } = body;
+    const { properties, raw, isPumpkin, configFile } = body;
+    const sDir = getServerDir(id);
 
-    const propPath = path.join(getServerDir(id), "server.properties");
+    const pumpkinPath = path.join(sDir, "pumpkin.toml");
+    const isTargetPumpkin = Boolean(isPumpkin || configFile === "pumpkin.toml" || fsSync.existsSync(pumpkinPath));
 
+    if (isTargetPumpkin) {
+      if (typeof raw !== "string") {
+        return NextResponse.json({ error: "Invalid raw TOML content" }, { status: 400 });
+      }
+      await fs.writeFile(pumpkinPath, raw, "utf8");
+      return NextResponse.json({
+        success: true,
+        isPumpkin: true,
+        configFile: "pumpkin.toml",
+        raw,
+      });
+    }
+
+    const propPath = path.join(sDir, "server.properties");
     let contentToWrite = "";
 
     if (typeof raw === "string") {
       contentToWrite = raw;
     } else if (properties && typeof properties === "object") {
-      // Rebuild properties file cleanly
       const lines = [
         "# Minecraft server properties",
         `# Modified via Rubber Panel on ${new Date().toISOString()}`,
       ];
-
       for (const [key, value] of Object.entries(properties)) {
         lines.push(`${key}=${value}`);
       }
-
       contentToWrite = lines.join("\n") + "\n";
     } else {
       return NextResponse.json({ error: "Invalid properties or raw payload" }, { status: 400 });
@@ -83,10 +111,12 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
+      isPumpkin: false,
+      configFile: "server.properties",
       properties: parseProperties(contentToWrite),
       raw: contentToWrite,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to update server.properties" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to update properties" }, { status: 500 });
   }
 }

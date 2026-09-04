@@ -10,9 +10,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const userId = (session.user as any).id;
   const { id } = await params;
 
+  let body: any = {};
+  try { body = await request.json(); } catch {}
+
   const { data, error, status } = await adminApiFetch<object>(
     `/api/user/servers/${id}/reinstall`,
-    { method: "POST", userId }
+    { method: "POST", userId, body }
   );
   if (error) return NextResponse.json({ error }, { status });
   return NextResponse.json(data);

@@ -8,7 +8,8 @@ import {
   RotateCcw, ChevronLeft, ChevronRight, Trash2, Pencil,
   HardDrive, Cpu, Network, Shield, Upload, Check, Filter, User, Lock, FolderOpen,
   ExternalLink, Terminal, ArrowLeftRight, Zap, ShieldAlert, FastForward,
-  Calendar, Clock, Cloud, Coffee, Sparkles, Box, Gamepad2, Code, Database, Globe, Download, Flame, Star
+  Calendar, Clock, Cloud, Coffee, Sparkles, Box, Gamepad2, Code, Database, Globe, Download, Flame, Star,
+  Package, Layers
 } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 
@@ -57,6 +58,9 @@ interface ServerItem {
   software: { name: string; type: string } | null;
   allocations: { ip: string; port: number }[];
   allowNodeTransfer?: boolean;
+  allowChangeSoftware?: boolean;
+  allowChangeVersion?: boolean;
+  allowEditStartup?: boolean;
   cryoSleepEnabled?: boolean;
   cryoSleepIdleMinutes?: number;
   cryoSleepCustomMotdAllowed?: boolean;
@@ -125,6 +129,9 @@ const EMPTY_FORM = {
   protectedPaths: "",
   blockedUploadPaths: "",
   allowNodeTransfer: false,
+  allowChangeSoftware: true,
+  allowChangeVersion: true,
+  allowEditStartup: true,
   allowGoogleDriveBackups: true,
   sftpEnabled: true,
   databaseLimit: "1",
@@ -230,7 +237,9 @@ function ServersPageContent() {
     javaVersion: "21", javaVersionId: "",
     ram: "", cpu: "", disk: "", swap: "", startupCommand: "",
     allowedPaths: "", protectedPaths: "", blockedUploadPaths: "", allowFileUploads: true,
-    showStableOnly: false, allowNodeTransfer: false, allowGoogleDriveBackups: true,
+    showStableOnly: false, allowNodeTransfer: false,
+    allowChangeSoftware: true, allowChangeVersion: true, allowEditStartup: true,
+    allowGoogleDriveBackups: true,
     sftpEnabled: true, databaseLimit: "0",
     cryoSleepEnabled: false, cryoSleepIdleMinutes: "10", cryoSleepCustomMotdAllowed: true, cryoSleepMotd: "",
     expiresAt: "", gracePeriodDays: "3", autoSuspendOnExpiry: true, autoDeleteOnGraceExpiry: false,
@@ -323,6 +332,9 @@ function ServersPageContent() {
           allowFileUploads: true,
           showStableOnly: false,
           allowNodeTransfer: Boolean(s.allowNodeTransfer),
+          allowChangeSoftware: s.allowChangeSoftware !== false,
+          allowChangeVersion: s.allowChangeVersion !== false,
+          allowEditStartup: s.allowEditStartup !== false,
           allowGoogleDriveBackups: s.allowGoogleDriveBackups !== false,
           sftpEnabled: s.sftpEnabled !== false,
           databaseLimit: String(s.databaseLimit ?? 0),
@@ -572,6 +584,9 @@ function ServersPageContent() {
         protectedPaths: editForm.protectedPaths.split(",").map(p => p.trim()).filter(Boolean),
         blockedUploadPaths: editForm.blockedUploadPaths.split(",").map(p => p.trim()).filter(Boolean),
         allowNodeTransfer: editForm.allowNodeTransfer,
+        allowChangeSoftware: editForm.allowChangeSoftware,
+        allowChangeVersion: editForm.allowChangeVersion,
+        allowEditStartup: editForm.allowEditStartup,
         allowGoogleDriveBackups: editForm.allowGoogleDriveBackups,
         sftpEnabled: editForm.sftpEnabled,
         databaseLimit: parseInt(editForm.databaseLimit) || 0,
@@ -950,6 +965,9 @@ function ServersPageContent() {
         protectedPaths: JSON.stringify(form.protectedPaths.split(",").map(p => p.trim()).filter(Boolean)),
         blockedUploadPaths: JSON.stringify(form.blockedUploadPaths.split(",").map(p => p.trim()).filter(Boolean)),
         allowNodeTransfer: form.allowNodeTransfer,
+        allowChangeSoftware: form.allowChangeSoftware,
+        allowChangeVersion: form.allowChangeVersion,
+        allowEditStartup: form.allowEditStartup,
         allowGoogleDriveBackups: form.allowGoogleDriveBackups,
         sftpEnabled: form.sftpEnabled !== false,
         databaseLimit: parseInt(form.databaseLimit) || 0,
@@ -1726,6 +1744,66 @@ function ServersPageContent() {
                     <ToggleSwitch
                       checked={form.allowNodeTransfer}
                       onChange={() => setForm(f => ({ ...f, allowNodeTransfer: !f.allowNodeTransfer }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(168,85,247,0.1)", color: "#a855f7" }}>
+                        <Package className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Change Software (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to switch server software (Paper, Purpur, Pumpkin, Fabric, Spigot, etc.)
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={form.allowChangeSoftware}
+                      onChange={() => setForm(f => ({ ...f, allowChangeSoftware: !f.allowChangeSoftware }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(234,179,8,0.1)", color: "#eab308" }}>
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Change Version (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to upgrade or downgrade server software version
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={form.allowChangeVersion}
+                      onChange={() => setForm(f => ({ ...f, allowChangeVersion: !f.allowChangeVersion }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(34,197,94,0.1)", color: "#22c55e" }}>
+                        <Terminal className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Edit Startup Command (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to modify startup script, JVM flags, and launch arguments
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={form.allowEditStartup}
+                      onChange={() => setForm(f => ({ ...f, allowEditStartup: !f.allowEditStartup }))}
                     />
                   </div>
 
@@ -2627,6 +2705,66 @@ function ServersPageContent() {
                     <ToggleSwitch
                       checked={editForm.allowNodeTransfer}
                       onChange={() => setEditForm(f => ({ ...f, allowNodeTransfer: !f.allowNodeTransfer }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(168,85,247,0.1)", color: "#a855f7" }}>
+                        <Package className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Change Software (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to switch server software (Paper, Purpur, Pumpkin, Fabric, Spigot, etc.)
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={editForm.allowChangeSoftware}
+                      onChange={() => setEditForm(f => ({ ...f, allowChangeSoftware: !f.allowChangeSoftware }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(234,179,8,0.1)", color: "#eab308" }}>
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Change Version (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to upgrade or downgrade server software version
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={editForm.allowChangeVersion}
+                      onChange={() => setEditForm(f => ({ ...f, allowChangeVersion: !f.allowChangeVersion }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(34,197,94,0.1)", color: "#22c55e" }}>
+                        <Terminal className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Edit Startup Command (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to modify startup script, JVM flags, and launch arguments
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={editForm.allowEditStartup}
+                      onChange={() => setEditForm(f => ({ ...f, allowEditStartup: !f.allowEditStartup }))}
                     />
                   </div>
 
