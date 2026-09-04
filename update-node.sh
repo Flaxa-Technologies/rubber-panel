@@ -48,6 +48,26 @@ if [ ! -d "${INSTALL_DIR}" ]; then
   fi
 fi
 
+USE_MAIN=false
+BRANCH="main"
+
+for arg in "$@"; do
+  case $arg in
+    --main|--git)
+      USE_MAIN=true
+      ;;
+    --branch=*)
+      USE_MAIN=true
+      BRANCH="${arg#*=}"
+      ;;
+    *)
+      if [ -d "$arg" ]; then
+        INSTALL_DIR="$arg"
+      fi
+      ;;
+  esac
+done
+
 echo -e "${CYAN}[1/4] Target Node Directory: ${INSTALL_DIR}${NC}"
 REPO="Flaxa-Technologies/rubber-panel"
 
@@ -58,7 +78,12 @@ fi
 if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG="v0.1.0-beta.61"
 fi
-echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
+
+if [ "$USE_MAIN" = "true" ] || [ "$USE_GIT" = "true" ] || [ "$USE_GIT" = "1" ]; then
+  echo -e "${GREEN}✓ Updating directly from GitHub branch '${BRANCH}'...${NC}"
+else
+  echo -e "${GREEN}✓ Targeted Release: ${LATEST_TAG}${NC}"
+fi
 
 NODE_ENV_BAK=""
 if [ -f "${INSTALL_DIR}/.env" ]; then
@@ -67,17 +92,26 @@ fi
 
 TEMP_DIR=$(mktemp -d)
 cd "${TEMP_DIR}"
-NODE_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/node-side.zip"
 
-echo -e "${CYAN}[2/4] Downloading latest node daemon package...${NC}"
-curl -sSL "${NODE_ZIP}" -o node-side.zip || true
-
-if [ -f node-side.zip ] && [ -s node-side.zip ]; then
-  unzip -qo node-side.zip -d "${INSTALL_DIR}"
-  rm -f node-side.zip
-else
-  git clone --depth 1 "https://github.com/${REPO}.git" repo-clone
+if [ "$USE_MAIN" = "true" ] || [ "$USE_GIT" = "true" ] || [ "$USE_GIT" = "1" ]; then
+  echo -e "${CYAN}[2/4] Fetching latest node daemon from branch '${BRANCH}'...${NC}"
+  git clone --depth 1 --branch "${BRANCH}" "https://github.com/${REPO}.git" repo-clone
   cp -r repo-clone/node-side/* "${INSTALL_DIR}/" 2>/dev/null || true
+  rm -rf repo-clone
+else
+  NODE_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/node-side.zip"
+
+  echo -e "${CYAN}[2/4] Downloading latest node daemon package...${NC}"
+  curl -sSL "${NODE_ZIP}" -o node-side.zip || true
+
+  if [ -f node-side.zip ] && [ -s node-side.zip ]; then
+    unzip -qo node-side.zip -d "${INSTALL_DIR}"
+    rm -f node-side.zip
+  else
+    git clone --depth 1 "https://github.com/${REPO}.git" repo-clone
+    cp -r repo-clone/node-side/* "${INSTALL_DIR}/" 2>/dev/null || true
+    rm -rf repo-clone
+  fi
 fi
 
 # Restore node .env so node token, node ID, and admin URL are 100% preserved

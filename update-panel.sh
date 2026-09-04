@@ -55,9 +55,25 @@ if [ ! -d "${INSTALL_DIR}/admin-side" ]; then
   fi
 fi
 
-if [ -n "$1" ] && [ -d "$1/admin-side" ]; then
-  INSTALL_DIR="$1"
-fi
+USE_MAIN=false
+BRANCH="main"
+
+for arg in "$@"; do
+  case $arg in
+    --main|--git)
+      USE_MAIN=true
+      ;;
+    --branch=*)
+      USE_MAIN=true
+      BRANCH="${arg#*=}"
+      ;;
+    *)
+      if [ -d "$arg/admin-side" ]; then
+        INSTALL_DIR="$arg"
+      fi
+      ;;
+  esac
+done
 
 echo -e "${CYAN}[1/5] Target Installation: ${INSTALL_DIR}${NC}"
 REPO="Flaxa-Technologies/rubber-panel"
@@ -69,7 +85,11 @@ fi
 if [ -z "${LATEST_TAG}" ]; then
   LATEST_TAG="v0.1.0-beta.61"
 fi
-echo -e "${GREEN}✓ Applying Release: ${LATEST_TAG}${NC}"
+if [ "$USE_MAIN" = "true" ] || [ "$USE_GIT" = "true" ] || [ "$USE_GIT" = "1" ]; then
+  echo -e "${GREEN}✓ Updating directly from GitHub branch '${BRANCH}'...${NC}"
+else
+  echo -e "${GREEN}✓ Applying Release: ${LATEST_TAG}${NC}"
+fi
 
 ADMIN_ENV_BAK=""
 USER_ENV_BAK=""
@@ -83,25 +103,34 @@ fi
 TEMP_DIR=$(mktemp -d)
 cd "${TEMP_DIR}"
 
-ADMIN_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/admin-side.zip"
-USER_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/user-side.zip"
-
-echo -e "${CYAN}[2/5] Downloading package assets...${NC}"
-curl -sL "${ADMIN_ZIP}" -o admin-side.zip || true
-curl -sL "${USER_ZIP}" -o user-side.zip || true
-
-if [ -f admin-side.zip ] && [ -s admin-side.zip ]; then
-  unzip -qo admin-side.zip -d "${INSTALL_DIR}/admin-side"
-  rm -f admin-side.zip
-else
-  git clone --depth 1 "https://github.com/${REPO}.git" repo-clone
+if [ "$USE_MAIN" = "true" ] || [ "$USE_GIT" = "true" ] || [ "$USE_GIT" = "1" ]; then
+  echo -e "${CYAN}[2/5] Fetching source tree from branch '${BRANCH}'...${NC}"
+  git clone --depth 1 --branch "${BRANCH}" "https://github.com/${REPO}.git" repo-clone
   cp -r repo-clone/admin-side/* "${INSTALL_DIR}/admin-side/" 2>/dev/null || true
   cp -r repo-clone/user-side/* "${INSTALL_DIR}/user-side/" 2>/dev/null || true
-fi
+  rm -rf repo-clone
+else
+  ADMIN_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/admin-side.zip"
+  USER_ZIP="https://github.com/${REPO}/releases/download/${LATEST_TAG}/user-side.zip"
 
-if [ -f user-side.zip ] && [ -s user-side.zip ]; then
-  unzip -qo user-side.zip -d "${INSTALL_DIR}/user-side"
-  rm -f user-side.zip
+  echo -e "${CYAN}[2/5] Downloading package assets...${NC}"
+  curl -sL "${ADMIN_ZIP}" -o admin-side.zip || true
+  curl -sL "${USER_ZIP}" -o user-side.zip || true
+
+  if [ -f admin-side.zip ] && [ -s admin-side.zip ]; then
+    unzip -qo admin-side.zip -d "${INSTALL_DIR}/admin-side"
+    rm -f admin-side.zip
+  else
+    git clone --depth 1 "https://github.com/${REPO}.git" repo-clone
+    cp -r repo-clone/admin-side/* "${INSTALL_DIR}/admin-side/" 2>/dev/null || true
+    cp -r repo-clone/user-side/* "${INSTALL_DIR}/user-side/" 2>/dev/null || true
+    rm -rf repo-clone
+  fi
+
+  if [ -f user-side.zip ] && [ -s user-side.zip ]; then
+    unzip -qo user-side.zip -d "${INSTALL_DIR}/user-side"
+    rm -f user-side.zip
+  fi
 fi
 
 # Restore production .env files so credentials, tokens, and database paths are 100% preserved
