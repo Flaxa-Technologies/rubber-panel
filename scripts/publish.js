@@ -26,10 +26,11 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- Cleaned up user panel sidebar by removing admin navigation links.
-- Pterodactyl-style native SFTP server on port 2022 on Node VPS daemon with sandboxed file transfer and one-click launch details.
-- Pterodactyl-style isolated MySQL Databases tab with credential generation, password rotation, and JDBC strings.
-- Server creation wizard permission controls for SFTP access toggle and MySQL database limit quota.
+- Fixed software selection reversion issue in user panel where selecting another software reverted back to Paper after few seconds.
+- Integrated official icons for Pumpkin (icon.svg), Fabric (logo.png), NeoForge, Vanilla Minecraft, and Bedrock.
+- Separated Version Change into a dedicated modal so changing version does not expose or alter server software.
+- Added live Server Uptime duration counter and Server ID with one-click copy button to the Console page telemetry row.
+- Updated settings API to cleanly process software, version, and runtime changes with individual admin permission gating.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal

@@ -84,7 +84,7 @@ export async function syncPumpkinReleases(): Promise<{
         name: "Pumpkin",
         type: "PUMPKIN",
         description: "Blazing fast, multithreaded Minecraft server written entirely in Rust with native Java & Bedrock support.",
-        logoUrl: "https://raw.githubusercontent.com/Pumpkin-MC/Pumpkin/master/assets/logo.png",
+        logoUrl: "https://pumpkinmc.org/assets/icon.svg",
       },
     });
   } else {

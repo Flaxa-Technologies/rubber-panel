@@ -33,9 +33,14 @@ export default function ChangeSoftwareModal({
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setSearch("");
+      setError("");
+      setSuccessMsg("");
+      return;
+    }
 
-    // Detect current software
+    // Detect current software once when modal opens
     const currentType = server.software?.type || (server.serverType === "PUMPKIN" ? "PUMPKIN" : "PAPER");
     const found = SOFTWARE_CATALOG.find(s => s.type === currentType) || SOFTWARE_CATALOG[0];
     setSelectedSoftware(found);
@@ -58,7 +63,7 @@ export default function ChangeSoftwareModal({
       setLoadingList(false);
     }
     loadSoftwareList();
-  }, [isOpen, server]);
+  }, [isOpen]); // Only run when modal opens/closes, NOT on background server polling
 
   if (!isOpen) return null;
 
@@ -86,8 +91,11 @@ export default function ChangeSoftwareModal({
       const dbVer = dbSoft?.versions?.find((v: any) => (v.version || v) === selectedVersion);
 
       const payload: any = {
-        softwareId: dbSoft?.id,
+        softwareId: dbSoft?.id || selectedSoftware.type,
+        softwareType: selectedSoftware.type,
+        softwareName: selectedSoftware.name,
         softwareVersionId: dbVer?.id,
+        version: selectedVersion,
       };
 
       const res = await fetch(`/api/user/servers/${server.id}/settings`, {

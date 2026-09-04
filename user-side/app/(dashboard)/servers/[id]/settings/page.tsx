@@ -7,12 +7,13 @@ import {
   Settings, Shield, Zap, Box, Globe, Save, AlertTriangle, Loader2, Check,
   Coffee, Sparkles, Cpu, HardDrive, Terminal, RefreshCw, CheckCircle2,
   ShieldCheck, ShieldAlert, Code2, Play, Moon, FolderOpen, Copy, ExternalLink,
-  Package, Layers, Lock, Flame
+  Package, Layers, Lock, Flame, Tag
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { getSoftwareLogo } from "@/lib/software-catalog";
 import ChangeSoftwareModal from "@/components/server/ChangeSoftwareModal";
+import ChangeVersionModal from "@/components/server/ChangeVersionModal";
 import ReinstallServerModal from "@/components/server/ReinstallServerModal";
 
 interface JavaVersionItem {
@@ -194,6 +195,7 @@ export default function SettingsPage() {
 
   // Modals state
   const [showSoftwareModal, setShowSoftwareModal] = useState(false);
+  const [showVersionModal, setShowVersionModal] = useState(false);
   const [showReinstallModal, setShowReinstallModal] = useState(false);
   const [customReinstallTarget, setCustomReinstallTarget] = useState<{ softwareType?: string; version?: string } | null>(null);
 
@@ -315,9 +317,7 @@ export default function SettingsPage() {
     ? "Pumpkin MC (Rust)"
     : (server.software?.name ?? (isNodeJs ? "Node.js" : isDatabase ? "Database" : "Minecraft Paper"));
 
-  const activeSoftwareLogo = isPumpkin
-    ? "https://raw.githubusercontent.com/Pumpkin-MC/Pumpkin/master/assets/logo.png"
-    : getSoftwareLogo(server.software?.type || server.serverType);
+  const activeSoftwareLogo = getSoftwareLogo(isPumpkin ? "PUMPKIN" : (server.software?.type || server.serverType));
 
   const activeVersionName = isPumpkin
     ? "Nightly"
@@ -378,8 +378,25 @@ export default function SettingsPage() {
               title="Server Software & Engine"
               description="Current server runtime, platform distribution, and version"
               action={
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {canChangeSoftware || canChangeVersion ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {canChangeVersion && (
+                    <button
+                      type="button"
+                      onClick={() => setShowVersionModal(true)}
+                      className="btn btn-secondary"
+                      style={{
+                        padding: "5px 12px",
+                        fontSize: 11.5,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                      }}
+                    >
+                      <Tag size={12} />
+                      <span>Change Version</span>
+                    </button>
+                  )}
+                  {canChangeSoftware && (
                     <button
                       type="button"
                       onClick={() => setShowSoftwareModal(true)}
@@ -393,9 +410,10 @@ export default function SettingsPage() {
                       }}
                     >
                       <Sparkles size={12} />
-                      <span>Change Software / Version</span>
+                      <span>Change Software</span>
                     </button>
-                  ) : (
+                  )}
+                  {!canChangeSoftware && !canChangeVersion && (
                     <span
                       style={{
                         fontSize: 10.5,
@@ -409,7 +427,7 @@ export default function SettingsPage() {
                         alignItems: "center",
                         gap: 4,
                       }}
-                      title="Admin has disabled software changes for this instance"
+                      title="Admin has disabled software and version changes for this instance"
                     >
                       <Lock size={10} />
                       <span>Locked by Admin</span>
@@ -476,16 +494,30 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {(canChangeSoftware || canChangeVersion) && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSoftwareModal(true)}
-                    className="btn btn-secondary"
-                    style={{ fontSize: 12, padding: "6px 12px" }}
-                  >
-                    Switch Software...
-                  </button>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {canChangeVersion && (
+                    <button
+                      type="button"
+                      onClick={() => setShowVersionModal(true)}
+                      className="btn btn-secondary"
+                      style={{ fontSize: 12, padding: "6px 12px", display: "flex", alignItems: "center", gap: 5 }}
+                    >
+                      <Tag size={12} />
+                      <span>Change Version...</span>
+                    </button>
+                  )}
+                  {canChangeSoftware && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSoftwareModal(true)}
+                      className="btn btn-primary"
+                      style={{ fontSize: 12, padding: "6px 12px", display: "flex", alignItems: "center", gap: 5 }}
+                    >
+                      <Sparkles size={12} />
+                      <span>Switch Software...</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </Section>
 
@@ -874,6 +906,21 @@ export default function SettingsPage() {
           </div>
         </div>
       </form>
+
+      {/* Change Version Modal */}
+      <ChangeVersionModal
+        isOpen={showVersionModal}
+        onClose={() => setShowVersionModal(false)}
+        server={server}
+        onSuccess={async () => {
+          await refreshServer?.();
+        }}
+        onTriggerReinstallWithVersion={(version) => {
+          const currentType = server.software?.type || (server.serverType === "PUMPKIN" ? "PUMPKIN" : "PAPER");
+          setCustomReinstallTarget({ softwareType: currentType, version });
+          setShowReinstallModal(true);
+        }}
+      />
 
       {/* Change Software Modal */}
       <ChangeSoftwareModal

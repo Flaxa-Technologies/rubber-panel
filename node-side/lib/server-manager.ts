@@ -28,6 +28,8 @@ export interface ServerInfo {
   netRx?: string;
   netTx?: string;
   uptime?: number;
+  uptimeSeconds?: number;
+  startedAt?: number | null;
   environment?: Record<string, string>;
   serverType?: string;
   startupCommand?: string;
@@ -1946,6 +1948,9 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
   let netRx = "0 B";
   let netTx = "0 B";
 
+  let startedAt: number | null = (state as any).startedAt || null;
+  let uptimeSeconds = 0;
+
   if (isRunning) {
     const live = await fetchLiveDockerStats(containerName, state.ram || 1024);
     cpuUsage = live.cpuUsage;
@@ -1953,6 +1958,23 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
     ramPercent = live.ramPercent;
     netRx = live.netRx;
     netTx = live.netTx;
+
+    if (!startedAt) {
+      try {
+        const { stdout } = await execAsync(`docker inspect --format='{{.State.StartedAt}}' ${containerName}`);
+        const parsed = new Date(stdout.trim()).getTime();
+        if (!isNaN(parsed) && parsed > 0) {
+          startedAt = parsed;
+          (state as any).startedAt = parsed;
+        }
+      } catch {}
+    }
+
+    if (startedAt) {
+      uptimeSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    }
+  } else {
+    (state as any).startedAt = null;
   }
 
   try {
@@ -1965,6 +1987,8 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
       ramPercent,
       netRx,
       netTx,
+      startedAt,
+      uptimeSeconds,
       diskUsedBytes: diskBytes,
       diskUsedMb,
       isCryoSleeping: isSleeping,
@@ -1978,6 +2002,10 @@ export async function getServerStatus(serverId: string): Promise<ServerInfo | un
       ramPercent,
       netRx,
       netTx,
+      startedAt,
+      uptimeSeconds,
+      diskUsedBytes: 0,
+      diskUsedMb: 0,
       isCryoSleeping: isSleeping,
       status: state.status,
     };
@@ -2007,6 +2035,8 @@ export async function getServerLiveStats(serverId: string) {
     diskPercent,
     netRx: status.netRx || "0 B",
     netTx: status.netTx || "0 B",
+    startedAt: (status as any).startedAt || null,
+    uptimeSeconds: (status as any).uptimeSeconds || 0,
     timestamp: Date.now(),
   };
 }

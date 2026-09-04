@@ -33,11 +33,39 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     dataUpdate.startupCommand = body.startupCommand || null;
   }
 
-  if (body.softwareId !== undefined) {
-    if (server.allowChangeSoftware === false && body.softwareId !== server.softwareId) {
+  if (body.softwareId !== undefined || body.softwareType !== undefined) {
+    if (server.allowChangeSoftware === false) {
       return NextResponse.json({ error: "Changing server software is restricted by administration for this instance." }, { status: 403 });
     }
-    const sw = await db.software.findUnique({ where: { id: body.softwareId } });
+
+    const targetIdentifier = String(body.softwareId || body.softwareType || "").trim();
+    let sw = await db.software.findUnique({ where: { id: targetIdentifier } }).catch(() => null);
+
+    if (!sw) {
+      sw = await db.software.findFirst({
+        where: {
+          OR: [
+            { type: targetIdentifier.toUpperCase() },
+            { name: targetIdentifier },
+            ...(body.softwareType ? [{ type: body.softwareType.toUpperCase() }] : []),
+            ...(body.softwareName ? [{ name: body.softwareName }] : []),
+          ],
+        },
+      });
+    }
+
+    if (!sw && (body.softwareType || body.softwareName)) {
+      const swType = (body.softwareType || targetIdentifier).toUpperCase();
+      const swName = body.softwareName || targetIdentifier;
+      sw = await db.software.create({
+        data: {
+          name: swName,
+          type: swType,
+          description: `${swName} server runtime environment.`,
+        },
+      }).catch(() => null);
+    }
+
     if (sw) {
       dataUpdate.softwareId = sw.id;
       if (sw.type === "PUMPKIN") {
@@ -58,19 +86,59 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
   }
 
-  if (body.softwareVersionId !== undefined) {
-    if (server.allowChangeVersion === false && body.softwareVersionId !== server.softwareVersionId) {
+  if (body.softwareVersionId !== undefined || body.version !== undefined) {
+    if (server.allowChangeVersion === false) {
       return NextResponse.json({ error: "Changing server version is restricted by administration for this instance." }, { status: 403 });
     }
-    const ver = await db.softwareVersion.findUnique({ where: { id: body.softwareVersionId } });
+
+    const currentSoftwareId = dataUpdate.softwareId || server.softwareId;
+    let ver = null;
+
+    if (body.softwareVersionId) {
+      ver = await db.softwareVersion.findUnique({ where: { id: body.softwareVersionId } }).catch(() => null);
+    }
+
+    const versionStr = body.version ? String(body.version).trim() : null;
+
+    if (!ver && versionStr && currentSoftwareId) {
+      ver = await db.softwareVersion.findFirst({
+        where: {
+          softwareId: currentSoftwareId,
+          version: versionStr,
+        },
+      });
+
+      if (!ver) {
+        ver = await db.softwareVersion.create({
+          data: {
+            softwareId: currentSoftwareId,
+            version: versionStr,
+            isStable: true,
+          },
+        }).catch(() => null);
+      }
+    }
+
     if (ver) {
       dataUpdate.softwareVersionId = ver.id;
+    }
+
+    const finalVerString = ver?.version || versionStr;
+    if (finalVerString) {
       try {
         const currentEnv = JSON.parse(dataUpdate.environment || server.environment || "{}");
-        currentEnv.VERSION = ver.version;
+        currentEnv.VERSION = finalVerString;
         dataUpdate.environment = JSON.stringify(currentEnv);
       } catch {}
     }
+  }
+
+  if (body.nodeVersion !== undefined) {
+    dataUpdate.nodeVersion = String(body.nodeVersion).trim();
+  }
+
+  if (body.securityProtection !== undefined) {
+    dataUpdate.securityProtection = Boolean(body.securityProtection);
   }
 
   if (body.javaVersion !== undefined) {

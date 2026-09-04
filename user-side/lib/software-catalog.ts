@@ -41,7 +41,7 @@ export const SOFTWARE_CATALOG: SoftwareCatalogItem[] = [
     id: "pumpkin",
     name: "Pumpkin MC (Rust)",
     type: "PUMPKIN",
-    logo: "https://raw.githubusercontent.com/Pumpkin-MC/Pumpkin/master/assets/logo.png",
+    logo: "https://pumpkinmc.org/assets/icon.svg",
     description: "Blazingly fast, multi-threaded Minecraft server written entirely in Rust. Crossplay with Java and Bedrock natively.",
     tag: "Rust Native",
     tagColor: "#f97316",
@@ -52,7 +52,7 @@ export const SOFTWARE_CATALOG: SoftwareCatalogItem[] = [
     id: "fabric",
     name: "Fabric",
     type: "FABRIC",
-    logo: "https://avatars.githubusercontent.com/u/45091763?s=200&v=4",
+    logo: "https://fabricmc.net/assets/logo.png",
     description: "Lightweight, modular modding toolchain for Minecraft. Excellent for modern modpacks and optimization mods like Lithium & Sodium.",
     tag: "Modded",
     tagColor: "#eab308",
@@ -74,7 +74,7 @@ export const SOFTWARE_CATALOG: SoftwareCatalogItem[] = [
     id: "neoforge",
     name: "NeoForge",
     type: "NEOFORGE",
-    logo: "https://avatars.githubusercontent.com/u/138128509?s=200&v=4",
+    logo: "https://neoforged.net/img/authors/neoforged.png",
     description: "Next-generation community-driven fork of Forge designed for modern Minecraft versions with cleaner APIs and stability.",
     tag: "Modern Mods",
     tagColor: "#ef4444",
@@ -96,7 +96,7 @@ export const SOFTWARE_CATALOG: SoftwareCatalogItem[] = [
     id: "vanilla",
     name: "Vanilla Minecraft",
     type: "VANILLA",
-    logo: "https://launchercontent.mojang.com/icons/minecraft.png",
+    logo: "https://tse1.explicit.bing.net/th/id/OIP.TX0odM9CI73kM6M1Pm7yKAHaHk?r=0&rs=1&pid=ImgDetMain&o=7&rm=3",
     description: "The authentic, official Mojang Minecraft Java Edition server without modifications or plugins.",
     tag: "Official",
     tagColor: "#22c55e",
@@ -129,7 +129,7 @@ export const SOFTWARE_CATALOG: SoftwareCatalogItem[] = [
     id: "bedrock",
     name: "Bedrock Dedicated",
     type: "BEDROCK",
-    logo: "https://launchercontent.mojang.com/icons/minecraft.png",
+    logo: "https://tse1.explicit.bing.net/th/id/OIP.TX0odM9CI73kM6M1Pm7yKAHaHk?r=0&rs=1&pid=ImgDetMain&o=7&rm=3",
     description: "Official Minecraft Bedrock Edition server for players on mobile (iOS/Android), Windows 10/11, and consoles.",
     tag: "Bedrock",
     tagColor: "#14b8a6",
@@ -139,15 +139,18 @@ export const SOFTWARE_CATALOG: SoftwareCatalogItem[] = [
 ];
 
 export function getSoftwareLogo(typeOrName?: string | null): string {
-  if (!typeOrName) return "https://launchercontent.mojang.com/icons/minecraft.png";
+  const vanillaDefault = "https://tse1.explicit.bing.net/th/id/OIP.TX0odM9CI73kM6M1Pm7yKAHaHk?r=0&rs=1&pid=ImgDetMain&o=7&rm=3";
+  if (!typeOrName) return vanillaDefault;
   const upper = typeOrName.toUpperCase();
   const found = SOFTWARE_CATALOG.find(s => s.type === upper || s.name.toUpperCase() === upper || s.id === typeOrName.toLowerCase());
   if (found) return found.logo;
-  if (upper.includes("PUMPKIN")) return "https://raw.githubusercontent.com/Pumpkin-MC/Pumpkin/master/assets/logo.png";
+  if (upper.includes("PUMPKIN")) return "https://pumpkinmc.org/assets/icon.svg";
   if (upper.includes("PAPER")) return "https://avatars.githubusercontent.com/u/7608950?s=200&v=4";
   if (upper.includes("PURPUR")) return "https://purpurmc.org/images/purpur.svg";
-  if (upper.includes("FABRIC")) return "https://avatars.githubusercontent.com/u/45091763?s=200&v=4";
+  if (upper.includes("FABRIC")) return "https://fabricmc.net/assets/logo.png";
+  if (upper.includes("NEOFORGE")) return "https://neoforged.net/img/authors/neoforged.png";
   if (upper.includes("FORGE")) return "https://avatars.githubusercontent.com/u/522144?s=200&v=4";
   if (upper.includes("SPIGOT")) return "https://static.spigotmc.org/img/spigot.png";
-  return "https://launchercontent.mojang.com/icons/minecraft.png";
+  if (upper.includes("BEDROCK") || upper.includes("VANILLA")) return vanillaDefault;
+  return vanillaDefault;
 }
