@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAgentToken } from "@/lib/auth";
+import { verifyAgentToken, verifyAgentTokenAsync } from "@/lib/auth";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
@@ -10,7 +10,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!verifyAgentToken(request)) {
+  if (!(await verifyAgentTokenAsync(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

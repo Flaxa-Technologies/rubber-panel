@@ -207,6 +207,7 @@ export async function POST(
           `http://localhost:${server.node.port}/api/agent/servers/${id}/transfer/export`,
         ]));
 
+        const sourceAuthToken = (server.node.authToken || "").trim().replace(/^["']|["']$/g, "");
         let exportRes: Response | null = null;
         for (const url of candidateExportUrls) {
           try {
@@ -214,8 +215,9 @@ export async function POST(
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${server.node.authToken}`,
+                Authorization: `Bearer ${sourceAuthToken}`,
                 "X-Rubber-Panel": "admin",
+                "X-Node-Id": server.node.id,
               },
               body: JSON.stringify({ excludePaths }),
             });
@@ -246,7 +248,7 @@ export async function POST(
 
         const zipBuffer = await exportRes.arrayBuffer();
 
-        // Step 3: Prepare exact clone metadata with target allocation port
+        // Step 3: Server metadata clone
         let cleanEnv: Record<string, string> = {};
         if (typeof server.environment === "string") {
           try { cleanEnv = JSON.parse(server.environment); } catch {}
@@ -288,6 +290,7 @@ export async function POST(
         });
 
         // Step 4: Upload & Unpack onto target node
+        const targetAuthToken = (targetNode.authToken || "").trim().replace(/^["']|["']$/g, "");
         const candidateImportUrls = Array.from(new Set([
           `${targetBaseUrl}/api/agent/servers/${id}/transfer/import?wipe=true`,
           `http://127.0.0.1:${targetNode.port}/api/agent/servers/${id}/transfer/import?wipe=true`,
@@ -303,8 +306,9 @@ export async function POST(
               headers: {
                 "Content-Type": "application/zip",
                 "X-Server-Meta": metaBase64,
-                Authorization: `Bearer ${targetNode.authToken}`,
+                Authorization: `Bearer ${targetAuthToken}`,
                 "X-Rubber-Panel": "admin",
+                "X-Node-Id": targetNode.id,
               },
               body: Buffer.from(zipBuffer),
             });
@@ -321,7 +325,7 @@ export async function POST(
         }
 
         if (!importRes || !importRes.ok) {
-          throw new Error(`Target node import failed: ${importErr || "Could not reach target node"}`);
+          throw new Error(`Target node import failed: ${importErr || "Could not reach target node"} (Node: ${targetNode.name})`);
         }
 
         // Step 5: Update Server Node and Allocations in Database

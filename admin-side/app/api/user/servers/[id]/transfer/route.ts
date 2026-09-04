@@ -223,6 +223,7 @@ export async function POST(
           `http://localhost:${server.node.port}/api/agent/servers/${id}/transfer/export`,
         ]));
 
+        const sourceAuthToken = (server.node.authToken || "").trim().replace(/^["']|["']$/g, "");
         let exportRes: Response | null = null;
         for (const url of candidateExportUrls) {
           try {
@@ -230,8 +231,9 @@ export async function POST(
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${server.node.authToken}`,
+                Authorization: `Bearer ${sourceAuthToken}`,
                 "X-Rubber-Panel": "admin",
+                "X-Node-Id": server.node.id,
               },
               body: JSON.stringify({ excludePaths }),
             });
@@ -304,6 +306,7 @@ export async function POST(
         });
 
         // 4. Upload & unpack onto target node
+        const targetAuthToken = (targetNode.authToken || "").trim().replace(/^["']|["']$/g, "");
         const candidateImportUrls = Array.from(new Set([
           `${targetBaseUrl}/api/agent/servers/${id}/transfer/import?wipe=true`,
           `http://127.0.0.1:${targetNode.port}/api/agent/servers/${id}/transfer/import?wipe=true`,
@@ -319,8 +322,9 @@ export async function POST(
               headers: {
                 "Content-Type": "application/zip",
                 "X-Server-Meta": metaBase64,
-                Authorization: `Bearer ${targetNode.authToken}`,
+                Authorization: `Bearer ${targetAuthToken}`,
                 "X-Rubber-Panel": "admin",
+                "X-Node-Id": targetNode.id,
               },
               body: Buffer.from(zipBuffer),
             });
@@ -337,7 +341,7 @@ export async function POST(
         }
 
         if (!importRes || !importRes.ok) {
-          throw new Error(`Target node import failed: ${importErr || "Could not reach target node"}`);
+          throw new Error(`Target node import failed: ${importErr || "Could not reach target node"} (Node: ${targetNode.name})`);
         }
 
         // 5. Update Database Transaction (Re-bind allocation and node)

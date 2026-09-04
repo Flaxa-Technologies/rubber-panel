@@ -77,7 +77,17 @@ export function getConsoleLogs(serverId: string): string[] {
 // ─── FILE SYSTEM HELPERS ───────────────────────────────────────────────────
 
 export function getServerDir(serverId: string): string {
-  return path.join(process.cwd(), ".data", "servers", serverId);
+  const customDataDir = (process.env.DATA_DIR || process.env.SERVER_DATA_DIR || "").trim();
+  if (customDataDir && fsSync.existsSync(customDataDir)) {
+    const candidate = path.join(customDataDir, serverId);
+    if (fsSync.existsSync(candidate)) return candidate;
+  }
+  const defaultDir = path.join(process.cwd(), ".data", "servers", serverId);
+  if (fsSync.existsSync(defaultDir)) return defaultDir;
+  if (customDataDir && fsSync.existsSync(customDataDir)) {
+    return path.join(customDataDir, serverId);
+  }
+  return defaultDir;
 }
 
 function resolveSecurePath(serverId: string, reqPath: string): string {
