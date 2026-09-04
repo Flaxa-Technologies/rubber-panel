@@ -44,8 +44,8 @@ export default function ServerNavigation({ serverId }: { serverId: string }) {
     return true;
   });
 
-  // Show Transfer tab if enabled by administration
-  if (server?.allowNodeTransfer) {
+  // Show Transfer tab if enabled by administration (cluster transfer or remote SFTP transfer)
+  if (server?.allowNodeTransfer || server?.allowRemoteTransfer !== false) {
     // Insert Transfer tab right before Settings
     tabs.splice(tabs.length - 1, 0, {
       name: "Transfer",

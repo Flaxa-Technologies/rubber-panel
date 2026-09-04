@@ -43,6 +43,7 @@ export interface UserServer {
   allowChangeSoftware?: boolean;
   allowChangeVersion?: boolean;
   allowEditStartup?: boolean;
+  allowRemoteTransfer?: boolean;
   serverType?: string;
   nodeVersion?: string | null;
   securityProtection?: boolean;

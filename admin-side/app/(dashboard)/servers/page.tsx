@@ -61,6 +61,7 @@ interface ServerItem {
   allowChangeSoftware?: boolean;
   allowChangeVersion?: boolean;
   allowEditStartup?: boolean;
+  allowRemoteTransfer?: boolean;
   cryoSleepEnabled?: boolean;
   cryoSleepIdleMinutes?: number;
   cryoSleepCustomMotdAllowed?: boolean;
@@ -132,6 +133,7 @@ const EMPTY_FORM = {
   allowChangeSoftware: true,
   allowChangeVersion: true,
   allowEditStartup: true,
+  allowRemoteTransfer: true,
   allowGoogleDriveBackups: true,
   sftpEnabled: true,
   databaseLimit: "1",
@@ -239,6 +241,7 @@ function ServersPageContent() {
     allowedPaths: "", protectedPaths: "", blockedUploadPaths: "", allowFileUploads: true,
     showStableOnly: false, allowNodeTransfer: false,
     allowChangeSoftware: true, allowChangeVersion: true, allowEditStartup: true,
+    allowRemoteTransfer: true,
     allowGoogleDriveBackups: true,
     sftpEnabled: true, databaseLimit: "0",
     cryoSleepEnabled: false, cryoSleepIdleMinutes: "10", cryoSleepCustomMotdAllowed: true, cryoSleepMotd: "",
@@ -335,6 +338,7 @@ function ServersPageContent() {
           allowChangeSoftware: s.allowChangeSoftware !== false,
           allowChangeVersion: s.allowChangeVersion !== false,
           allowEditStartup: s.allowEditStartup !== false,
+          allowRemoteTransfer: s.allowRemoteTransfer !== false,
           allowGoogleDriveBackups: s.allowGoogleDriveBackups !== false,
           sftpEnabled: s.sftpEnabled !== false,
           databaseLimit: String(s.databaseLimit ?? 0),
@@ -587,6 +591,7 @@ function ServersPageContent() {
         allowChangeSoftware: editForm.allowChangeSoftware,
         allowChangeVersion: editForm.allowChangeVersion,
         allowEditStartup: editForm.allowEditStartup,
+        allowRemoteTransfer: editForm.allowRemoteTransfer,
         allowGoogleDriveBackups: editForm.allowGoogleDriveBackups,
         sftpEnabled: editForm.sftpEnabled,
         databaseLimit: parseInt(editForm.databaseLimit) || 0,
@@ -968,6 +973,7 @@ function ServersPageContent() {
         allowChangeSoftware: form.allowChangeSoftware,
         allowChangeVersion: form.allowChangeVersion,
         allowEditStartup: form.allowEditStartup,
+        allowRemoteTransfer: form.allowRemoteTransfer,
         allowGoogleDriveBackups: form.allowGoogleDriveBackups,
         sftpEnabled: form.sftpEnabled !== false,
         databaseLimit: parseInt(form.databaseLimit) || 0,
@@ -1071,7 +1077,7 @@ function ServersPageContent() {
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--color-rp-text-muted)" }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search servers..."
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search servers by name, ID, UUID, owner..."
           className="w-full h-10 pl-10 pr-3 rounded-lg border text-sm outline-none"
           style={{ backgroundColor: "var(--color-rp-surface)", borderColor: "var(--color-rp-border)", color: "var(--color-rp-text)" }} />
       </div>
@@ -1804,6 +1810,26 @@ function ServersPageContent() {
                     <ToggleSwitch
                       checked={form.allowEditStartup}
                       onChange={() => setForm(f => ({ ...f, allowEditStartup: !f.allowEditStartup }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(14,165,233,0.1)", color: "#0ea5e9" }}>
+                        <ArrowLeftRight className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Remote SFTP Pull &amp; Transfer (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to pull/import from or transfer/export to any remote SFTP host directly
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={form.allowRemoteTransfer}
+                      onChange={() => setForm(f => ({ ...f, allowRemoteTransfer: !f.allowRemoteTransfer }))}
                     />
                   </div>
 
@@ -2765,6 +2791,26 @@ function ServersPageContent() {
                     <ToggleSwitch
                       checked={editForm.allowEditStartup}
                       onChange={() => setEditForm(f => ({ ...f, allowEditStartup: !f.allowEditStartup }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-xl border gap-4"
+                    style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "rgba(14,165,233,0.1)", color: "#0ea5e9" }}>
+                        <ArrowLeftRight className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-rp-text)" }}>Allow Remote SFTP Pull &amp; Transfer (User Panel)</p>
+                        <p className="text-xs" style={{ color: "var(--color-rp-text-dim)" }}>
+                          Permits user to pull/import from or transfer/export to any remote SFTP host directly
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={editForm.allowRemoteTransfer}
+                      onChange={() => setEditForm(f => ({ ...f, allowRemoteTransfer: !f.allowRemoteTransfer }))}
                     />
                   </div>
 

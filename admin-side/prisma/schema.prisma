@@ -161,6 +161,7 @@ model Server {
   allowChangeSoftware Boolean   @default(true)
   allowChangeVersion  Boolean   @default(true)
   allowEditStartup    Boolean   @default(true)
+  allowRemoteTransfer Boolean   @default(true)
 
   // Billing, Lifecycle & Suspension
   expiresAt                DateTime?

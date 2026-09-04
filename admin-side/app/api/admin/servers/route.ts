@@ -30,6 +30,7 @@ const createServerSchema = z.object({
   allowChangeSoftware: z.boolean().default(true),
   allowChangeVersion: z.boolean().default(true),
   allowEditStartup: z.boolean().default(true),
+  allowRemoteTransfer: z.boolean().default(true),
   allowGoogleDriveBackups: z.boolean().default(true),
   sftpEnabled: z.boolean().default(true),
   databaseLimit: z.number().int().min(0).max(100).default(0),
@@ -68,8 +69,17 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") ?? "1");
   const limit = parseInt(searchParams.get("limit") ?? "20");
 
-  const where: Record<string, unknown> = {};
-  if (search) where.name = { contains: search };
+  const where: any = {};
+  if (search) {
+    const s = search.trim();
+    where.OR = [
+      { name: { contains: s } },
+      { id: { contains: s } },
+      { uuid: { contains: s } },
+      { owner: { username: { contains: s } } },
+      { owner: { email: { contains: s } } },
+    ];
+  }
   if (nodeId) where.nodeId = nodeId;
   if (ownerId) where.ownerId = ownerId;
   if (status) where.status = status;
@@ -87,7 +97,7 @@ export async function GET(request: NextRequest) {
         securityProtection: true, securitySuspendedUntil: true, securityQuarantineReason: true,
         javaVersion: true, javaVersionId: true, customImageId: true,
         customImage: { select: { id: true, name: true, dockerImage: true, icon: true, category: true } },
-        allowNodeTransfer: true, allowChangeSoftware: true, allowChangeVersion: true, allowEditStartup: true, allowGoogleDriveBackups: true,
+        allowNodeTransfer: true, allowChangeSoftware: true, allowChangeVersion: true, allowEditStartup: true, allowRemoteTransfer: true, allowGoogleDriveBackups: true,
         cryoSleepEnabled: true, cryoSleepIdleMinutes: true, cryoSleepCustomMotdAllowed: true, cryoSleepMotd: true,
         expiresAt: true, gracePeriodDays: true,
         autoSuspendOnExpiry: true, autoDeleteOnGraceExpiry: true,
@@ -304,6 +314,7 @@ export async function POST(request: NextRequest) {
       allowChangeSoftware: rest.allowChangeSoftware !== false,
       allowChangeVersion: rest.allowChangeVersion !== false,
       allowEditStartup: rest.allowEditStartup !== false,
+      allowRemoteTransfer: rest.allowRemoteTransfer !== false,
       allowGoogleDriveBackups: rest.allowGoogleDriveBackups !== false,
       sftpEnabled: rest.sftpEnabled !== false,
       databaseLimit: typeof rest.databaseLimit === "number" ? rest.databaseLimit : parseInt(rest.databaseLimit || "0", 10) || 0,

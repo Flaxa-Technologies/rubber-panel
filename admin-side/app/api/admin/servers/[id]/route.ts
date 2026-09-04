@@ -155,6 +155,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.allowEditStartup !== undefined) {
     data.allowEditStartup = Boolean(body.allowEditStartup);
   }
+  if (body.allowRemoteTransfer !== undefined) {
+    data.allowRemoteTransfer = Boolean(body.allowRemoteTransfer);
+  }
   if (body.expiresAt !== undefined) {
     data.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
   }

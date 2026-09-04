@@ -26,11 +26,10 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- Fixed software selection reversion issue in user panel where selecting another software reverted back to Paper after few seconds.
-- Integrated official icons for Pumpkin (icon.svg), Fabric (logo.png), NeoForge, Vanilla Minecraft, and Bedrock.
-- Separated Version Change into a dedicated modal so changing version does not expose or alter server software.
-- Added live Server Uptime duration counter and Server ID with one-click copy button to the Console page telemetry row.
-- Updated settings API to cleanly process software, version, and runtime changes with individual admin permission gating.
+- **Admin Server Search by ID**: Search servers on `/servers` instantly by Server ID (UUID / short ID), server name, or owner username/email.
+- **Remote SFTP Pull (Import)**: Pull an existing server directly from any external SFTP host into the current instance with connection testing, custom preservation rules (keep world/plugins/config), exclusion filters, and detailed overwrite/deletion pre-flight warning modals.
+- **Remote SFTP Transfer (Export)**: Transfer and export server instances to external SFTP hosts or offsite backup locations with progress tracking and live streaming logs.
+- **Admin Permission Gating**: Added \`allowRemoteTransfer\` toggle in Server Creation Wizard and Edit Modal (Step 4 Permissions) to control access to remote SFTP operations.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal
