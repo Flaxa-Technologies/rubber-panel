@@ -181,7 +181,7 @@ async function sendHeartbeat() {
 
     if (res && res.ok) {
       const data = await res.json();
-      if (data?.nodeId && !discoveredNodeId) {
+      if (data?.nodeId && !discoveredNodeId) { 
         discoveredNodeId = data.nodeId;
       }
       console.log(`[Heartbeat] ✓ OK (Node: ${discoveredNodeId || "connected"}) — ${new Date().toLocaleTimeString()}`);
