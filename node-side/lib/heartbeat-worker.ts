@@ -174,7 +174,8 @@ async function sendHeartbeat() {
           lastErr = `HTTP ${candidateRes.status}`;
         }
       } catch (e: any) {
-        lastErr = e?.message || "Connection failed";
+        const cause = e?.cause?.message ? ` (${e.cause.message})` : (e?.cause?.code ? ` (${e.cause.code})` : "");
+        lastErr = `${e?.message || "Connection failed"}${cause}`;
       }
     }
 
