@@ -83,7 +83,7 @@ export default function Sidebar() {
       } catch {}
     }
     checkUpdates();
-    const updateInterval = setInterval(checkUpdates, 15 * 60 * 1000);
+    const updateInterval = setInterval(checkUpdates, 60 * 1000);
     return () => clearInterval(updateInterval);
   }, []);
 

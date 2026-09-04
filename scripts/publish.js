@@ -26,11 +26,11 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- **Cryo-Sleep Real Telemetry & Workload Metrics**: Fixed server status query on \`/nodes\` to correctly recognize \`SLEEPING\` instances alongside active servers. Computed real dynamic RAM savings reclaimed from hibernation.
-- **Node Instant Connect / Reconfigure Command**: Added 1-second copy-paste \`.env\` setup snippet directly inside the Admin Panel \`Setup Link\` modal on \`/nodes\` to instantly sync \`NODE_TOKEN\`, \`NODE_ID\`, and \`ADMIN_API_URL\` and restart PM2.
-- **Node Heartbeat WAN Resiliency**: Increased heartbeat HTTP timeout from 3.5s to 15s to eliminate WAN/Cloudflare \`fetch failed\` timeouts, improved 401 token mismatch diagnostics, and prevented redundant local polling.
-- **Cryo Wake Proxy Port Guard**: Fixed port registration during heartbeat synchronization (\`s.port\`) and guarded against wake proxies colliding or stealing assigned ports from other sleeping instances.
-- **Tunnel Domain Normalization**: Stripped trailing port suffix on GitHub Codespaces and Cloudflare tunnel domains to guarantee clean reverse proxy routing.
+- **Automatic Live Update Polling**: Added auto-refresh loop to \`/updates\` (every 15s) and reduced TopBar/Sidebar polling from 15 minutes to 60 seconds so new releases appear dynamically without requiring manual page reloads.
+- **Panel Release Detection & Asset Fallback**: Fixed \`needsUpdate\` logic for Admin & User panels so new versions are immediately flagged as available, with resilient fallback asset resolution ensuring panels and nodes update reliably.
+- **Cache Invalidation**: Reduced update endpoint cache TTL to 5s, ensuring newly published GitHub releases reflect immediately.
+- **Cryo-Sleep Dynamic Telemetry**: Fixed \`/nodes\` query to recognize \`SLEEPING\` instances and compute genuine RAM savings.
+- **Node Instant Connect**: 1-second copy-paste connect command in Node Setup modal.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal

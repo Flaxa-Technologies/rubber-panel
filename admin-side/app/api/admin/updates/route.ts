@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       const cachedAt = await db.setting.findUnique({ where: { key: "updates.cacheAt" } });
       if (cachedAt) {
         const age = Date.now() - new Date(cachedAt.value).getTime();
-        if (age < 15 * 1000) {
+        if (age < 5 * 1000) {
           return NextResponse.json(JSON.parse(cached.value));
         }
       }
@@ -60,8 +60,11 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const anyNodeNeedsUpdate = nodesWithUpdate.some((n) => n.needsUpdate);
+
     const fullResponse = {
       ...info,
+      available: info.available || anyNodeNeedsUpdate,
       nodes: nodesWithUpdate,
     };
 

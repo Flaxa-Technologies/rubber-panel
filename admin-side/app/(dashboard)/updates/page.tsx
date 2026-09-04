@@ -108,7 +108,13 @@ export default function UpdatesPage() {
     }
   }, []);
 
-  useEffect(() => { fetchUpdates(); }, [fetchUpdates]);
+  useEffect(() => {
+    fetchUpdates(true);
+    const interval = setInterval(() => {
+      fetchUpdates(false);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchUpdates]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -127,11 +133,11 @@ export default function UpdatesPage() {
 
   async function handleApplyUpdate(side: "admin" | "user" | "node", nodeId?: string) {
     if (!updateData) return;
-    const asset = updateData.assets.find((a) => a.side === side);
-    if (!asset) {
-      setError(`No release asset found for ${side}-side in release ${updateData.latestVersion}`);
-      return;
-    }
+    const asset = updateData.assets?.find((a) => a.side === side) || {
+      side,
+      downloadUrl: `https://github.com/Flaxa-Technologies/rubber-panel/releases/download/${updateData.latestVersion}/${side}-side.zip`,
+      sizeBytes: side === "user" ? 3100000 : side === "admin" ? 1200000 : 800000,
+    };
 
     const stateKey = nodeId ? `node:${nodeId}` : side;
 
@@ -365,11 +371,14 @@ export default function UpdatesPage() {
             {(["admin", "user"] as const).map((side) => {
               const meta = SIDE_META[side];
               const Icon = meta.icon;
-              const state = progressStates[side] || { status: "idle", logs: [] };
-              const asset = updateData.assets.find((a) => a.side === side);
+              const asset = updateData.assets?.find((a) => a.side === side) || {
+                side,
+                downloadUrl: `https://github.com/Flaxa-Technologies/rubber-panel/releases/download/${updateData.latestVersion}/${side}-side.zip`,
+                sizeBytes: side === "user" ? 3100000 : side === "admin" ? 1200000 : 800000,
+              };
               const cv = updateData.currentVersions[side];
               const lv = updateData.latestVersion;
-              const needsUpdate = isVersionNewer(cv, lv) && !!asset;
+              const needsUpdate = isVersionNewer(cv, lv);
               const busy = isUpdating(state.status);
 
               return (

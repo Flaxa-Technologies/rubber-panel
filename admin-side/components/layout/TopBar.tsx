@@ -49,7 +49,7 @@ export default function TopBar() {
       } catch {}
     }
     check();
-    const id = setInterval(check, 15 * 60 * 1000);
+    const id = setInterval(check, 60 * 1000);
     return () => clearInterval(id);
   }, []);
 
