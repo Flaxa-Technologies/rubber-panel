@@ -44,23 +44,31 @@ curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main
 \`\`\`
 `;
 
-function ghRequest(options, postData) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          resolve({ status: res.statusCode, data: JSON.parse(data) });
-        } catch {
-          resolve({ status: res.statusCode, data });
-        }
+async function ghRequest(options, postData, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await new Promise((resolve, reject) => {
+        const req = https.request(options, (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            try {
+              resolve({ status: res.statusCode, data: JSON.parse(data) });
+            } catch {
+              resolve({ status: res.statusCode, data });
+            }
+          });
+        });
+        req.on("error", reject);
+        if (postData) req.write(postData);
+        req.end();
       });
-    });
-    req.on("error", reject);
-    if (postData) req.write(postData);
-    req.end();
-  });
+    } catch (err) {
+      if (attempt === retries) throw err;
+      console.warn(`[ghRequest] Attempt ${attempt} failed (${err.message}), retrying in 2s...`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
 }
 
 function uploadAssetSingle(uploadUrlTemplate, filePath, fileName) {
