@@ -114,12 +114,6 @@ fi
 
 rm -rf "${TEMP_DIR}"
 
-# Stop PM2 instances during compilation so running workers do not attempt to load half-deleted chunks
-if command -v pm2 >/dev/null 2>&1; then
-  echo -e "${CYAN}Stopping PM2 services during build...${NC}"
-  pm2 stop rubber-admin rubber-user 2>/dev/null || sudo pm2 stop rubber-admin rubber-user 2>/dev/null || true
-fi
-
 echo -e "${CYAN}[3/5] Compiling Admin Panel...${NC}"
 cd "${INSTALL_DIR}/admin-side"
 npm install --include=dev --prefer-offline --no-audit --no-fund

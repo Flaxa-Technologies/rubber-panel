@@ -26,11 +26,10 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- **Fix Admin Updates Page Build Failure**: Fixed missing \`state\` variable in \`updates/page.tsx\` that caused TypeScript compilation to fail during \`update-panel.sh\`.
-- **Dynamic Node Daemon Runtime Environment**: Node daemon now dynamically reads \`/var/rubber-panel/node-daemon/.env\` on disk, immediately picking up new \`ADMIN_API_URL\` and credentials without being blocked by PM2 environment caching.
-- **Cryo-Sleep Port Conflict Handling**: Added hibernation cooldowns and graceful error reporting so port conflicts do not spam PM2 logs or leave instances in an inconsistent state.
-- **Node Allocation Port Uniqueness**: Enforced strict port uniqueness per node in allocation creation to prevent overlapping port bindings on the same physical host.
-- **Node Setup Modal Tabbed Redesign**: Compact 3-tab layout (⚡ Direct Sync, 🚀 Auto Installer, 🔑 Credentials) that eliminates vertical scrolling.
+- **Zero-Downtime Panel Update**: Removed premature \`pm2 stop\` from \`update-panel.sh\` during compilation, eliminating Cloudflare Tunnel HTTP 502 Bad Gateway downtime while building.
+- **Resilient Heartbeat with Local Fallback**: When the node is co-located on the same VPS, the heartbeat worker now automatically falls back to \`http://127.0.0.1:3000\` if Cloudflare Tunnel experiences edge 502 errors or hairpinning loops.
+- **Heartbeat Route Fault-Tolerance**: Wrapped admin heartbeat route handler in defensive try-catch error handling to ensure unhandled exceptions never crash the HTTP response.
+- **Clear Cloudflare 502 Diagnostics**: Heartbeat logs now explain when HTTP 502 is caused by Cloudflare Tunnel or origin port 3000 restarting.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal

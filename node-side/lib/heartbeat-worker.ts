@@ -138,7 +138,7 @@ async function sendHeartbeat() {
     const isLocalAdmin = adminUrl.includes("localhost") || adminUrl.includes("127.0.0.1");
     const adminCandidates = isLocalAdmin
       ? Array.from(new Set([adminUrl, "http://127.0.0.1:3000", "http://localhost:3000"]))
-      : [adminUrl];
+      : [adminUrl, "http://127.0.0.1:3000"];
 
     let res: Response | null = null;
     let lastErr = "";
@@ -165,6 +165,8 @@ async function sendHeartbeat() {
         } else if (candidateRes.status === 401) {
           lastErr = `HTTP 401 Unauthorized (Token Mismatch)`;
           console.error(`[Heartbeat] ✗ Auth Error (401 Unauthorized): NODE_TOKEN in .env does not match Admin Panel for node "${activeId}". Please update .env with the token from Admin Panel -> Nodes -> Setup Link.`);
+        } else if (candidateRes.status === 502) {
+          lastErr = `HTTP 502 Bad Gateway (Cloudflare Tunnel or Origin port 3000 is unreachable / restarting)`;
         } else if (candidateRes.status === 404) {
           lastErr = `HTTP 404 Not Found`;
           console.warn(`[Heartbeat] ⚠️ HTTP 404 Not Found at ${targetUrl}/api/node/heartbeat. Verify ADMIN_API_URL in .env.`);
