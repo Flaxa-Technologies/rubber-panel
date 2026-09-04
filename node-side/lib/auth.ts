@@ -39,9 +39,9 @@ export function getLocalNodeTokens(): Set<string> {
   ];
 
   for (const envFile of envCandidates) {
-    if (fs.existsSync(envFile)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ envFile)) {
       try {
-        const content = fs.readFileSync(envFile, "utf-8");
+        const content = fs.readFileSync(/*turbopackIgnore: true*/ envFile, "utf-8");
         for (const line of content.split("\n")) {
           const trimmed = line.trim();
           if (!trimmed || trimmed.startsWith("#")) continue;
@@ -68,14 +68,14 @@ function syncTokenToEnvFile(token: string) {
       path.join(process.cwd(), ".env"),
     ];
     for (const envFile of envCandidates) {
-      if (fs.existsSync(envFile)) {
-        let content = fs.readFileSync(envFile, "utf-8");
+      if (fs.existsSync(/*turbopackIgnore: true*/ envFile)) {
+        let content = fs.readFileSync(/*turbopackIgnore: true*/ envFile, "utf-8");
         if (content.includes("NODE_TOKEN=")) {
           content = content.replace(/NODE_TOKEN=.*/g, `NODE_TOKEN="${token}"`);
         } else {
           content += `\nNODE_TOKEN="${token}"\n`;
         }
-        fs.writeFileSync(envFile, content, "utf-8");
+        fs.writeFileSync(/*turbopackIgnore: true*/ envFile, content, "utf-8");
         break;
       }
     }
@@ -135,11 +135,11 @@ export async function verifyAgentTokenAsync(request: NextRequest): Promise<boole
   let adminUrl = (process.env.ADMIN_API_URL || "").trim().replace(/\/$/, "");
   if (!adminUrl) {
     try {
-      const envPath = fs.existsSync("/var/rubber-panel/node-daemon/.env")
+      const envPath = fs.existsSync(/*turbopackIgnore: true*/ "/var/rubber-panel/node-daemon/.env")
         ? "/var/rubber-panel/node-daemon/.env"
         : path.join(process.cwd(), ".env");
-      if (fs.existsSync(envPath)) {
-        const raw = fs.readFileSync(envPath, "utf-8");
+      if (fs.existsSync(/*turbopackIgnore: true*/ envPath)) {
+        const raw = fs.readFileSync(/*turbopackIgnore: true*/ envPath, "utf-8");
         for (const line of raw.split("\n")) {
           if (line.startsWith("ADMIN_API_URL=")) {
             adminUrl = stripQuotes(line.slice("ADMIN_API_URL=".length)).replace(/\/$/, "");

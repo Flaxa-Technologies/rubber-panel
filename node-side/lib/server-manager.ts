@@ -121,7 +121,7 @@ export function getServerStateFile(serverId: string): string {
 async function syncServerJar(serverId: string) {
   try {
     const dir = getServerDir(serverId);
-    const entries = await fs.readdir(dir);
+    const entries = await fs.readdir(/*turbopackIgnore: true*/ dir);
     const targetJar = entries.find(f => 
       (
         f.startsWith("paper-") ||
@@ -448,7 +448,7 @@ export async function getOrLoadServerState(serverId: string): Promise<ServerInfo
 
   // 3. Fallback: If server dir exists or Docker container exists, reconstruct state
   const dir = getServerDir(serverId);
-  const dirExists = await fs.stat(dir).then(() => true).catch(() => false);
+  const dirExists = await fs.stat(/*turbopackIgnore: true*/ dir).then(() => true).catch(() => false);
   const containerName = getContainerName(serverId);
   const isRunning = await containerRunning(containerName);
 
@@ -1742,7 +1742,7 @@ export async function reinstallServer(serverId: string, options: ReinstallOption
   };
 
   try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const entries = await fs.readdir(/*turbopackIgnore: true*/ dir, { withFileTypes: true });
     for (const ent of entries) {
       if (!shouldPreserve(ent.name)) {
         const fullPath = path.join(dir, ent.name);
