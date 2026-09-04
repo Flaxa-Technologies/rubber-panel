@@ -28,6 +28,10 @@ export function getNodeBaseUrl(node: { fqdn: string; port: number }): string {
   const isTunnelDomain = host.includes(".github.dev") || host.includes(".gitpod.io") || host.includes(".ngrok") || host.includes(".loca.lt") || host.includes(".trycloudflare.com");
 
   if (isTunnelDomain) {
+    // Codespaces and Cloudflare tunnels map port into subdomain or edge route; strip trailing port suffix
+    if (host.includes(".github.dev") || host.includes(".app.github.dev") || host.includes(".trycloudflare.com")) {
+      host = host.replace(/:\d+$/, "");
+    }
     if (!host.startsWith("http://") && !host.startsWith("https://")) {
       host = `https://${host}`;
     }

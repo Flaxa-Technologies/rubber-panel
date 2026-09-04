@@ -26,11 +26,11 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- **Admin Server Search by ID**: Search servers on \`/servers\` instantly by Server ID (UUID / short ID), server name, or owner username/email.
-- **Remote SFTP Pull (Import)**: Pull an existing server directly from any external SFTP host into the current instance with connection testing, custom preservation rules (keep world/plugins/config), exclusion filters, and detailed overwrite/deletion pre-flight warning modals.
-- **Remote SFTP Transfer (Export)**: Transfer and export server instances to external SFTP hosts or offsite backup locations with progress tracking and live streaming logs.
-- **Admin Permission Gating**: Added \`allowRemoteTransfer\` toggle in Server Creation Wizard and Edit Modal (Step 4 Permissions) to control access to remote SFTP operations.
-- **Node Setup Modal Upgrades**: Added direct GitHub installer command option (Cloudflare and Codespace safe) and modernized quick command flags.
+- **Cryo-Sleep Real Telemetry & Workload Metrics**: Fixed server status query on \`/nodes\` to correctly recognize \`SLEEPING\` instances alongside active servers. Computed real dynamic RAM savings reclaimed from hibernation.
+- **Node Instant Connect / Reconfigure Command**: Added 1-second copy-paste \`.env\` setup snippet directly inside the Admin Panel \`Setup Link\` modal on \`/nodes\` to instantly sync \`NODE_TOKEN\`, \`NODE_ID\`, and \`ADMIN_API_URL\` and restart PM2.
+- **Node Heartbeat WAN Resiliency**: Increased heartbeat HTTP timeout from 3.5s to 15s to eliminate WAN/Cloudflare \`fetch failed\` timeouts, improved 401 token mismatch diagnostics, and prevented redundant local polling.
+- **Cryo Wake Proxy Port Guard**: Fixed port registration during heartbeat synchronization (\`s.port\`) and guarded against wake proxies colliding or stealing assigned ports from other sleeping instances.
+- **Tunnel Domain Normalization**: Stripped trailing port suffix on GitHub Codespaces and Cloudflare tunnel domains to guarantee clean reverse proxy routing.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal

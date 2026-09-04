@@ -79,11 +79,19 @@ export function startWakeProxy(options: CryoProxyOptions): Promise<ActiveWakePro
   return new Promise(async (resolve, reject) => {
     const { serverId, serverName, port, serverType = "MINECRAFT", onWake } = options;
 
-    // 1. Ensure any existing proxy on this serverId or port is completely closed first
+    // 1. Ensure any existing proxy on this serverId is closed first
     const existingById = activeProxiesById.get(serverId);
     if (existingById && existingById.port === port) {
       return resolve(existingById);
     }
+
+    // Guard: do not forcibly kill another server's wake proxy if they share a port
+    const existingByPort = activeProxiesByPort.get(port);
+    if (existingByPort && existingByPort.serverId !== serverId) {
+      console.warn(`[Cryo-Sleep:Proxy] ⚠️ Port conflict: Port ${port} is already active for server ${existingByPort.serverId}. Cannot bind for "${serverName}" (${serverId}) on same port.`);
+      return reject(new Error(`Port ${port} is already active for sleeping server ${existingByPort.serverId}`));
+    }
+
     await stopWakeProxy(serverId, port).catch(() => {});
     await stopWakeProxyByPort(port).catch(() => {});
 

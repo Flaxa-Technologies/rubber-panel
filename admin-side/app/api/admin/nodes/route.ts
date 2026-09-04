@@ -79,8 +79,13 @@ export async function GET(request: NextRequest) {
     const totalAllocatedRam = node.servers.reduce((sum, s) => sum + (s.ram || 0), 0);
     const totalAllocatedDisk = node.servers.reduce((sum, s) => sum + (s.disk || 0), 0);
     const serversRunning = node.servers.filter(s => s.status === "RUNNING").length;
-    const serversCryo = node.servers.filter(s => s.status === "CRYO_SLEEP" || s.status === "HIBERNATED").length;
+    const serversCryo = node.servers.filter(s => s.status === "SLEEPING" || s.status === "CRYO_SLEEP" || s.status === "HIBERNATED").length;
     const serversStopped = node.servers.filter(s => s.status === "STOPPED" || s.status === "OFFLINE" || s.status === "SUSPENDED").length;
+
+    // Real RAM saved by Cryo-Sleep (all hibernating instances contribute 0 MB active load)
+    const cryoRamSavedMb = node.servers
+      .filter(s => s.status === "SLEEPING" || s.status === "CRYO_SLEEP" || s.status === "HIBERNATED")
+      .reduce((sum, s) => sum + (s.ram || 0), 0);
 
     // Automatic Allocatable Capacity when left blank / unmetered (Total RAM - 1024 MB for OS)
     const isAutoRam = !node.maxRam || node.maxRam <= 0;
@@ -142,6 +147,7 @@ export async function GET(request: NextRequest) {
       serversRunning,
       serversCryo,
       serversStopped,
+      cryoRamSavedMb,
       ramUsedPercent: hostRamUsagePct,
       ramAllocatedPercent,
       diskUsedPercent: hostDiskUsagePct,

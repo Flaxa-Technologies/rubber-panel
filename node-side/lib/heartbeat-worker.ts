@@ -93,11 +93,10 @@ async function sendHeartbeat() {
       },
     };
 
-    const adminCandidates = Array.from(new Set([
-      ADMIN_API_URL,
-      "http://127.0.0.1:3000",
-      "http://localhost:3000",
-    ].filter(Boolean)));
+    const isLocalAdmin = ADMIN_API_URL.includes("localhost") || ADMIN_API_URL.includes("127.0.0.1");
+    const adminCandidates = isLocalAdmin
+      ? Array.from(new Set([ADMIN_API_URL, "http://127.0.0.1:3000", "http://localhost:3000"]))
+      : [ADMIN_API_URL];
 
     let res: Response | null = null;
     let lastErr = "";
@@ -115,12 +114,18 @@ async function sendHeartbeat() {
             Accept: "application/json",
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(3500),
+          signal: AbortSignal.timeout(15000),
         });
 
         if (candidateRes.ok) {
           res = candidateRes;
           break;
+        } else if (candidateRes.status === 401) {
+          lastErr = `HTTP 401 Unauthorized (Token Mismatch)`;
+          console.error(`[Heartbeat] ✗ Auth Error (401 Unauthorized): NODE_TOKEN in .env does not match Admin Panel for node "${activeId}". Please update .env with the token from Admin Panel -> Nodes -> Setup Link.`);
+        } else if (candidateRes.status === 404) {
+          lastErr = `HTTP 404 Not Found`;
+          console.warn(`[Heartbeat] ⚠️ HTTP 404 Not Found at ${targetUrl}/api/node/heartbeat. Verify ADMIN_API_URL.`);
         } else {
           lastErr = `HTTP ${candidateRes.status}`;
         }
@@ -168,7 +173,7 @@ async function sendHeartbeat() {
               serverId: s.id,
               serverName: s.name,
               serverType: s.serverType,
-              port: s.allocations?.[0]?.port ?? s.internalPort,
+              port: s.port ?? s.allocations?.[0]?.port ?? s.internalPort ?? 25565,
               enabled: !!s.cryoSleepEnabled,
               idleMinutes: s.cryoSleepIdleMinutes ?? data.config.cryosleep?.defaultIdleMinutes ?? 10,
               motd: s.cryoSleepMotd,

@@ -56,6 +56,7 @@ interface NodeItem {
   serversRunning: number;
   serversCryo: number;
   serversStopped: number;
+  cryoRamSavedMb?: number;
   ramUsedPercent: number;
   ramAllocatedPercent?: number;
   diskUsedPercent: number;
@@ -85,13 +86,28 @@ function SetupCommandModal({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copiedDirect, setCopiedDirect] = useState(false);
+  const [copiedInstant, setCopiedInstant] = useState(false);
   if (!data) return null;
 
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
   const setupFile = data.setupToken || `ncfg_${data.token}`;
   const quickCmd = `curl -fsSL "${origin}/api/node/configure/${setupFile}" | sudo bash`;
   const directCmd = `curl -sSL https://raw.githubusercontent.com/Flaxa-Technologies/rubber-panel/main/install-node.sh | sudo bash -s -- --admin-url="${origin}" --node-id="${data.nodeId}" --node-token="${data.token}" --port="${data.port || 3001}"`;
-  const [copiedDirect, setCopiedDirect] = useState(false);
+  
+  const instantEnvCmd = `cat << 'EOF' | sudo tee /var/rubber-panel/node-daemon/.env > /dev/null
+NODE_PORT=3001
+PORT=3001
+AGENT_PORT=3001
+ADMIN_API_URL="${origin}"
+NODE_TOKEN="${data.token}"
+NODE_ID="${data.nodeId}"
+DATA_DIR="/var/rubber-panel/servers"
+SERVER_DATA_DIR="/var/rubber-panel/servers"
+HEARTBEAT_INTERVAL_SECONDS=30
+GITHUB_REPO="Flaxa-Technologies/rubber-panel"
+EOF
+sudo pm2 restart rubber-node --update-env`;
 
   return (
     <Modal
@@ -102,11 +118,38 @@ function SetupCommandModal({
       footer={<Button onClick={onClose}>Done</Button>}
     >
       <div className="space-y-4">
-        <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
-          <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#22c55e" }} />
-          <p className="text-xs leading-relaxed" style={{ color: "var(--color-rp-text)" }}>
-            <strong>1-Click Auto-Deploy Command:</strong> Run this command on your VPS or Codespace. It automatically downloads dependencies, sets up credentials, reloads PM2, and connects the daemon in seconds.
+        {/* Instant Daemon Connect (Direct .env Fix) */}
+        <div className="p-4 rounded-xl border" style={{ backgroundColor: "rgba(163,230,53,0.06)", borderColor: "rgba(163,230,53,0.3)" }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-lime-400" />
+              <p className="text-xs font-bold text-lime-400">
+                ⚡ Direct Connect / Sync Command (Existing Node)
+              </p>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-lime-400/20 text-lime-300 border border-lime-400/30">
+                Fastest &amp; Instant
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await copyToClipboard(instantEnvCmd);
+                setCopiedInstant(true);
+                setTimeout(() => setCopiedInstant(false), 3000);
+              }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all bg-lime-400 text-black hover:bg-lime-300 shadow-sm">
+              {copiedInstant ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedInstant ? "Copied Direct Command!" : "Copy Direct Command"}
+            </button>
+          </div>
+          <p className="text-[11.5px] text-lime-200/90 mb-2.5">
+            Run this single command on your node server terminal. It instantly configures <code>/var/rubber-panel/node-daemon/.env</code> with the correct Admin URL, Node ID, and Node Secret Token, and reloads PM2.
           </p>
+          <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(163,230,53,0.25)" }}>
+            <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap text-lime-400">
+              {instantEnvCmd}
+            </code>
+          </div>
         </div>
 
         {/* 1-Click Command */}
@@ -114,8 +157,8 @@ function SetupCommandModal({
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
-                <Zap className="w-3.5 h-3.5" />
-                <span>1-Click Auto-Configure Command</span>
+                <Terminal className="w-3.5 h-3.5" />
+                <span>1-Click Auto-Configure Installer (Fresh VPS)</span>
               </p>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
                 Expires in 15 mins
@@ -589,6 +632,8 @@ export default function NodesPage() {
   const totalServers = nodes.reduce((sum, n) => sum + (n._count?.servers || 0), 0);
   const totalRunningServers = nodes.reduce((sum, n) => sum + (n.serversRunning || 0), 0);
   const totalCryoServers = nodes.reduce((sum, n) => sum + (n.serversCryo || 0), 0);
+  const totalCryoRamSavedMb = nodes.reduce((sum, n) => sum + (n.cryoRamSavedMb || 0), 0);
+  const totalCryoRamSavedGb = (totalCryoRamSavedMb / 1024).toFixed(1);
 
   const totalLiveUsedRamMb = nodes.reduce((sum, n) => {
     if (n.hostUsedRam != null) return sum + n.hostUsedRam;
@@ -604,6 +649,7 @@ export default function NodesPage() {
   const totalAllocatedRamGb = (totalAllocatedRamMb / 1024).toFixed(1);
   const totalCapacityRamGb = (totalCapacityRamMb / 1024).toFixed(1);
   const fleetLiveRamPct = totalPhysicalRamMb > 0 ? Math.round((totalLiveUsedRamMb / totalPhysicalRamMb) * 100) : 0;
+  const cryoSavingsPercent = totalAllocatedRamMb > 0 ? Math.round((totalCryoRamSavedMb / totalAllocatedRamMb) * 100) : 0;
   const nodesWithWarnings = nodes.filter(n => n.isRamCritical || n.isRamWarning || n.isCpuWarning || n.isDiskWarning).length;
 
   return (
@@ -686,7 +732,11 @@ export default function NodesPage() {
           </p>
           <div className="mt-2.5 text-[11px] text-cyan-400/90 flex items-center gap-1">
             <Moon className="w-3 h-3" />
-            <span>Cryo-Sleep saving 0% RAM on sleep</span>
+            <span>
+              {totalCryoServers > 0
+                ? `Cryo-Sleep saving ${totalCryoRamSavedGb} GB (${cryoSavingsPercent}%) RAM on sleep`
+                : "Cryo-Sleep active (0 instances in hibernation)"}
+            </span>
           </div>
         </div>
 
