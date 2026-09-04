@@ -26,11 +26,11 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
-- **Node Setup Modal Tabbed Redesign**: Re-architected the Node Setup modal on \`/nodes\` with compact, elegant tabs (⚡ Direct Sync, 🚀 Auto Installer, 🔑 Credentials), cutting dialog height by over 60% and completely eliminating vertical scrolling.
-- **Automatic Live Update Polling**: Added auto-refresh loop to \`/updates\` (every 15s) and reduced TopBar/Sidebar polling from 15 minutes to 60 seconds so new releases appear dynamically without requiring manual page reloads.
-- **Panel Release Detection & Asset Fallback**: Fixed \`needsUpdate\` logic for Admin & User panels so new versions are immediately flagged as available, with resilient fallback asset resolution ensuring panels and nodes update reliably.
-- **Cache Invalidation**: Reduced update endpoint cache TTL to 5s, ensuring newly published GitHub releases reflect immediately.
-- **Cryo-Sleep Dynamic Telemetry**: Fixed \`/nodes\` query to recognize \`SLEEPING\` instances and compute genuine RAM savings.
+- **Fix Admin Updates Page Build Failure**: Fixed missing \`state\` variable in \`updates/page.tsx\` that caused TypeScript compilation to fail during \`update-panel.sh\`.
+- **Dynamic Node Daemon Runtime Environment**: Node daemon now dynamically reads \`/var/rubber-panel/node-daemon/.env\` on disk, immediately picking up new \`ADMIN_API_URL\` and credentials without being blocked by PM2 environment caching.
+- **Cryo-Sleep Port Conflict Handling**: Added hibernation cooldowns and graceful error reporting so port conflicts do not spam PM2 logs or leave instances in an inconsistent state.
+- **Node Allocation Port Uniqueness**: Enforced strict port uniqueness per node in allocation creation to prevent overlapping port bindings on the same physical host.
+- **Node Setup Modal Tabbed Redesign**: Compact 3-tab layout (⚡ Direct Sync, 🚀 Auto Installer, 🔑 Credentials) that eliminates vertical scrolling.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal

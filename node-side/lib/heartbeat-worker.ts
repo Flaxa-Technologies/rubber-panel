@@ -23,6 +23,43 @@ export function getDiscoveredNodeId(): string {
   return discoveredNodeId || process.env.NODE_ID || "";
 }
 
+function getRuntimeConfig(): { adminUrl: string; nodeToken: string; nodeId: string } {
+  let adminUrl = (process.env.ADMIN_API_URL || "").trim();
+  let nodeToken = (process.env.NODE_TOKEN || "").trim();
+  let nodeId = (process.env.NODE_ID || discoveredNodeId || "").trim();
+
+  const envCandidates = [
+    path.join(process.cwd(), ".env"),
+    "/var/rubber-panel/node-daemon/.env",
+  ];
+
+  for (const envFile of envCandidates) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ envFile)) {
+      try {
+        const raw = fs.readFileSync(/*turbopackIgnore: true*/ envFile, "utf-8");
+        for (const line of raw.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          const idx = trimmed.indexOf("=");
+          if (idx === -1) continue;
+          const k = trimmed.slice(0, idx).trim();
+          let v = trimmed.slice(idx + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
+          }
+          if (k === "ADMIN_API_URL" && v) adminUrl = v;
+          if (k === "NODE_TOKEN" && v) nodeToken = v;
+          if (k === "NODE_ID" && v) nodeId = v;
+        }
+      } catch {}
+      break;
+    }
+  }
+
+  if (!adminUrl) adminUrl = "http://localhost:3000";
+  return { adminUrl, nodeToken, nodeId };
+}
+
 export function startHeartbeat() {
   if (globalThis.__rubberHeartbeatStarted) return;
   globalThis.__rubberHeartbeatStarted = true;
@@ -33,13 +70,13 @@ export function startHeartbeat() {
   // Ensure SFTP file transfer server is running on port 2022
   import("./sftp-server").then((m) => m.startSftpServer()).catch(() => {});
 
-  // Don't start if token not configured
-  if (!NODE_TOKEN || NODE_TOKEN === "dev-token-placeholder") {
+  const { adminUrl, nodeToken } = getRuntimeConfig();
+  if (!nodeToken || nodeToken === "dev-token-placeholder") {
     console.log("[Heartbeat] NODE_TOKEN not set — heartbeat disabled. Configure .env to connect to admin.");
     return;
   }
 
-  console.log(`[Heartbeat] Starting — will ping ${ADMIN_API_URL}/api/node/heartbeat every ${INTERVAL_MS / 1000}s`);
+  console.log(`[Heartbeat] Starting — will ping ${adminUrl}/api/node/heartbeat every ${INTERVAL_MS / 1000}s`);
 
   // Send immediately on startup, then on interval 
   sendHeartbeat();
@@ -48,6 +85,11 @@ export function startHeartbeat() {
 
 async function sendHeartbeat() {
   try {
+    const { adminUrl, nodeToken, nodeId } = getRuntimeConfig();
+    if (!nodeToken || nodeToken === "dev-token-placeholder") {
+      return;
+    }
+
     const resources = getNodeResources();
     const servers = await getAllServers();
     
@@ -59,13 +101,13 @@ async function sendHeartbeat() {
       }
     }
 
-    let currentVer = "0.1.0-beta.16";
+    let currentVer = "0.1.0-beta.75";
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
       if (pkg?.version) currentVer = pkg.version;
     } catch {}
 
-    const activeId = discoveredNodeId || process.env.NODE_ID || "";
+    const activeId = nodeId || discoveredNodeId || process.env.NODE_ID || "";
     const { getRadarStats, updateTrustedIps, updateServerThresholds, setFleetShieldMode } = await import("./radar-engine");
     const radarStats = getRadarStats();
 
@@ -93,10 +135,10 @@ async function sendHeartbeat() {
       },
     };
 
-    const isLocalAdmin = ADMIN_API_URL.includes("localhost") || ADMIN_API_URL.includes("127.0.0.1");
+    const isLocalAdmin = adminUrl.includes("localhost") || adminUrl.includes("127.0.0.1");
     const adminCandidates = isLocalAdmin
-      ? Array.from(new Set([ADMIN_API_URL, "http://127.0.0.1:3000", "http://localhost:3000"]))
-      : [ADMIN_API_URL];
+      ? Array.from(new Set([adminUrl, "http://127.0.0.1:3000", "http://localhost:3000"]))
+      : [adminUrl];
 
     let res: Response | null = null;
     let lastErr = "";
@@ -107,7 +149,7 @@ async function sendHeartbeat() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${NODE_TOKEN}`,
+            Authorization: `Bearer ${nodeToken}`,
             "X-Node-Id": activeId,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RubberPanel/2.0 (Flaxa Studios)",
             "Bypass-Tunnel-Reminder": "true",
@@ -125,7 +167,7 @@ async function sendHeartbeat() {
           console.error(`[Heartbeat] ✗ Auth Error (401 Unauthorized): NODE_TOKEN in .env does not match Admin Panel for node "${activeId}". Please update .env with the token from Admin Panel -> Nodes -> Setup Link.`);
         } else if (candidateRes.status === 404) {
           lastErr = `HTTP 404 Not Found`;
-          console.warn(`[Heartbeat] ⚠️ HTTP 404 Not Found at ${targetUrl}/api/node/heartbeat. Verify ADMIN_API_URL.`);
+          console.warn(`[Heartbeat] ⚠️ HTTP 404 Not Found at ${targetUrl}/api/node/heartbeat. Verify ADMIN_API_URL in .env.`);
         } else {
           lastErr = `HTTP ${candidateRes.status}`;
         }

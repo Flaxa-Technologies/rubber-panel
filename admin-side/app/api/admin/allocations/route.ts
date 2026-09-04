@@ -111,6 +111,8 @@ export async function POST(request: NextRequest) {
     let created = 0;
     for (const port of ports) {
       try {
+        const existing = await db.allocation.findFirst({ where: { nodeId, port } });
+        if (existing) continue;
         await db.allocation.create({ data: { nodeId, ip, port } });
         created++;
       } catch {
@@ -131,6 +133,13 @@ export async function POST(request: NextRequest) {
   // Single creation
   const parsed = createAllocationSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
+
+  const existingPort = await db.allocation.findFirst({
+    where: { nodeId: parsed.data.nodeId, port: parsed.data.port },
+  });
+  if (existingPort) {
+    return NextResponse.json({ error: `Port ${parsed.data.port} is already assigned on this node (IP: ${existingPort.ip})` }, { status: 409 });
+  }
 
   try {
     const allocation = await db.allocation.create({ data: parsed.data });

@@ -379,6 +379,7 @@ export default function UpdatesPage() {
               const cv = updateData.currentVersions[side];
               const lv = updateData.latestVersion;
               const needsUpdate = isVersionNewer(cv, lv);
+              const state = progressStates[side] || { status: "idle", progress: 0, logs: [] as string[] };
               const busy = isUpdating(state.status);
 
               return (
@@ -481,7 +482,7 @@ export default function UpdatesPage() {
                         <Terminal className="w-3 h-3" style={{ color: meta.color }} />
                         <span style={{ color: "#6b7280" }}>Update Terminal — {meta.label}</span>
                       </div>
-                      {state.logs.map((log, i) => (
+                      {state.logs.map((log: string, i: number) => (
                         <div key={i} className="flex gap-2">
                           <span style={{ color: "#374151", userSelect: "none" }}>{String(i + 1).padStart(2, "0")}</span>
                           <span style={{ color: log.toLowerCase().includes("error") ? "#f87171" : log.toLowerCase().includes("success") || log.toLowerCase().includes("complete") ? "#a3e635" : "#d4d4d4" }}>

@@ -61,6 +61,8 @@ export function resetServerActiveTimer(serverId: string) {
   lastActiveTimestamps.set(serverId, Date.now());
 }
 
+const hibernationCooldowns = new Map<string, number>();
+
 /**
  * Manually or automatically hibernate a server into Cryo-Sleep.
  */
@@ -119,8 +121,13 @@ export async function hibernateServer(serverId: string, reason = "Idle timeout")
     appendLog(serverId, `[Cryo-Sleep] ✓ Wake proxy active on port ${assignedPort}. Listening for connections to auto-wake!`);
     return { success: true };
   } catch (err: any) {
-    console.error(`[Cryo-Sleep] Failed to enter hibernation for ${serverId}:`, err);
+    console.warn(`[Cryo-Sleep] Hibernation deferred for ${serverId}: ${err.message}`);
     appendLog(serverId, `[Cryo-Sleep] ✗ Failed to start wake proxy: ${err.message}`);
+    if (status.status === "SLEEPING") {
+      status.status = "STOPPED" as any;
+    }
+    (status as any).isCryoSleeping = false;
+    hibernationCooldowns.set(serverId, Date.now() + 5 * 60 * 1000);
     return { success: false, error: err.message };
   }
 }
@@ -131,6 +138,7 @@ const wakingServers = new Set<string>();
  * Wake a server up from Cryo-Sleep.
  */
 export async function wakeServer(serverId: string, trigger = "Manual wake"): Promise<{ success: boolean; error?: string }> {
+  hibernationCooldowns.delete(serverId);
   if (wakingServers.has(serverId)) {
     console.log(`[Cryo-Sleep] Wake already in progress for ${serverId}. Skipping duplicate trigger.`);
     return { success: true };
@@ -228,6 +236,10 @@ export function initCryoSleepEngine(config?: {
 
         // Skip if already sleeping or wake proxy is active
         if (isWakeProxyRunning(serverId)) continue;
+
+        // Skip if server failed hibernation recently (e.g. port conflict)
+        const cooldown = hibernationCooldowns.get(serverId) ?? 0;
+        if (now < cooldown) continue;
 
         const status = await getServerStatus(serverId);
         if (!status || status.status !== "RUNNING") continue;
