@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Plus, RefreshCw, Copy, AlertCircle, Pencil, Trash2, X, Check, Loader2,
   Zap, Moon, Activity, Server, Cpu, HardDrive, ShieldAlert,
-  Radio, Terminal, Info, ChevronRight, CheckCircle2, AlertTriangle, PlayCircle
+  Radio, Terminal, Info, ChevronRight, CheckCircle2, AlertTriangle, PlayCircle, Key
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -85,6 +85,7 @@ function SetupCommandModal({
   data: SetupModalState;
   onClose: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<"instant" | "installer" | "credentials">("instant");
   const [copied, setCopied] = useState(false);
   const [copiedDirect, setCopiedDirect] = useState(false);
   const [copiedInstant, setCopiedInstant] = useState(false);
@@ -117,152 +118,182 @@ sudo pm2 restart rubber-node --update-env`;
       size="lg"
       footer={<Button onClick={onClose}>Done</Button>}
     >
-      <div className="space-y-4">
-        {/* Instant Daemon Connect (Direct .env Fix) */}
-        <div className="p-4 rounded-xl border" style={{ backgroundColor: "rgba(163,230,53,0.06)", borderColor: "rgba(163,230,53,0.3)" }}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-lime-400" />
-              <p className="text-xs font-bold text-lime-400">
-                ⚡ Direct Connect / Sync Command (Existing Node)
+      <div className="space-y-3">
+        {/* Navigation Tabs */}
+        <div className="flex border-b gap-1" style={{ borderColor: "var(--color-rp-border)" }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab("instant")}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+              activeTab === "instant"
+                ? "border-lime-400 text-lime-400"
+                : "border-transparent text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>⚡ Direct Sync</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-lime-400/20 text-lime-300">
+              Fastest
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("installer")}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+              activeTab === "installer"
+                ? "border-sky-400 text-sky-400"
+                : "border-transparent text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>🚀 Auto Installer</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("credentials")}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+              activeTab === "credentials"
+                ? "border-purple-400 text-purple-400"
+                : "border-transparent text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>🔑 Credentials</span>
+          </button>
+        </div>
+
+        {/* Tab 1: Instant Sync */}
+        {activeTab === "instant" && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-neutral-300">
+                Run this on your node terminal to configure <code>.env</code> and restart PM2:
               </p>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-lime-400/20 text-lime-300 border border-lime-400/30">
-                Fastest &amp; Instant
-              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  await copyToClipboard(instantEnvCmd);
+                  setCopiedInstant(true);
+                  setTimeout(() => setCopiedInstant(false), 2500);
+                }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all bg-lime-400 text-black hover:bg-lime-300 shadow-sm">
+                {copiedInstant ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedInstant ? "Copied Direct Command!" : "Copy Direct Command"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={async () => {
-                await copyToClipboard(instantEnvCmd);
-                setCopiedInstant(true);
-                setTimeout(() => setCopiedInstant(false), 3000);
-              }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all bg-lime-400 text-black hover:bg-lime-300 shadow-sm">
-              {copiedInstant ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedInstant ? "Copied Direct Command!" : "Copy Direct Command"}
-            </button>
-          </div>
-          <p className="text-[11.5px] text-lime-200/90 mb-2.5">
-            Run this single command on your node server terminal. It instantly configures <code>/var/rubber-panel/node-daemon/.env</code> with the correct Admin URL, Node ID, and Node Secret Token, and reloads PM2.
-          </p>
-          <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(163,230,53,0.25)" }}>
-            <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap text-lime-400">
-              {instantEnvCmd}
-            </code>
-          </div>
-        </div>
-
-        {/* 1-Click Command */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--color-rp-accent)" }}>
-                <Terminal className="w-3.5 h-3.5" />
-                <span>1-Click Auto-Configure Installer (Fresh VPS)</span>
-              </p>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
-                Expires in 15 mins
-              </span>
+            <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(163,230,53,0.25)" }}>
+              <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap text-lime-400">
+                {instantEnvCmd}
+              </code>
             </div>
-            <button
-              type="button"
-              onClick={async () => {
-                await copyToClipboard(quickCmd);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 3000);
-              }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
-              style={{ backgroundColor: "var(--color-rp-accent)", color: "#000" }}>
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied Quick Command!" : "Copy Command"}
-            </button>
           </div>
-          <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
-            <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#a3e635" }}>
-              {quickCmd}
-            </code>
-          </div>
-        </div>
+        )}
 
-        {/* Direct Installer Fallback (Codespaces & Cloudflare Safe) */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: "#38bdf8" }}>
-              <Terminal className="w-3.5 h-3.5" />
-              <span>Direct GitHub Installer (Codespaces &amp; Cloudflare Safe)</span>
-            </p>
-            <button
-              type="button"
-              onClick={async () => {
-                await copyToClipboard(directCmd);
-                setCopiedDirect(true);
-                setTimeout(() => setCopiedDirect(false), 3000);
-              }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition-all"
-              style={{ backgroundColor: "rgba(56,189,248,0.15)", color: "#38bdf8", border: "1px solid rgba(56,189,248,0.3)" }}>
-              {copiedDirect ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedDirect ? "Copied Direct Command!" : "Copy Direct Command"}
-            </button>
-          </div>
-          <div className="rounded-xl overflow-hidden p-3" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
-            <code className="text-[11.5px] font-mono select-all break-all whitespace-pre-wrap" style={{ color: "#38bdf8" }}>
-              {directCmd}
-            </code>
-          </div>
-        </div>
+        {/* Tab 2: Installer Scripts */}
+        {activeTab === "installer" && (
+          <div className="space-y-3">
+            {/* 1-Click Command */}
+            <div className="p-3 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-sky-400 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5" />
+                  1-Click Auto-Configure Script (15m Token)
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyToClipboard(quickCmd);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2500);
+                  }}
+                  className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-medium cursor-pointer transition-all bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30">
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <div className="rounded-lg overflow-hidden p-2" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
+                <code className="text-[11px] font-mono select-all break-all whitespace-pre-wrap text-sky-300">
+                  {quickCmd}
+                </code>
+              </div>
+            </div>
 
-        {/* Credentials Cards */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "var(--color-rp-text-muted)" }}>
-            Node Credentials (Manual Setup)
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+            {/* Direct GitHub Installer */}
+            <div className="p-3 rounded-xl border" style={{ backgroundColor: "var(--color-rp-surface-2)", borderColor: "var(--color-rp-border)" }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-neutral-400" />
+                  Direct GitHub Installer (Codespaces &amp; Cloudflare Safe)
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyToClipboard(directCmd);
+                    setCopiedDirect(true);
+                    setTimeout(() => setCopiedDirect(false), 2500);
+                  }}
+                  className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-medium cursor-pointer transition-all bg-white/10 text-neutral-200 border border-white/10 hover:bg-white/15">
+                  {copiedDirect ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedDirect ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <div className="rounded-lg overflow-hidden p-2" style={{ backgroundColor: "#0a0a0a", border: "1px solid var(--color-rp-border)" }}>
+                <code className="text-[11px] font-mono select-all break-all whitespace-pre-wrap text-neutral-400">
+                  {directCmd}
+                </code>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Credentials */}
+        {activeTab === "credentials" && (
+          <div className="space-y-2">
+            <div className="p-2.5 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
               <div className="min-w-0 pr-2">
-                <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Admin Panel URL</p>
-                <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{origin}</p>
+                <p className="text-[10.5px] font-medium text-neutral-400">Admin Panel URL</p>
+                <p className="text-xs font-mono font-semibold truncate text-white">{origin}</p>
               </div>
               <button
                 type="button"
                 onClick={() => copyToClipboard(origin)}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-                title="Copy Admin URL"
-                style={{ color: "var(--color-rp-text-muted)" }}>
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer text-neutral-400 hover:text-white"
+                title="Copy Admin URL">
                 <Copy className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="p-3 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+            <div className="p-2.5 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
               <div className="min-w-0 pr-2">
-                <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node ID</p>
-                <p className="text-xs font-mono font-semibold truncate" style={{ color: "var(--color-rp-text)" }}>{data.nodeId}</p>
+                <p className="text-[10.5px] font-medium text-neutral-400">Node ID</p>
+                <p className="text-xs font-mono font-semibold truncate text-white">{data.nodeId}</p>
               </div>
               <button
                 type="button"
                 onClick={() => copyToClipboard(data.nodeId)}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-                title="Copy Node ID"
-                style={{ color: "var(--color-rp-text-muted)" }}>
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer text-neutral-400 hover:text-white"
+                title="Copy Node ID">
                 <Copy className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="p-3 rounded-xl flex items-center justify-between md:col-span-2" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
+            <div className="p-2.5 rounded-xl flex items-center justify-between" style={{ backgroundColor: "var(--color-rp-surface)", border: "1px solid var(--color-rp-border)" }}>
               <div className="min-w-0 pr-2">
-                <p className="text-[11px] font-medium" style={{ color: "var(--color-rp-text-muted)" }}>Node Auth Token (Secret)</p>
-                <p className="text-xs font-mono font-semibold truncate" style={{ color: "#a3e635" }}>{data.token}</p>
+                <p className="text-[10.5px] font-medium text-neutral-400">Node Auth Token (Secret)</p>
+                <p className="text-xs font-mono font-semibold truncate text-lime-400">{data.token}</p>
               </div>
               <button
                 type="button"
                 onClick={() => copyToClipboard(data.token)}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-                title="Copy Node Token"
-                style={{ color: "var(--color-rp-accent)" }}>
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer text-lime-400 hover:text-lime-300"
+                title="Copy Node Token">
                 <Copy className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </Modal>
   );

@@ -26,11 +26,11 @@ const NAME = `Rubber Panel ${TAG}`;
 const BODY = `## Rubber Panel ${TAG}
 
 ### 🚀 Highlights
+- **Node Setup Modal Tabbed Redesign**: Re-architected the Node Setup modal on \`/nodes\` with compact, elegant tabs (⚡ Direct Sync, 🚀 Auto Installer, 🔑 Credentials), cutting dialog height by over 60% and completely eliminating vertical scrolling.
 - **Automatic Live Update Polling**: Added auto-refresh loop to \`/updates\` (every 15s) and reduced TopBar/Sidebar polling from 15 minutes to 60 seconds so new releases appear dynamically without requiring manual page reloads.
 - **Panel Release Detection & Asset Fallback**: Fixed \`needsUpdate\` logic for Admin & User panels so new versions are immediately flagged as available, with resilient fallback asset resolution ensuring panels and nodes update reliably.
 - **Cache Invalidation**: Reduced update endpoint cache TTL to 5s, ensuring newly published GitHub releases reflect immediately.
 - **Cryo-Sleep Dynamic Telemetry**: Fixed \`/nodes\` query to recognize \`SLEEPING\` instances and compute genuine RAM savings.
-- **Node Instant Connect**: 1-second copy-paste connect command in Node Setup modal.
 
 ### 📦 Release Assets
 - \`admin-side.zip\` — Admin Management Portal
